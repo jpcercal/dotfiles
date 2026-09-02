@@ -4,12 +4,16 @@
 source $(dirname $0)/support-keep-alive.sh
 source $(dirname $0)/support-print.sh
 source $(dirname $0)/support-require-sudo.sh
-source $(dirname $0)/support-source-path.sh
 
 # ------------------------------------------------------------------------------
 
 print::title "Personal Preferences"
 print::title_paragraph "This script will apply the personal preferences you like using on macOS."
+
+# ===========================================================================================
+# Homebrew permissions
+
+print::command "chmod g-w /opt/homebrew/share"
 
 # ===========================================================================================
 # Add Login Items
