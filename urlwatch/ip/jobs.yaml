@@ -1,5 +1,0 @@
----
-name: "Current IP Address"
-url: "https://api.ipify.org"
-treat_new_as_changed: true
----
