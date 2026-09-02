@@ -20,3 +20,20 @@ echo "y" | /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew
 print::command "(echo; echo 'eval \"$(/opt/homebrew/bin/brew shellenv)\"') >> ~/.zprofile && eval \"$(/opt/homebrew/bin/brew shellenv)\"" "Adding homebrew to the \$PATH environment variable."
 print::command "brew update"
 print::command "brew install yq"
+
+print::section "Adding Homebrew Third-Party Repositories"
+print::section_paragraph "The brew tap command adds more repositories to the list of formulae that Homebrew tracks, updates, and installs from."
+print::section_paragraph "A tap is Homebrew-speak for a Git repository containing additional formulae."
+
+for tapBase64Encoded in $(yq -r '.install.brew.taps .[] | @base64' apps.yaml); do
+    print::command "brew tap $(echo ${tapBase64Encoded} | yq '. | @base64d')"
+done
+
+for tapBase64Encoded in $(yq -r '.install.brew.taps .[] | @base64' apps.yaml); do
+    tap=$(echo ${tapBase64Encoded} | yq '. | @base64d')
+
+    case "${tap}" in
+        homebrew/*) ;;
+        *) print::command "brew trust ${tap}" ;;
+    esac
+done

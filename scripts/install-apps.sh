@@ -17,25 +17,6 @@ print::command "brew update"
 
 # ------------------------------------------------------------------------------
 
-print::section "Adding Homebrew Third-Party Repositories"
-print::section_paragraph "The brew tap command adds more repositories to the list of formulae that Homebrew tracks, updates, and installs from."
-print::section_paragraph "A tap is Homebrew-speak for a Git repository containing additional formulae."
-
-for tapBase64Encoded in $(yq -r '.install.brew.taps .[] | @base64' apps.yaml); do
-    print::command "brew tap $(echo ${tapBase64Encoded} | yq '. | @base64d')"
-done
-
-for tapBase64Encoded in $(yq -r '.install.brew.taps .[] | @base64' apps.yaml); do
-    tap=$(echo ${tapBase64Encoded} | yq '. | @base64d')
-
-    case "${tap}" in
-        homebrew/*) ;;
-        *) print::command "brew trust ${tap}" ;;
-    esac
-done
-
-# ------------------------------------------------------------------------------
-
 print::section "Installing Homebrew Formulas"
 print::section_paragraph "Install software based on homebrew formulas."
 

@@ -3,6 +3,7 @@ install:
   brew:
     taps:
       - "anomalyco/tap"
+      - "autozimu/formulas"
       - "aws/tap"
       - "hashicorp/tap"
     formulas:
@@ -57,7 +58,6 @@ install:
       - "php-code-sniffer"
       - "php-cs-fixer"
       - "php"
-      - "phpmd"
       - "phpstan"
       - "rclone"
       - "ripgrep"
@@ -68,7 +68,7 @@ install:
       - "speedtest-cli"
       - "starship"
       - "taskwarrior-tui"
-      - "tldr"
+      - "tealdeer"
       - "tmux"
       - "tpm"
       - "tree"

@@ -6,6 +6,8 @@ jobs:
       name: Configure
       runs-on: macos-latest
       timeout-minutes: 180
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
       steps:
         - name: Checkout
           uses: actions/checkout@v3
