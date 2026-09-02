@@ -6,8 +6,12 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin${PATH+:$PATH}"
 export MANPATH="/opt/homebrew/share/man${MANPATH+:$MANPATH}:"
 export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
 
-# ruby (keep in sync with `ruby -e 'puts Gem.bindir'`)
-export GEM_BINDIR="/opt/homebrew/lib/ruby/gems/4.0.0/bin"
+# ruby (derive the gem bindir from the installed brew ruby, no subprocess forks)
+gemdirs=("$HOMEBREW_PREFIX"/lib/ruby/gems/*(/N))
+if [[ -n ${gemdirs[-1]} ]]; then
+    export GEM_BINDIR="${gemdirs[-1]}/bin"
+fi
+unset gemdirs
 
 # compile flags
 export HOMEBREW_OPT="$HOMEBREW_PREFIX/opt"
