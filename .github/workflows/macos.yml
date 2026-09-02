@@ -1,5 +1,7 @@
 name: MacOS Workflow
-on: [push]
+on:
+  workflow_dispatch:
+# on: [push]  # temporarily disabled
 
 jobs:
   config:
