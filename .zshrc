@@ -28,8 +28,8 @@ zrecompile -p "$HOME/.zshrc"
 ###########################################################
 # aliases
 
-alias l="exa -lbF"
-alias ll="exa -lbhHigUmuSa@ --sort=modified"
+alias l="eza -lbF"
+alias ll="eza -lbhHigUmuSa@ --sort=modified"
 alias -- -='cd -'
 
 ###########################################################
