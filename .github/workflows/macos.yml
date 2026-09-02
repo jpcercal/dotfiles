@@ -12,26 +12,6 @@ jobs:
         - name: Checkout
           uses: actions/checkout@v7
 
-        - name: provision update_history_commands job
-          run: |
-            brew install coreutils go
-            go install github.com/oklog/ulid/v2/cmd/ulid@latest
-            echo "$HOME/go/bin" >> "$GITHUB_PATH"
-            mkdir -p "$HOME/.local/share/atuin"
-            sqlite3 "$HOME/.local/share/atuin/history.db" <<'SQL'
-            CREATE TABLE IF NOT EXISTS history (
-              id TEXT NOT NULL PRIMARY KEY,
-              timestamp TEXT,
-              duration TEXT,
-              exit TEXT,
-              command TEXT NOT NULL,
-              cwd TEXT,
-              session TEXT,
-              hostname TEXT,
-              deleted_at TEXT
-            );
-            SQL
-
         - name: run
           env:
             SKIP_JOBS: software_update

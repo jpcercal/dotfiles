@@ -1,5 +1,5 @@
 
-export PATH := $(HOME)/.local/bin:/opt/homebrew/bin:$(HOME)/dotfiles/bin:$(PATH)
+export PATH := $(HOME)/.local/bin:/opt/homebrew/bin:$(HOME)/dotfiles/bin:$(HOME)/go/bin:$(PATH)
 
 .PHONY: default
 default: run

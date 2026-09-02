@@ -13,6 +13,13 @@ print::title_paragraph "This local database will later be used by zsh history in
 
 # ------------------------------------------------------------------------------
 
+ATUIN_HISTORY_DB=~/.local/share/atuin/history.db
+
+if [[ ! -f ${ATUIN_HISTORY_DB} ]]; then
+    print::info "The atuin history database \"${ATUIN_HISTORY_DB}\" does not exist yet, start the atuin daemon once before running this job. Skipping."
+    exit 0
+fi
+
 COMMANDS=$(cat $(dirname $0)/../commands.yaml)
 
 homedir=$(eval echo ~$USER)
@@ -74,14 +81,14 @@ EOF
         print::info "${description}"
         echo "\$ ${command}"
         echo "${sql}"
-        echo "${sql}" | sqlite3 ~/.local/share/atuin/history.db
+        echo "${sql}" | sqlite3 ${ATUIN_HISTORY_DB}
     done
 done
 
 # ------------------------------------------------------------------------------
 # Clean-up the dirty command used to execute this script
 
-cat <<EOF | sqlite3 ~/.local/share/atuin/history.db
+cat <<EOF | sqlite3 ${ATUIN_HISTORY_DB}
 .parameter init
 .parameter set @command "%%dotfiles/scripts/$(basename $0)"
 .parameter set @session "${session}"
