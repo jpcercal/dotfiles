@@ -6,7 +6,7 @@ eval "$(fnm env)"
 ###########################################################
 # plugins
 
-fpath=(~/.config/zsh/completions /opt/homebrew/share/zsh-completions $fpath)
+fpath=(~/.config/zsh/completions "$HOMEBREW_PREFIX/share/zsh-completions" $fpath)
 autoload -Uz compinit
 if [[ -n ${ZDOTDIR:-$HOME}/.zcompdump(#qN.mh+24) ]]; then
   compinit
@@ -14,8 +14,8 @@ else
   compinit -C
 fi
 
-source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
-source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+source "$HOMEBREW_PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+source "$HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
