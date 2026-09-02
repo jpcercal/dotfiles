@@ -91,7 +91,6 @@ install:
     casks: 
       - "alfred"
       - "appcleaner"
-      - "authy"
       - "brave-browser"
       - "caffeine"
       - "discord"
@@ -133,9 +132,8 @@ install:
       - "font-monofur-nerd-font"
       - "font-monoid-nerd-font"
       - "font-mononoki-nerd-font"
-      - "font-mplus-nerd-font"
       - "font-noto-nerd-font"
-      - "font-open-dyslexic-nerd-font"
+      - "font-opendyslexic-nerd-font"
       - "font-overpass-nerd-font"
       - "font-profont-nerd-font"
       - "font-proggy-clean-tt-nerd-font"
@@ -164,7 +162,6 @@ install:
       - "teamviewer"
       - "visual-studio-code"
       - "vlc"
-      - "vnc-viewer"
       - "whatsapp"
       - "zoom"
     customCommands: 
@@ -173,8 +170,8 @@ install:
       - "git lfs install"
       - "go install github.com/oklog/ulid/v2/cmd/ulid@latest"
       - "mkdir -p ~/.config/tmux/"
-      - "mkdir -p ~/dotfiles/logs/crontab/"
-      - "crontab ~/dotfiles/crontab"
+      - "mkdir -p $(pwd)/logs/crontab/"
+      - "crontab $(pwd)/crontab"
       - "uv python install"
       - "ln -sfn \"$(dirname \"$(uv python find)\")/python3\" ~/.local/bin/python"
       - "ln -sfn \"$(dirname \"$(uv python find)\")/python3\" ~/.local/bin/python3"
@@ -185,9 +182,8 @@ install:
       - "fnm default lts-latest"
       - "curl -fsSL https://opencode.ai/install | bash"
       - "rtk init -g --opencode --auto-patch"
-      - "npx claude-mem install --ide opencode"
+      - "npx claude-mem install --ide opencode --provider openrouter"
       - "curl -fLo \"${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/autoload/plug.vim\" --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim"
-      - "nvim --headless +PlugInstall +qa"
   gem:
     rubygems:
       - "neovim"

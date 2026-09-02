@@ -43,6 +43,13 @@ done
 
 # ------------------------------------------------------------------------------
 
+print::section "Installing Neovim Plugins"
+print::section_paragraph "Install the plugins defined on the vimrc configuration file."
+
+print::command "nvim --headless +PlugInstall +qa"
+
+# ------------------------------------------------------------------------------
+
 print::section "Reorganizing the Dock"
 print::section_paragraph "Let's increase your productivity a bit more by setting a custom applications order on the macOS Dock."
 

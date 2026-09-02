@@ -25,6 +25,15 @@ for tapBase64Encoded in $(yq -r '.install.brew.taps .[] | @base64' apps.yaml); d
     print::command "brew tap $(echo ${tapBase64Encoded} | yq '. | @base64d')"
 done
 
+for tapBase64Encoded in $(yq -r '.install.brew.taps .[] | @base64' apps.yaml); do
+    tap=$(echo ${tapBase64Encoded} | yq '. | @base64d')
+
+    case "${tap}" in
+        homebrew/*) ;;
+        *) print::command "brew trust ${tap}" ;;
+    esac
+done
+
 # ------------------------------------------------------------------------------
 
 print::section "Installing Homebrew Formulas"
