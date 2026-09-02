@@ -13,7 +13,7 @@ print::title_paragraph "It will download and install all the apps you love that 
 print::title_paragraph "I was wondering here... did you finish drinking your cup of coffee? Probably you did not, so go do something else while I keep working hard here on this process."
 print::title_paragraph "Be aware that this step depends a lot on your internet connection, it might be it will take some minutes to complete, of course you can check the progress of it anytime you want."
 
-print::command "brew update"
+print::command "attempt=0; success=1; while [ \$attempt -lt 6 ]; do if brew update; then success=0; break; fi; attempt=\$((attempt + 1)); sleep 15; done; [ \$success -eq 0 ]"
 
 # ------------------------------------------------------------------------------
 
