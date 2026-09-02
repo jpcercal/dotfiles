@@ -31,3 +31,14 @@ apply_preferences:
 .PHONY: update_history_commands
 update_history_commands:
 	./scripts/update-history-commands.sh
+
+.PHONY: dotfiles_updater
+dotfiles_updater:
+	./scripts/dotfiles-updater.sh --foreground
+
+.PHONY: install_dotfiles_updater_agent
+install_dotfiles_updater_agent:
+	-launchctl bootout gui/$$(id -u)/com.jpcercal.dotfiles.updater
+	cp launchd/com.jpcercal.dotfiles.updater.plist $(HOME)/Library/LaunchAgents/
+	launchctl bootstrap gui/$$(id -u) $(HOME)/Library/LaunchAgents/com.jpcercal.dotfiles.updater.plist
+	launchctl enable gui/$$(id -u)/com.jpcercal.dotfiles.updater

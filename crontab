@@ -1,1 +1,0 @@
-* * * * * echo abc > ~/dotfiles/logs/crontab/$(date +%Y.%m.%d.%H.%M.%S).mas-update.log 2>&1

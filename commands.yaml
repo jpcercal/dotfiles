@@ -1017,13 +1017,3 @@ uname:
         print the name of the operating system implementation.
       command: |
         uname -a
-
-urlwatch:
-  description: |
-    urlwatch is intended to help you watch changes in webpages and get notified
-    (e.g., via email) of any changes.
-  commands:
-    - description: |
-        execute the urlwatch command with the configuration file and the jobs using the verbose flag.
-      command: |
-        urlwatch --config ~/dotfiles/urlwatch/aima/config.yaml --urls ~/dotfiles/urlwatch/aima/jobs.yaml --verbose

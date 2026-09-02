@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# NOTE: This script is intentionally MANUAL-ONLY. Its `--restart` flag reboots the
+# machine and must never be driven by the dotfiles-updater LaunchAgent.
+
 # Dependencies
 source $(dirname $0)/support-require-sudo.sh
 source $(dirname $0)/support-keep-alive.sh
