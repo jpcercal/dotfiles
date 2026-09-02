@@ -4,7 +4,6 @@ install:
     taps:
       - "anomalyco/tap"
       - "aws/tap"
-      - "homebrew/cask-fonts"
     formulas:
       - "act"
       - "aircrack-ng"
