@@ -65,6 +65,7 @@ install:
       - "sops"
       - "starship"
       - "taskwarrior-tui"
+      - "terminal-notifier"
       - "tealdeer"
       - "tmux"
       - "tpm"
