@@ -25,11 +25,9 @@ apply_preferences:
 update_history_commands:
 	./scripts/update-history-commands.sh
 
+.PHONY: run
+run:
+	./scripts/run.sh
+
 .PHONY: default
-default: 
-	software_update
-	install_dependencies
-	install_apps
-	configure_apps
-	apply_preferences
-	update_history_commands
+default: run
