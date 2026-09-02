@@ -13,6 +13,7 @@ jobs:
         - name: provision update_history_commands job
           run: |
             brew install coreutils go
+            brew trust aws/tap || true
             go install github.com/oklog/ulid/v2/cmd/ulid@latest
             echo "$HOME/go/bin" >> "$GITHUB_PATH"
             mkdir -p "$HOME/.local/share/atuin"
