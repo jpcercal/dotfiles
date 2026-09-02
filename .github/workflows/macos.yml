@@ -60,4 +60,24 @@ jobs:
         #   run: make apply_preferences
 
         - name: update history of executed commands
-          run: brew install zsh zsh-completions atuin && eval "$(atuin init zsh)" && make update_history_commands
+          shell: zsh {0}
+          run: |
+            brew install zsh zsh-completions atuin coreutils
+            export PATH="$HOME/go/bin:$PATH"
+            go install github.com/oklog/ulid/v2/cmd/ulid@latest
+            mkdir -p "$HOME/.local/share/atuin"
+            sqlite3 "$HOME/.local/share/atuin/history.db" <<'SQL'
+            CREATE TABLE IF NOT EXISTS history (
+              id TEXT NOT NULL PRIMARY KEY,
+              timestamp TEXT,
+              duration TEXT,
+              exit TEXT,
+              command TEXT NOT NULL,
+              cwd TEXT,
+              session TEXT,
+              hostname TEXT,
+              deleted_at TEXT
+            );
+            SQL
+            eval "$(atuin init zsh)"
+            make update_history_commands
