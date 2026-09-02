@@ -4,6 +4,7 @@ install:
     taps:
       - "anomalyco/tap"
       - "aws/tap"
+      - "hashicorp/tap"
     formulas:
       - "act"
       - "aircrack-ng"
