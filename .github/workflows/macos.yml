@@ -2,69 +2,19 @@ name: MacOS Workflow
 on: [push]
 
 jobs:
-  # shellcheck:
-  #   name: runner / shellcheck
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v1
-  #     - name: shellcheck
-  #       uses: reviewdog/action-shellcheck@v1
-  #       with:
-  #         github_token: ${{ secrets.github_token }}
-  #         reporter: github-pr-review
-  #         path: "."
-  #         pattern: "*.sh"
-  #         exclude: "./.git/*"
-  #         check_all_files_with_shebangs: "false"
-
-  # software_update:
-  #   name: Software Update
-  #   runs-on: macos-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v3
-
-  #     - name: install software updates
-  #       run: make software_update
-
-  # install:
-  #     name: Install Dependencies and Apps
-  #     runs-on: macos-latest
-  #     steps:
-  #       - name: Checkout
-  #         uses: actions/checkout@v3
-
-  #       - name: install dependencies
-  #         run: make install_dependencies
-
-  #       - name: install apps
-  #         run: make install_apps
-
   config:
       name: Configure
       runs-on: macos-latest
+      timeout-minutes: 180
       steps:
         - name: Checkout
           uses: actions/checkout@v3
 
-        - name: install software updates
-          run: make software_update
-
-        - name: install dependencies
-          run: make install_dependencies
-        
-        # - name: configure apps
-        #   run: make configure_apps
-
-        # - name: apply custom preferences
-        #   run: make apply_preferences
-
-        - name: update history of executed commands
-          shell: zsh {0}
+        - name: provision update_history_commands job
           run: |
-            brew install zsh zsh-completions atuin coreutils go
-            export PATH="$HOME/go/bin:$PATH"
+            brew install coreutils go
             go install github.com/oklog/ulid/v2/cmd/ulid@latest
+            echo "$HOME/go/bin" >> "$GITHUB_PATH"
             mkdir -p "$HOME/.local/share/atuin"
             sqlite3 "$HOME/.local/share/atuin/history.db" <<'SQL'
             CREATE TABLE IF NOT EXISTS history (
@@ -79,5 +29,8 @@ jobs:
               deleted_at TEXT
             );
             SQL
-            eval "$(atuin init zsh)"
-            make update_history_commands
+
+        - name: run
+          env:
+            SKIP_JOBS: software_update
+          run: make
