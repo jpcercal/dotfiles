@@ -1,0 +1,88 @@
+#!/usr/bin/env osascript -l JavaScript
+// dotfiles-updater live progress window: tails the combined log.
+ObjC.import('AppKit');
+ObjC.import('Foundation');
+
+function run(argv) {
+  const logDir = String(argv[0] || '');
+  const runId = String(argv[1] || '');
+  const combinedPath = logDir + '/' + runId + '.combined.log';
+  const donePath = logDir + '/' + runId + '.done';
+
+  const win = $.NSWindow.alloc.initWithContentRectStyleMaskBackingDefer(
+    $.NSMakeRect(200, 200, 750, 500),
+    $.NSTitledWindowMask | $.NSClosableWindowMask | $.NSResizableWindowMask | $.NSMiniaturizableWindowMask,
+    $.NSBackingStoreBuffered, false
+  );
+  win.title = 'dotfiles-updater — live log';
+  win.minSize = $.NSMakeSize(500, 300);
+
+  const scroll = $.NSScrollView.alloc.initWithFrame(win.contentView.bounds);
+  scroll.autoresizingMask = $.NSViewWidthSizable | $.NSViewHeightSizable;
+  scroll.hasVerticalScroller = true;
+  scroll.hasHorizontalScroller = false;
+  scroll.autohidesScrollers = false;
+  scroll.borderType = $.NSBezelBorder;
+
+  const tv = $.NSTextView.alloc.initWithFrame(scroll.contentView.bounds);
+  tv.editable = false;
+  tv.selectable = true;
+  tv.horizontallyResizable = false;
+  tv.autoresizingMask = $.NSViewWidthSizable;
+  tv.textContainer.containerSize = $.NSMakeSize(700, 1.0e7);
+  tv.textContainer.widthTracksTextView = true;
+  tv.font = $.NSFont.fontWithNameSize('Menlo', 11);
+  if (!tv.font) tv.font = $.NSFont.systemFontOfSize(11);
+  tv.string = 'Waiting for log…\n';
+
+  scroll.documentView = tv;
+  win.contentView.addSubview(scroll);
+  win.makeKeyAndOrderFront(win);
+  $.NSApplication.sharedApplication.setActivationPolicy($.NSApplicationActivationPolicyRegular);
+  $.NSApplication.sharedApplication.activateIgnoringOtherApps(true);
+  // keep focus unless user minimized — polling loop checks isVisible/isMiniaturized
+
+  const fm = $.NSFileManager.defaultManager;
+  let lastLen = 0;
+  function readLog() {
+    let s = $.NSString.stringWithContentsOfFileEncodingError($(combinedPath), $.NSUTF8StringEncoding, null);
+    if (!s) s = $.NSString.stringWithContentsOfFileEncodingError($(combinedPath), $.NSISOLatin1StringEncoding, null);
+    if (!s) return '';
+    let js = s.js;
+    // Strip ANSI escape codes (colors, cursor, etc.) and carriage returns — they appear as � in the window.
+    js = js.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').replace(/\r/g, '');
+    return js;
+  }
+  // poll loop — keep window responsive via run loop
+  while (true) {
+    if (!win.isVisible) break;
+    if (fm.fileExistsAtPath($(donePath))) {
+      // one final read and show completion
+      const js = readLog();
+      if (js.length > lastLen) {
+        tv.string = $(js);
+        tv.scrollToEndOfDocument(win);
+      }
+      const cur = tv.string.js || '';
+      tv.string = $(cur + '\n\n✓ Update finished — see ' + logDir + '/' + runId + '.json');
+      tv.scrollToEndOfDocument(win);
+      // keep window open until user closes it (or 60s after done)
+      let wait = 0;
+      while (win.isVisible && wait < 600) { // 60s
+        $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
+        wait++;
+        if (!win.isVisible) break;
+      }
+      break;
+    }
+    const js = readLog();
+    if (js.length !== lastLen) {
+      tv.string = $(js);
+      tv.scrollToEndOfDocument(win);
+      lastLen = js.length;
+    }
+    // run the run loop briefly so window stays responsive
+    $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.3));
+  }
+  return 'done';
+}

@@ -1,0 +1,59 @@
+#!/usr/bin/env osascript -l JavaScript
+// dotfiles-updater confirmation dialog:
+// scrollable summary with bold section titles, passed as argv[0].
+// (initWithString is not bridged in JXA, so content goes in via insertText.)
+ObjC.import('AppKit');
+ObjC.import('Foundation');
+
+function run(argv) {
+  const text = String(argv[0] || '');
+  const title = 'dotfiles-updater';
+  const bodyFont = $.NSFont.systemFontOfSize(12);
+  const boldFont = $.NSFont.boldSystemFontOfSize(13);
+
+  const scroll = $.NSScrollView.alloc.initWithFrame($.NSMakeRect(0, 0, 620, 430));
+  scroll.hasVerticalScroller = true;
+  scroll.borderType = $.NSBezelBorder;
+
+  const tv = $.NSTextView.alloc.initWithFrame($.NSMakeRect(0, 0, 620, 430));
+  tv.selectable = true;
+  tv.horizontallyResizable = false;
+  tv.autoresizingMask = $.NSViewWidthSizable;
+  tv.textContainer.containerSize = $.NSMakeSize(580, 1.0e7);
+  tv.textContainer.widthTracksTextView = true;
+  tv.minSize = $.NSMakeSize(0, 430);
+  tv.maxSize = $.NSMakeSize(1.0e7, 1.0e7);
+
+  tv.insertText($(text));
+  tv.editable = false;
+  tv.textStorage.addAttributeValueRange($.NSFontAttributeName, bodyFont, $.NSMakeRange(0, text.length));
+
+  const lines = text.split('\n');
+  let offset = 0;
+  for (const line of lines) {
+    if (/^[A-Za-z][A-Za-z ()\/-]*\([0-9]+\)$/.test(line.trim())) {
+      tv.textStorage.addAttributeValueRange($.NSFontAttributeName, boldFont, $.NSMakeRange(offset, line.length));
+    }
+    offset += line.length + 1;
+  }
+
+  scroll.documentView = tv;
+
+  const alert = $.NSAlert.alloc.init;
+  alert.messageText = title;
+  alert.informativeText = 'Review what will be updated, then click "Update Now" to run it in the background.';
+  alert.addButtonWithTitle('Update Now');
+  alert.addButtonWithTitle('Postpone until tomorrow');
+  alert.buttons.objectAtIndex(1).keyEquivalent = $('\u001b');
+  alert.accessoryView = scroll;
+
+  const app = $.NSApplication.sharedApplication;
+  app.setActivationPolicy($.NSApplicationActivationPolicyRegular);
+  app.activateIgnoringOtherApps(true);
+  const win = alert.window;
+  win.setLevel($.NSFloatingWindowLevel);
+  win.makeKeyAndOrderFront(app);
+  const resp = alert.runModal;
+  if (resp === $.NSAlertFirstButtonReturn) return 'Update Now';
+  return 'Postpone until tomorrow';
+}
