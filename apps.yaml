@@ -173,15 +173,20 @@ install:
       - "echo \"y\" | $(brew --prefix)/opt/fzf/install"
       - "git lfs install"
       - "go install github.com/oklog/ulid/v2/cmd/ulid@latest"
-      - "mkdir ~/.nvm"
       - "mkdir -p ~/.config/tmux/"
       - "mkdir -p ~/dotfiles/logs/crontab/"
       - "crontab ~/dotfiles/crontab"
-      - "pyenv install $(pyenv install -l | awk '{print $1}' | egrep -e '^3\\.\\d+\\.\\d+$' | tail -n 1)"
-      - "pyenv global $(pyenv install -l | awk '{print $1}' | egrep -e '^3\\.\\d+\\.\\d+$' | tail -n 1)"
-      - "pyenv exec pip install --upgrade pip"
-      - "pyenv exec pip install neovim pynvim"
-      - "curl -fLo \"${XDG_DATA_HOME:-$HOME/.local/share}\"/nvim/site/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim"
+      - "uv python install"
+      - "ln -sfn \"$(dirname \"$(uv python find)\")/python3\" ~/.local/bin/python"
+      - "ln -sfn \"$(dirname \"$(uv python find)\")/python3\" ~/.local/bin/python3"
+      - "ln -sfn \"$(dirname \"$(uv python find)\")/pip3\" ~/.local/bin/pip"
+      - "ln -sfn \"$(dirname \"$(uv python find)\")/pip3\" ~/.local/bin/pip3"
+      - "uv pip install --system --break-system-packages --python \"$(uv python find)\" pynvim neovim"
+      - "fnm install --lts"
+      - "fnm default lts-latest"
+      - "curl -fsSL https://opencode.ai/install | bash"
+      - "rtk init -g --opencode --auto-patch"
+      - "npx claude-mem install --ide opencode"
   gem:
     rubygems:
       - "neovim"
@@ -190,7 +195,6 @@ install:
       packages:
         - "neovim"
         - "prettier"
-        - "serverless"
   mas:
     apps:    
       - id: "1018301773"
