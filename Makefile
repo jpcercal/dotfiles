@@ -1,4 +1,6 @@
 
+export PATH := $(HOME)/.local/bin:/opt/homebrew/bin:$(HOME)/dotfiles/bin:$(PATH)
+
 .PHONY: software_update
 software_update:
 	./scripts/software-update.sh

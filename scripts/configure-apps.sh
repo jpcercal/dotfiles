@@ -4,7 +4,6 @@
 source $(dirname $0)/support-require-sudo.sh
 source $(dirname $0)/support-keep-alive.sh
 source $(dirname $0)/support-print.sh
-source $(dirname $0)/support-source-path.sh
 
 # ------------------------------------------------------------------------------
 
