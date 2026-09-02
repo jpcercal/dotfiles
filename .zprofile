@@ -11,9 +11,40 @@ export GEM_BINDIR="$(ruby -e 'puts Gem.bindir')"
 
 # compile flags
 export HOMEBREW_OPT="$HOMEBREW_PREFIX/opt"
-export PATH="$HOMEBREW_OPT/gettext/bin:$HOMEBREW_OPT/curl/bin:$HOMEBREW_OPT/openssl/bin:$HOMEBREW_OPT/sqlite/bin:$HOMEBREW_OPT/ncurses/bin:$HOMEBREW_OPT/ruby/bin:$GEM_BINDIR:$PATH"
-export CPPFLAGS="-I$HOMEBREW_OPT/gettext/include -I$HOMEBREW_OPT/curl/include -I$HOMEBREW_OPT/openssl/include -I$HOMEBREW_OPT/readline/include -I$HOMEBREW_OPT/sqlite/include -I$HOMEBREW_OPT/ncurses/include -I$HOMEBREW_OPT/ruby/include $CPPFLAGS"
-export LDFLAGS="-L$HOMEBREW_OPT/gettext/lib -L$HOMEBREW_OPT/curl/lib -L$HOMEBREW_OPT/openssl/lib -L$HOMEBREW_OPT/readline/lib -L$HOMEBREW_OPT/sqlite/lib -L$HOMEBREW_OPT/ncurses/lib -L$HOMEBREW_OPT/ruby/lib $LDFLAGS"
+
+# gettext
+export PATH="$HOMEBREW_OPT/gettext/bin:$PATH"
+export CPPFLAGS="-I$HOMEBREW_OPT/gettext/include $CPPFLAGS"
+export LDFLAGS="-L$HOMEBREW_OPT/gettext/lib $LDFLAGS"
+
+# curl
+export PATH="$HOMEBREW_OPT/curl/bin:$PATH"
+export CPPFLAGS="-I$HOMEBREW_OPT/curl/include $CPPFLAGS"
+export LDFLAGS="-L$HOMEBREW_OPT/curl/lib $LDFLAGS"
+
+# openssl
+export PATH="$HOMEBREW_OPT/openssl/bin:$PATH"
+export CPPFLAGS="-I$HOMEBREW_OPT/openssl/include $CPPFLAGS"
+export LDFLAGS="-L$HOMEBREW_OPT/openssl/lib $LDFLAGS"
+
+# readline
+export CPPFLAGS="-I$HOMEBREW_OPT/readline/include $CPPFLAGS"
+export LDFLAGS="-L$HOMEBREW_OPT/readline/lib $LDFLAGS"
+
+# sqlite
+export PATH="$HOMEBREW_OPT/sqlite/bin:$PATH"
+export CPPFLAGS="-I$HOMEBREW_OPT/sqlite/include $CPPFLAGS"
+export LDFLAGS="-L$HOMEBREW_OPT/sqlite/lib $LDFLAGS"
+
+# ncurses
+export PATH="$HOMEBREW_OPT/ncurses/bin:$PATH"
+export CPPFLAGS="-I$HOMEBREW_OPT/ncurses/include $CPPFLAGS"
+export LDFLAGS="-L$HOMEBREW_OPT/ncurses/lib $LDFLAGS"
+
+# ruby
+export PATH="$HOMEBREW_OPT/ruby/bin:$GEM_BINDIR:$PATH"
+export CPPFLAGS="-I$HOMEBREW_OPT/ruby/include $CPPFLAGS"
+export LDFLAGS="-L$HOMEBREW_OPT/ruby/lib $LDFLAGS"
 
 # language runtimes
 
