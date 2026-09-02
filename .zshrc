@@ -1,14 +1,16 @@
 ###########################################################
 # node (fnm)
 
-eval "$(fnm env)"
+command -v fnm >/dev/null && eval "$(fnm env)"
 
 ###########################################################
 # plugins
 
+setopt extendedglob
+
 fpath=(~/.config/zsh/completions "$HOMEBREW_PREFIX/share/zsh-completions" $fpath)
 autoload -Uz compinit
-if [[ -n ${ZDOTDIR:-$HOME}/.zcompdump(#qN.mh+24) ]]; then
+if [[ ! -f ${ZDOTDIR:-$HOME}/.zcompdump || -n ${ZDOTDIR:-$HOME}/.zcompdump(#qN.mh+24) ]]; then
   compinit
 else
   compinit -C

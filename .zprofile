@@ -6,8 +6,8 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin${PATH+:$PATH}"
 export MANPATH="/opt/homebrew/share/man${MANPATH+:$MANPATH}:"
 export INFOPATH="/opt/homebrew/share/info:${INFOPATH:-}"
 
-# ruby (before compile flags — GEM_BINDIR used below)
-export GEM_BINDIR="$(ruby -e 'puts Gem.bindir')"
+# ruby (keep in sync with `ruby -e 'puts Gem.bindir'`)
+export GEM_BINDIR="/opt/homebrew/lib/ruby/gems/4.0.0/bin"
 
 # compile flags
 export HOMEBREW_OPT="$HOMEBREW_PREFIX/opt"

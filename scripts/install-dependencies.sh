@@ -17,7 +17,7 @@ print::section_paragraph "Grab a cup of coffee and relax, this script does not e
 print::command "/bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"" "Installing homebrew." "0"
 echo "y" | /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-print::command "(echo; echo 'eval \"$(/opt/homebrew/bin/brew shellenv)\"') >> ~/.zprofile && eval \"$(/opt/homebrew/bin/brew shellenv)\"" "Adding homebrew to the \$PATH environment variable."
+print::command "eval \"$(/opt/homebrew/bin/brew shellenv)\"" "Adding homebrew to the \$PATH environment variable."
 print::command "attempt=0; success=1; while [ \$attempt -lt 6 ]; do if brew update; then success=0; break; fi; attempt=\$((attempt + 1)); sleep 15; done; [ \$success -eq 0 ]"
 print::command "brew install yq"
 
