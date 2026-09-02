@@ -6,14 +6,24 @@ eval "$(fnm env)"
 ###########################################################
 # plugins
 
-fpath=(/opt/homebrew/share/zsh-completions $fpath)
+fpath=(~/.config/zsh/completions /opt/homebrew/share/zsh-completions $fpath)
 autoload -Uz compinit
-compinit
+if [[ -n ${ZDOTDIR:-$HOME}/.zcompdump(#qN.mh+24) ]]; then
+  compinit
+else
+  compinit -C
+fi
 
 source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+###########################################################
+# byte-compile rc for faster parse (cache lives in $HOME)
+
+autoload -Uz zrecompile
+zrecompile -p "$HOME/.zshrc"
 
 ###########################################################
 # aliases
@@ -88,8 +98,3 @@ gli() {
       --preview-window=right:60% \
       --height 80%
 }
-
-###########################################################
-# bun completions
-
-[ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
