@@ -12,7 +12,6 @@ install:
       - "automake"
       - "autozimu/homebrew-formulas/unison-fsmonitor"
       - "awscli"
-      - "balena-cli"
       - "bash-completion"
       - "bash"
       - "bat"
