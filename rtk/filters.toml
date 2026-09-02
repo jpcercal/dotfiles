@@ -1,0 +1,49 @@
+# User-global RTK filters — apply to all your projects.
+# Project-local .rtk/filters.toml takes precedence over these.
+# Docs: https://github.com/rtk-ai/rtk#custom-filters
+schema_version = 1
+
+[filters]
+ignore_dirs = [
+    ".git",
+    "node_modules",
+    "target",
+    "__pycache__",
+    ".venv",
+    "vendor",
+    "build",
+    "dist",
+    "coverage",
+    ".next",
+    ".turbo",
+    ".terraform",
+    ".gradle",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".bundle",
+    ".idea",
+]
+ignore_files = [
+    "*.lock",
+    "*.lockb",
+    "*.min.js",
+    "*.min.css",
+    "*.tfstate*",
+    "*.jar",
+    "*.war",
+    "*.zip",
+    "*.tar.*",
+    "*.tgz",
+    "*.gz",
+    "*.png",
+    "*.jpg",
+    "*.jpeg",
+    "*.gif",
+    "*.ico",
+    "*.woff",
+    "*.woff2",
+    "*.pdf",
+    ".DS_Store",
+]
