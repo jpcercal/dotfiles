@@ -63,7 +63,6 @@ install:
       - "rtk"
       - "screen"
       - "sops"
-      - "speedtest-cli"
       - "starship"
       - "taskwarrior-tui"
       - "tealdeer"
