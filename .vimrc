@@ -21,8 +21,7 @@ call plug#end()
 " ============================================================================
 " => General settings
 
-let g:python2_host_prog = '/usr/local/bin/python'
-let g:python3_host_prog = '/usr/local/bin/python3'
+let g:python3_host_prog = expand('$HOME') . '/.local/bin/python3'
 
 set number 
 set relativenumber

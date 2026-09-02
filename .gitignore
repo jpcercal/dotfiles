@@ -1,1 +1,6 @@
-
+.DS_Store
+node_modules/
+logs/
+opencode/plugins/rtk.ts
+opencode/plugins/claude-mem.js*
+*.zwc

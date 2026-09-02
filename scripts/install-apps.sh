@@ -4,7 +4,6 @@
 source $(dirname $0)/support-keep-alive.sh
 source $(dirname $0)/support-print.sh
 source $(dirname $0)/support-require-sudo.sh
-source $(dirname $0)/support-source-path.sh
 
 # ------------------------------------------------------------------------------
 
@@ -14,17 +13,7 @@ print::title_paragraph "It will download and install all the apps you love that 
 print::title_paragraph "I was wondering here... did you finish drinking your cup of coffee? Probably you did not, so go do something else while I keep working hard here on this process."
 print::title_paragraph "Be aware that this step depends a lot on your internet connection, it might be it will take some minutes to complete, of course you can check the progress of it anytime you want."
 
-print::command "brew update"
-
-# ------------------------------------------------------------------------------
-
-print::section "Adding Homebrew Third-Party Repositories"
-print::section_paragraph "The brew tap command adds more repositories to the list of formulae that Homebrew tracks, updates, and installs from."
-print::section_paragraph "A tap is Homebrew-speak for a Git repository containing additional formulae."
-
-for tapBase64Encoded in $(yq -r '.install.brew.taps .[] | @base64' apps.yaml); do
-    print::command "brew tap $(echo ${tapBase64Encoded} | yq '. | @base64d')"
-done
+print::command "attempt=0; success=1; while [ \$attempt -lt 6 ]; do if brew update; then success=0; break; fi; attempt=\$((attempt + 1)); sleep 15; done; [ \$success -eq 0 ]"
 
 # ------------------------------------------------------------------------------
 

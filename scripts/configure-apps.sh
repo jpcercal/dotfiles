@@ -4,7 +4,6 @@
 source $(dirname $0)/support-require-sudo.sh
 source $(dirname $0)/support-keep-alive.sh
 source $(dirname $0)/support-print.sh
-source $(dirname $0)/support-source-path.sh
 
 # ------------------------------------------------------------------------------
 
@@ -41,6 +40,13 @@ for i in $(seq 0 $(($(yq -r '.config.symbolic_links | length' apps.yaml) - 1)));
 
     print::command "ln -sF $(pwd)/${from} ${to}"
 done
+
+# ------------------------------------------------------------------------------
+
+print::section "Installing Neovim Plugins"
+print::section_paragraph "Install the plugins defined on the vimrc configuration file."
+
+print::command "nvim --headless +PlugInstall +qa"
 
 # ------------------------------------------------------------------------------
 
