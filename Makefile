@@ -1,6 +1,13 @@
 
 export PATH := $(HOME)/.local/bin:/opt/homebrew/bin:$(HOME)/dotfiles/bin:$(PATH)
 
+.PHONY: default
+default: run
+
+.PHONY: run
+run:
+	./scripts/run.sh
+
 .PHONY: software_update
 software_update:
 	./scripts/software-update.sh
@@ -24,10 +31,3 @@ apply_preferences:
 .PHONY: update_history_commands
 update_history_commands:
 	./scripts/update-history-commands.sh
-
-.PHONY: run
-run:
-	./scripts/run.sh
-
-.PHONY: default
-default: run
