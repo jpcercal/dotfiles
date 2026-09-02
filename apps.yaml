@@ -288,6 +288,41 @@ config:
         absolute_path: "~/.zshrc"
 
     - from: 
+        relative_path: ".zprofile"
+      to: 
+        absolute_path: "~/.zprofile"
+
+    - from: 
+        relative_path: ".zshenv"
+      to: 
+        absolute_path: "~/.zshenv"
+
+    - from: 
+        relative_path: "opencode/AGENTS.md"
+      to: 
+        absolute_path: "~/.config/opencode/AGENTS.md"
+
+    - from: 
+        relative_path: "opencode/opencode.json"
+      to: 
+        absolute_path: "~/.config/opencode/opencode.json"
+
+    - from: 
+        relative_path: "opencode/opencode.jsonc"
+      to: 
+        absolute_path: "~/.config/opencode/opencode.jsonc"
+
+    - from: 
+        relative_path: "rtk/config.toml"
+      to: 
+        absolute_path: "~/Library/Application Support/rtk/config.toml"
+
+    - from: 
+        relative_path: "rtk/filters.toml"
+      to: 
+        absolute_path: "~/Library/Application Support/rtk/filters.toml"
+
+    - from: 
         relative_path: "starship.toml"
       to: 
         absolute_path: "~/.config/starship.toml"
