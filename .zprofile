@@ -63,6 +63,10 @@ export GOSUMDB=off
 # cloud
 export KUBECONFIG=~/.kube/config
 
+# editor
+export EDITOR=nvim
+export VISUAL=nvim
+
 # misc tools
 export PATH="$HOME/.local/bin:$PATH"
 export BUN_INSTALL="$HOME/.bun"
