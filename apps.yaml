@@ -3,7 +3,6 @@ install:
   brew:
     taps:
       - "anomalyco/tap"
-      - "autozimu/formulas"
       - "aws/tap"
       - "hashicorp/tap"
     formulas:
@@ -12,7 +11,6 @@ install:
       - "asciinema"
       - "atuin"
       - "automake"
-      - "autozimu/homebrew-formulas/unison-fsmonitor"
       - "awscli"
       - "bash-completion"
       - "bash"
