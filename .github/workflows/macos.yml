@@ -62,7 +62,7 @@ jobs:
         - name: update history of executed commands
           shell: zsh {0}
           run: |
-            brew install zsh zsh-completions atuin coreutils
+            brew install zsh zsh-completions atuin coreutils go
             export PATH="$HOME/go/bin:$PATH"
             go install github.com/oklog/ulid/v2/cmd/ulid@latest
             mkdir -p "$HOME/.local/share/atuin"

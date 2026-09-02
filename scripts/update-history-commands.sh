@@ -21,15 +21,15 @@ session=${ATUIN_SESSION}
 
 # ------------------------------------------------------------------------------
 
-for section in $(yq -r '. | keys' <<< $COMMANDS | awk '{ print $2}'); do
-    section_description=$(yq -r ".[\"${section}\"].description" <<< $COMMANDS)
+for section in $(yq -r '. | keys' <<< "$COMMANDS" | awk '{ print $2}'); do
+    section_description=$(yq -r ".[\"${section}\"].description" <<< "$COMMANDS")
 
     print::section "${section}"
     print::section_paragraph "${section_description}"
 
-    for i in $(seq 0 $(($(yq -r ".[\"${section}\"].commands | length" <<< $COMMANDS) - 1))); do
-        description=$(yq -r ".[\"${section}\"].commands[${i}].description" <<< $COMMANDS)
-        command=$(yq -r ".[\"${section}\"].commands[${i}].command" <<< $COMMANDS | tr '\n' ' ' | tr -s ' ' | sed 's/"/\\"/g' | sed 's/ *$//g')
+    for i in $(seq 0 $(($(yq -r ".[\"${section}\"].commands | length" <<< "$COMMANDS") - 1))); do
+        description=$(yq -r ".[\"${section}\"].commands[${i}].description" <<< "$COMMANDS")
+        command=$(yq -r ".[\"${section}\"].commands[${i}].command" <<< "$COMMANDS" | tr '\n' ' ' | tr -s ' ' | sed 's/"/\\"/g' | sed 's/ *$//g')
 
         sql=$(cat <<EOF
 .parameter init
