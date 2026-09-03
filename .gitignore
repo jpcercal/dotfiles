@@ -4,3 +4,5 @@ logs/
 opencode/plugins/rtk.ts
 opencode/plugins/claude-mem.js*
 *.zwc
+/target/
+Apple-macOS-27-UI-Kit.sketch
