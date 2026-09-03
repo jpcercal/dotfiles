@@ -55,7 +55,7 @@ jobs:
       - run: ./target/release/dotfiles --version
 
   coverage:
-    name: coverage (exec/manifest/backends/prefs/core)
+    name: coverage (exec/manifest/backends/prefs)
     runs-on: macos-15
     timeout-minutes: 10
     steps:
@@ -70,7 +70,10 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
+      # dotfiles-core is intentionally excluded: its pipeline/probes execute
+      # real system tools and are covered by the `sync --sandbox` E2E test,
+      # not by line coverage.
       - run: >-
           cargo llvm-cov nextest --profile ci
-          -p dotfiles-exec -p dotfiles-manifest -p dotfiles-backends -p dotfiles-prefs -p dotfiles-core
-          --fail-under-lines 70 --summary-only
+          -p dotfiles-exec -p dotfiles-manifest -p dotfiles-backends -p dotfiles-prefs
+          --fail-under-lines 80 --summary-only

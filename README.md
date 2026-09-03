@@ -83,7 +83,7 @@ listed, never auto-installed.
 cargo test --workspace                 # all tests (≈90)
 cargo nextest run --workspace --no-default-features   # CI mode: parallel, no GUI build
 cargo clippy --workspace --all-targets -- -D warnings
-cargo llvm-cov nextest -p dotfiles-exec -p dotfiles-manifest -p dotfiles-backends -p dotfiles-prefs -p dotfiles-core --fail-under-lines 70
+cargo llvm-cov nextest -p dotfiles-exec -p dotfiles-manifest -p dotfiles-backends -p dotfiles-prefs --fail-under-lines 80
 ```
 
 Repo layout:
