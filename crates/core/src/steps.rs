@@ -17,11 +17,28 @@ pub enum LogStream {
 /// the password answer is delivered on (empty string = cancel).
 #[derive(Debug)]
 pub enum PipelineEvent {
-    StepStarted { name: String, index: usize, total: usize },
-    LogLine { step: String, stream: LogStream, line: String },
-    StepFinished { report: StepReport },
-    SudoPrompt { command: String, reason: String, respond: mpsc::Sender<String> },
-    RunFinished { status: String, report_path: PathBuf },
+    StepStarted {
+        name: String,
+        index: usize,
+        total: usize,
+    },
+    LogLine {
+        step: String,
+        stream: LogStream,
+        line: String,
+    },
+    StepFinished {
+        report: StepReport,
+    },
+    SudoPrompt {
+        command: String,
+        reason: String,
+        respond: mpsc::Sender<String>,
+    },
+    RunFinished {
+        status: String,
+        report_path: PathBuf,
+    },
 }
 
 /// Result of a spawned step
@@ -50,7 +67,11 @@ fn looks_like_password_prompt(buf: &str) -> bool {
 /// Ask the GUI for a password (SudoPrompt event) and block until answered.
 /// Empty string = user cancelled. Times out after 5 min so a headless run
 /// without a GUI listener doesn't hang forever.
-fn request_password(event_tx: &Option<mpsc::Sender<PipelineEvent>>, command: &str, reason: &str) -> String {
+fn request_password(
+    event_tx: &Option<mpsc::Sender<PipelineEvent>>,
+    command: &str,
+    reason: &str,
+) -> String {
     if event_tx.is_none() {
         return String::new();
     }
@@ -87,13 +108,16 @@ fn sudo_wrapper_dir() -> Option<PathBuf> {
     let shim = base.join("sudo");
     let script = "#!/bin/sh\nexec /usr/bin/sudo -A \"$@\"\n";
     if std::fs::write(&shim, script).is_ok() {
-        let _ = std::process::Command::new("chmod").args(["+x", shim.to_str()?]).output();
+        let _ = std::process::Command::new("chmod")
+            .args(["+x", shim.to_str()?])
+            .output();
         Some(base)
     } else {
         None
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Run a command with streaming, writing to per-step log and combined log.
 /// If SUDO_ASKPASS is set, sudo will invoke it for password.
 /// stdin is captured (never inherited from a terminal): password prompts are
@@ -158,7 +182,13 @@ pub fn run_step(
     }
 
     // Header for logs
-    let header = format!("\n▶ {}  {}\n# {} {}\n", name, chrono::Local::now().format("%H:%M:%S"), program, args.join(" "));
+    let header = format!(
+        "\n▶ {}  {}\n# {} {}\n",
+        name,
+        chrono::Local::now().format("%H:%M:%S"),
+        program,
+        args.join(" ")
+    );
     if let Some(ref f) = combined_file {
         use std::io::Write;
         let _ = writeln!(f.try_clone().unwrap(), "{}", header);
@@ -170,7 +200,11 @@ pub fn run_step(
     // Also emit as LogLine events
     if let Some(tx) = &event_tx {
         for line in header.lines() {
-            let _ = tx.send(PipelineEvent::LogLine { step: name.to_string(), stream: LogStream::Combined, line: line.to_string() });
+            let _ = tx.send(PipelineEvent::LogLine {
+                step: name.to_string(),
+                stream: LogStream::Combined,
+                line: line.to_string(),
+            });
         }
     }
 
@@ -187,7 +221,10 @@ pub fn run_step(
                 note,
                 raw_log: format!("{}.{}.log", run_id, name),
             };
-            return StepOutcome { report, exit_code: 127 };
+            return StepOutcome {
+                report,
+                exit_code: 127,
+            };
         }
     };
 
@@ -260,13 +297,25 @@ pub fn run_step(
                 let _ = writeln!(f, "{}", line);
             }
             if let Some(tx) = &event_tx {
-                let _ = tx.send(PipelineEvent::LogLine { step: name.to_string(), stream: stream.clone(), line: line.clone() });
-                let _ = tx.send(PipelineEvent::LogLine { step: name.to_string(), stream: LogStream::Combined, line: line.clone() });
+                let _ = tx.send(PipelineEvent::LogLine {
+                    step: name.to_string(),
+                    stream: stream.clone(),
+                    line: line.clone(),
+                });
+                let _ = tx.send(PipelineEvent::LogLine {
+                    step: name.to_string(),
+                    stream: LogStream::Combined,
+                    line: line.clone(),
+                });
             }
             // Newline-terminated prompts are answered here too
             if prompts_answered < 3 && looks_like_password_prompt(&line) {
                 prompts_answered += 1;
-                let answer = request_password(&event_tx, &command_display, &format!("step '{}' requested a password", name));
+                let answer = request_password(
+                    &event_tx,
+                    &command_display,
+                    &format!("step '{}' requested a password", name),
+                );
                 deliver_answer(&mut stdin_writer, &answer);
             }
         }
@@ -276,7 +325,11 @@ pub fn run_step(
         if prompts_answered < 3 && looks_like_password_prompt(&line_bufs[idx]) {
             prompts_answered += 1;
             line_bufs[idx].clear();
-            let answer = request_password(&event_tx, &command_display, &format!("step '{}' requested a password", name));
+            let answer = request_password(
+                &event_tx,
+                &command_display,
+                &format!("step '{}' requested a password", name),
+            );
             deliver_answer(&mut stdin_writer, &answer);
         }
     }
@@ -285,7 +338,11 @@ pub fn run_step(
     for (idx, buf) in line_bufs.iter_mut().enumerate() {
         let line = buf.trim_end().to_string();
         if !line.is_empty() {
-            let stream = if idx == 0 { LogStream::Stdout } else { LogStream::Stderr };
+            let stream = if idx == 0 {
+                LogStream::Stdout
+            } else {
+                LogStream::Stderr
+            };
             if let Some(ref mut f) = step_file {
                 let _ = writeln!(f, "{}", line);
             }
@@ -293,8 +350,16 @@ pub fn run_step(
                 let _ = writeln!(f, "{}", line);
             }
             if let Some(tx) = &event_tx {
-                let _ = tx.send(PipelineEvent::LogLine { step: name.to_string(), stream: stream.clone(), line: line.clone() });
-                let _ = tx.send(PipelineEvent::LogLine { step: name.to_string(), stream: LogStream::Combined, line });
+                let _ = tx.send(PipelineEvent::LogLine {
+                    step: name.to_string(),
+                    stream: stream.clone(),
+                    line: line.clone(),
+                });
+                let _ = tx.send(PipelineEvent::LogLine {
+                    step: name.to_string(),
+                    stream: LogStream::Combined,
+                    line,
+                });
             }
         }
         buf.clear();
@@ -309,14 +374,58 @@ pub fn run_step(
     let _ = start_secs; // unused but kept for parity
     let report = StepReport {
         name: name.to_string(),
-        status: if code == 0 { "success".into() } else { "failed".into() },
+        status: if code == 0 {
+            "success".into()
+        } else {
+            "failed".into()
+        },
         duration_seconds: duration,
         updated: Value::Array(vec![]),
         failed: Value::Array(vec![]),
-        note: if code == 0 { "".into() } else { format!("exited {}", code) },
+        note: if code == 0 {
+            "".into()
+        } else {
+            format!("exited {}", code)
+        },
         raw_log: format!("{}.{}.log", run_id, name),
     };
-    StepOutcome { report, exit_code: code }
+    StepOutcome {
+        report,
+        exit_code: code,
+    }
+}
+
+/// `run_step` with an additional environment overlay (e.g. HOMEBREW_NO_COLOR).
+#[allow(clippy::too_many_arguments)]
+pub fn run_step_env(
+    name: &str,
+    program: &str,
+    args: &[&str],
+    env: &[(&str, &str)],
+    log_dir: &Path,
+    run_id: &str,
+    combined_log: &Path,
+    event_tx: Option<mpsc::Sender<PipelineEvent>>,
+    sudo_askpass: Option<&Path>,
+) -> StepOutcome {
+    // Wrap via env key injection: temporarily extend process env is racy;
+    // instead route through `env(1)`-free direct spawn is what run_step does —
+    // so we expose a parameterized variant here using a shim: set envs on the
+    // command by wrapping into `/usr/bin/env`.
+    let mut full_args: Vec<String> = env.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+    full_args.push(program.to_string());
+    full_args.extend(args.iter().map(|s| s.to_string()));
+    let argv: Vec<&str> = full_args.iter().map(String::as_str).collect();
+    run_step(
+        name,
+        "/usr/bin/env",
+        &argv,
+        log_dir,
+        run_id,
+        combined_log,
+        event_tx,
+        sudo_askpass,
+    )
 }
 
 pub fn parse_brew_upgraded(log_path: &Path) -> Value {
@@ -349,17 +458,32 @@ pub fn parse_brew_upgraded(log_path: &Path) -> Value {
 
 pub fn brew_deprecated_json() -> Value {
     // best-effort, slow
-    let formulae = Command::new("brew").args(["list", "--formula"]).output().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+    let formulae = Command::new("brew")
+        .args(["list", "--formula"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
     let list = formulae.split_whitespace().collect::<Vec<_>>().join(" ");
     if list.is_empty() {
         return Value::Array(vec![]);
     }
-    let out = Command::new("brew").args(["info", "--json=v2"]).arg(&list).output();
+    let out = Command::new("brew")
+        .args(["info", "--json=v2"])
+        .arg(&list)
+        .output();
     if let Ok(o) = out {
         let s = String::from_utf8_lossy(&o.stdout);
         if let Ok(v) = serde_json::from_str::<Value>(&s) {
             if let Some(arr) = v.get("formulae").and_then(|x| x.as_array()) {
-                let deprecated: Vec<Value> = arr.iter().filter(|f| f.get("deprecated").and_then(|x| x.as_bool()).unwrap_or(false)).filter_map(|f| f.get("name").cloned()).collect();
+                let deprecated: Vec<Value> = arr
+                    .iter()
+                    .filter(|f| {
+                        f.get("deprecated")
+                            .and_then(|x| x.as_bool())
+                            .unwrap_or(false)
+                    })
+                    .filter_map(|f| f.get("name").cloned())
+                    .collect();
                 return Value::Array(deprecated);
             }
         }
@@ -368,7 +492,9 @@ pub fn brew_deprecated_json() -> Value {
 }
 
 pub fn composer_audit_json() -> Value {
-    let out = Command::new("composer").args(["global", "audit", "--format=json"]).output();
+    let out = Command::new("composer")
+        .args(["global", "audit", "--format=json"])
+        .output();
     if let Ok(o) = out {
         let s = String::from_utf8_lossy(&o.stdout);
         if let Ok(v) = serde_json::from_str::<Value>(&s) {
@@ -388,7 +514,16 @@ pub fn run_bash_step(
     event_tx: Option<mpsc::Sender<PipelineEvent>>,
     sudo_askpass: Option<&Path>,
 ) -> StepOutcome {
-    run_step(name, "bash", &["-c", bash_script], log_dir, run_id, combined_log, event_tx, sudo_askpass)
+    run_step(
+        name,
+        "bash",
+        &["-c", bash_script],
+        log_dir,
+        run_id,
+        combined_log,
+        event_tx,
+        sudo_askpass,
+    )
 }
 
 #[cfg(test)]
