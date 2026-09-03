@@ -1,4 +1,6 @@
+# yaml-language-server: $schema=./schema/apps.schema.json
 ---
+schema_version: 1
 install:
   brew:
     taps:
@@ -162,24 +164,28 @@ install:
       - "vlc"
       - "whatsapp"
       - "zoom"
-    customCommands: 
-      - "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-      - "echo \"y\" | $(brew --prefix)/opt/fzf/install"
-      - "git lfs install"
-      - "go install github.com/oklog/ulid/v2/cmd/ulid@latest"
-      - "mkdir -p ~/.config/tmux/"
-      - "uv python install"
-      - "ln -sfn \"$(dirname \"$(uv python find)\")/python3\" ~/.local/bin/python"
-      - "ln -sfn \"$(dirname \"$(uv python find)\")/python3\" ~/.local/bin/python3"
-      - "ln -sfn \"$(dirname \"$(uv python find)\")/pip3\" ~/.local/bin/pip"
-      - "ln -sfn \"$(dirname \"$(uv python find)\")/pip3\" ~/.local/bin/pip3"
-      - "uv pip install --system --break-system-packages --python \"$(uv python find)\" pynvim neovim"
-      - "fnm install --lts"
-      - "fnm default lts-latest"
-      - "curl -fsSL https://opencode.ai/install | bash"
-      - "rtk init -g --opencode --auto-patch"
-      - "npx claude-mem install --ide opencode --provider openrouter"
-      - "curl -fLo \"${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/autoload/plug.vim\" --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim"
+  pip:
+    packages:
+      - "pynvim"
+      - "neovim"
+  go:
+    packages:
+      - "github.com/oklog/ulid/v2/cmd/ulid@latest"
+  toolchains:
+    rustup:
+      channel: "stable"
+    node:
+      ensure: "lts"
+    python:
+      provider: "uv"
+  bootstrap:
+    - "fzf-keybindings"
+    - "git-lfs"
+    - "python-links"
+    - "nvim-plug"
+    - "opencode"
+    - "rtk-patch"
+    - "claude-mem"
   gem:
     rubygems:
       - "neovim"
@@ -239,6 +245,7 @@ install:
 config:
   mkdir: 
     - ~/.config/nvim/
+    - ~/.config/tmux/
   symbolic_links:  
     - from: 
         relative_path: ".curlrc"
