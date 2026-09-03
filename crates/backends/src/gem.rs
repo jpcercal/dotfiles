@@ -91,6 +91,44 @@ mod tests {
     }
 
     #[test]
+    fn upgrade_reports_previously_outdated() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "gem",
+            "case \"$1\" in outdated) echo 'rake (1.0 < 2.0)';; update) exit 0;; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = Gem.upgrade(&env).unwrap();
+        assert_eq!(out.changed, vec!["rake"]);
+        assert_eq!(t.calls_of("gem"), vec!["outdated", "update --no-document"]);
+    }
+
+    #[test]
+    fn upgrade_failure_records_note() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "gem",
+            "case \"$1\" in update) echo 'network down' 1>&2; exit 1;; outdated) exit 0;; esac",
+        );
+        let env = t.exec().clone();
+        let out = Gem.upgrade(&env).unwrap();
+        assert!(out.changed.is_empty());
+        assert!(out.note.contains("network down"), "{}", out.note);
+    }
+
+    #[test]
+    fn search_and_info_passthrough() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub("gem", "case \"$1\" in search) echo 'rake (13.0)'; echo 'rspec (3.0)';; info) echo 'rake: make-like';; esac; exit 0");
+        let env = t.exec().clone();
+        assert_eq!(
+            Gem.search(&env, "ra").unwrap(),
+            vec!["rake (13.0)", "rspec (3.0)"]
+        );
+        assert!(Gem.info(&env, "rake").unwrap().contains("make-like"));
+    }
+
+    #[test]
     fn idempotent_install() {
         let t = dotfiles_testkit::TestEnv::new();
         t.stub(

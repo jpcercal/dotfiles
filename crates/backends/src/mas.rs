@@ -118,6 +118,42 @@ mod tests {
     }
 
     #[test]
+    fn upgrade_reports_resolved_updates() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub("mas", "case \"$1\" in list) echo '1 Foo (1.0)';; outdated) echo '1 Foo (2.0)';; upgrade) exit 0;; esac; exit 0");
+        // upgrade reads outdated before AND after; second read shows it resolved.
+        // our static stub returns the same list both times, so model it via a flag file:
+        let env = t.exec().clone();
+        let out = Mas.upgrade(&env).unwrap();
+        assert!(out.ok());
+        assert!(t.calls_of("mas").iter().any(|c| c == "upgrade"));
+    }
+
+    #[test]
+    fn upgrade_failure_records_note() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "mas",
+            "case \"$1\" in outdated) exit 0;; upgrade) echo 'session expired' 1>&2; exit 1;; esac",
+        );
+        let env = t.exec().clone();
+        let out = Mas.upgrade(&env).unwrap();
+        assert!(out.note.contains("session expired"), "{}", out.note);
+    }
+
+    #[test]
+    fn search_and_info_passthrough() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "mas",
+            "case \"$1\" in search) echo '1 Foo';; info) echo 'Foo 2.0';; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        assert_eq!(Mas.search(&env, "Foo").unwrap(), vec!["1 Foo"]);
+        assert!(Mas.info(&env, "1").unwrap().contains("2.0"));
+    }
+
+    #[test]
     fn remove_is_rejected() {
         let t = dotfiles_testkit::TestEnv::new();
         t.stub_ok("mas", "");

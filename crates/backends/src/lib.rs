@@ -153,4 +153,48 @@ pub(crate) mod util {
             .trim()
             .to_string()
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn filters_partition_new_and_absent() {
+            let installed = vec!["a".to_string(), "b".to_string()];
+            let (todo, already) = filter_new(&installed, &["a".into(), "c".into()]);
+            assert_eq!(todo, vec!["c"]);
+            assert_eq!(already, vec!["a"]);
+            let (todo, absent) = filter_absent(&installed, &["b".into(), "z".into()]);
+            assert_eq!(todo, vec!["b"]);
+            assert_eq!(absent, vec!["z"]);
+        }
+
+        #[test]
+        fn summarize_error_prefers_stderr_last_line() {
+            assert_eq!(summarize_error("boom\n", ""), "boom");
+            assert_eq!(summarize_error("", "out\ntail\n"), "tail");
+            assert_eq!(summarize_error("", ""), "unknown error");
+        }
+
+        #[test]
+        fn run_batch_empty_is_noop_and_failure_attributes_all() {
+            let t = dotfiles_testkit::TestEnv::new();
+            t.stub_fail("gem", 1);
+            let empty = run_batch(t.exec(), "gem", "install", &[], &[], "gem").unwrap();
+            assert!(empty.ok() && empty.changed.is_empty());
+            assert!(t.calls_of("gem").is_empty());
+            t.stub("gem", "echo 'nope' 1>&2; exit 1");
+            let failed = run_batch(
+                t.exec(),
+                "gem",
+                "install",
+                &[],
+                &["a".into(), "b".into()],
+                "gem",
+            )
+            .unwrap();
+            assert!(!failed.ok());
+            assert_eq!(failed.failed.len(), 2);
+        }
+    }
 }

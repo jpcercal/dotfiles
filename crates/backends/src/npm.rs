@@ -108,6 +108,63 @@ mod tests {
     }
 
     #[test]
+    fn outdated_parsed_despite_exit_1() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub("npm", "case \"$1\" in outdated) echo '{\"neovim\":{\"current\":\"5.0\"}}'; exit 1;; esac; exit 0");
+        let env = t.exec().clone();
+        assert_eq!(Npm.outdated(&env).unwrap(), vec!["neovim"]);
+    }
+
+    #[test]
+    fn upgrade_reports_previously_outdated() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "npm",
+            "case \"$1\" in ls) echo '{\"dependencies\":{\"neovim\":{}}}';; outdated) echo '{\"neovim\":{}}'; exit 1;; update) exit 0;; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = Npm.upgrade(&env).unwrap();
+        assert_eq!(out.changed, vec!["neovim"]);
+        assert!(t.calls_of("npm").iter().any(|c| c == "update -g"));
+    }
+
+    #[test]
+    fn upgrade_failure_records_note() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "npm",
+            "case \"$1\" in outdated) exit 0;; update) echo 'EAI_AGAIN' 1>&2; exit 1;; esac",
+        );
+        let env = t.exec().clone();
+        let out = Npm.upgrade(&env).unwrap();
+        assert!(out.note.contains("EAI_AGAIN"), "{}", out.note);
+    }
+
+    #[test]
+    fn remove_uninstalls_present_only() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "npm",
+            "case \"$1\" in ls) echo '{\"dependencies\":{\"neovim\":{}}}';; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = Npm
+            .remove(&env, &["neovim".into(), "prettier".into()])
+            .unwrap();
+        assert_eq!(out.changed, vec!["neovim"]);
+        assert_eq!(out.unchanged, vec!["prettier"]);
+        assert!(t.calls_of("npm").iter().any(|c| c == "uninstall -g neovim"));
+    }
+
+    #[test]
+    fn search_splits_tsv_first_column() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub_ok("npm", "neovim\tneovim client\n");
+        let env = t.exec().clone();
+        assert_eq!(Npm.search(&env, "neovim").unwrap(), vec!["neovim"]);
+    }
+
+    #[test]
     fn idempotent_install() {
         let t = dotfiles_testkit::TestEnv::new();
         t.stub(

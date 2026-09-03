@@ -128,6 +128,60 @@ mod tests {
     }
 
     #[test]
+    fn upgrade_uses_cargo_update_when_present() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "cargo",
+            "case \"$*\" in \"install-update --version\") exit 0 ;; \"install-update -a\") echo 'Updating foo' ;; \"install-update --list\") echo 'foo  1.0  2.0  Yes' ;; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = Cargo.upgrade(&env).unwrap();
+        assert_eq!(out.changed, vec!["foo"]);
+        assert!(t.calls_of("cargo").iter().any(|c| c == "install-update -a"));
+    }
+
+    #[test]
+    fn upgrade_reinstalls_without_cargo_update() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "cargo",
+            "case \"$*\" in \"install-update --version\") exit 1 ;; \"install --list\") echo 'ripgrep v14:' ;; \"install ripgrep\") exit 0 ;; \"install-update --list\") exit 1 ;; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = Cargo.upgrade(&env).unwrap();
+        assert!(
+            t.calls_of("cargo").iter().any(|c| c == "install ripgrep"),
+            "{:?}",
+            t.calls_of("cargo")
+        );
+        assert!(out.ok());
+    }
+
+    #[test]
+    fn outdated_empty_without_cargo_update() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub_fail("cargo", 1);
+        let env = t.exec().clone();
+        assert!(Cargo.outdated(&env).unwrap().is_empty());
+    }
+
+    #[test]
+    fn remove_uninstalls() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "cargo",
+            "case \"$2\" in --list) echo 'ripgrep v14:';; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = Cargo
+            .remove(&env, &["ripgrep".into(), "gone".into()])
+            .unwrap();
+        assert_eq!(out.changed, vec!["ripgrep"]);
+        assert_eq!(out.unchanged, vec!["gone"]);
+        assert!(t.calls_of("cargo").iter().any(|c| c == "uninstall ripgrep"));
+    }
+
+    #[test]
     fn idempotent_install_one_by_one() {
         let t = dotfiles_testkit::TestEnv::new();
         t.stub(

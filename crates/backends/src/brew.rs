@@ -251,6 +251,30 @@ mod tests {
     }
 
     #[test]
+    fn upgrade_failure_records_note() {
+        let t = TestEnv::new();
+        t.stub("brew", "case \"$*\" in \"outdated --quiet --formula\") exit 0;; \"upgrade --formula\") echo 'conflict' 1>&2; exit 1;; esac; exit 0");
+        let env = t.exec().clone();
+        let out = Brew.upgrade(&env).unwrap();
+        assert!(out.changed.is_empty());
+        assert!(out.note.contains("conflict"), "{}", out.note);
+    }
+
+    #[test]
+    fn search_and_info_passthrough() {
+        let t = TestEnv::new();
+        t.stub("brew", "case \"$1\" in search) echo 'ripgrep';; info) echo 'ripgrep: fast grep';; esac; exit 0");
+        let env = t.exec().clone();
+        assert_eq!(Brew.search(&env, "rg").unwrap(), vec!["ripgrep"]);
+        assert!(Brew.info(&env, "ripgrep").unwrap().contains("fast grep"));
+        // flags travel along
+        assert!(t
+            .calls_of("brew")
+            .iter()
+            .any(|c| c.starts_with("search --formula rg")));
+    }
+
+    #[test]
     fn upgrade_reports_previously_outdated() {
         let t = TestEnv::new();
         t.stub(

@@ -100,6 +100,83 @@ fn empty_document_is_valid_manifest() {
 }
 
 #[test]
+fn missing_files_report_io_errors() {
+    let err = load_manifest(std::path::Path::new("/nonexistent/apps.yaml")).unwrap_err();
+    assert!(matches!(err, ManifestError::Io { .. }), "{}", err);
+    let err = load_commands(std::path::Path::new("/nonexistent/commands.yaml")).unwrap_err();
+    assert!(matches!(err, ManifestError::Io { .. }), "{}", err);
+}
+
+#[test]
+fn invalid_yaml_rejected() {
+    let err = parse_manifest("install:\n  brew:\n   - [\n").unwrap_err();
+    assert!(matches!(err, ManifestError::Yaml { .. }), "{}", err);
+}
+
+#[test]
+fn rejects_empty_custom_command() {
+    let err = parse_manifest("install:\n  brew:\n    customCommands: [\"\"]\n").unwrap_err();
+    assert!(err.to_string().contains("empty command"), "{}", err);
+}
+
+#[test]
+fn rejects_duplicate_mas_id_and_empty_name() {
+    let err = parse_manifest(
+        "install:\n  mas:\n    apps:\n      - { id: \"1\", name: \"A\" }\n      - { id: \"1\", name: \"B\" }\n",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("duplicate id 1"), "{}", err);
+    let err = parse_manifest("install:\n  mas:\n    apps:\n      - { id: \"2\", name: \"\" }\n")
+        .unwrap_err();
+    assert!(err.to_string().contains("empty name"), "{}", err);
+}
+
+#[test]
+fn rejects_unknown_bootstrap_step_and_bad_toolchains() {
+    let err = parse_manifest("install:\n  bootstrap: [nope]\n").unwrap_err();
+    assert!(err.to_string().contains("unknown step"), "{}", err);
+    let err =
+        parse_manifest("install:\n  toolchains:\n    node: { ensure: \"20\" }\n").unwrap_err();
+    assert!(
+        err.to_string().contains("install.toolchains.node.ensure"),
+        "{}",
+        err
+    );
+    let err = parse_manifest("install:\n  toolchains:\n    python: { provider: \"system\" }\n")
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("install.toolchains.python.provider"),
+        "{}",
+        err
+    );
+}
+
+#[test]
+fn rejects_invalid_dock_and_link_entries() {
+    let err =
+        parse_manifest("config:\n  dockutil:\n    add:\n      - { app: \"relative/Foo.app\" }\n")
+            .unwrap_err();
+    assert!(err.to_string().contains("absolute .app path"), "{}", err);
+    let err = parse_manifest(
+        "config:\n  dockutil:\n    add:\n      - { app: \"/Applications/Foo.app\", after: \"\" }\n",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("empty 'after'"), "{}", err);
+    let err = parse_manifest(
+        "config:\n  symbolic_links:\n    - from: { relative_path: \".x\" }\n      to: { absolute_path: \"\" }\n",
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("empty to.absolute_path"),
+        "{}",
+        err
+    );
+    let err = parse_manifest("install:\n  brew:\n    formulas: [\"\"]\n").unwrap_err();
+    assert!(err.to_string().contains("empty entry"), "{}", err);
+}
+
+#[test]
 fn schema_mentions_all_top_level_sections() {
     let schema = schema_json().expect("schema export");
     for needle in [

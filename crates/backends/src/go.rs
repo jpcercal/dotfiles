@@ -135,6 +135,38 @@ mod tests {
     }
 
     #[test]
+    fn remove_deletes_existing_binary() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub("go", "case \"$*\" in \"env GOPATH\") echo \"$HOME/gopath\" ;; \"env GOBIN\") echo '' ;; esac; exit 0");
+        let bin = t.home().join("gopath/bin/tool");
+        std::fs::create_dir_all(bin.parent().unwrap()).unwrap();
+        std::fs::write(&bin, b"").unwrap();
+        let env = t.exec().clone();
+        let out = Go
+            .remove(
+                &env,
+                &[
+                    "example.com/x/tool@latest".into(),
+                    "example.com/y/absent@latest".into(),
+                ],
+            )
+            .unwrap();
+        assert_eq!(out.changed, vec!["example.com/x/tool@latest"]);
+        assert_eq!(out.unchanged, vec!["example.com/y/absent@latest"]);
+        assert!(!bin.exists());
+    }
+
+    #[test]
+    fn upgrade_is_documented_noop() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub_ok("go", "");
+        let env = t.exec().clone();
+        let out = Go.upgrade(&env).unwrap();
+        assert!(out.ok());
+        assert!(!out.note.is_empty());
+    }
+
+    #[test]
     fn install_skips_when_binary_exists() {
         let t = dotfiles_testkit::TestEnv::new();
         t.stub("go", "case \"$*\" in \"env GOBIN\") echo '' ;; \"env GOPATH\") printf '%s/gopath' \"$HOME\" ;; esac; exit 0");

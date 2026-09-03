@@ -105,6 +105,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn upgrade_reports_outdated() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "composer",
+            "case \"$2\" in outdated) echo '{\"installed\":[{\"name\":\"a/b\"}]}';; *) exit 0;; esac",
+        );
+        let env = t.exec().clone();
+        let out = Composer.upgrade(&env).unwrap();
+        assert_eq!(out.changed, vec!["a/b"]);
+        assert!(t
+            .calls_of("composer")
+            .iter()
+            .any(|c| c.starts_with("global update")));
+    }
+
+    #[test]
+    fn upgrade_failure_records_note() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub("composer", "case \"$2\" in outdated) echo '{}';; update) echo 'killed' 1>&2; exit 1;; *) exit 0;; esac");
+        let env = t.exec().clone();
+        let out = Composer.upgrade(&env).unwrap();
+        assert!(out.note.contains("killed"), "{}", out.note);
+    }
+
+    #[test]
+    fn remove_uninstalls_present_only() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "composer",
+            "case \"$1 $2 $3\" in \"global show -N\") echo 'a/b';; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = Composer
+            .remove(&env, &["a/b".into(), "c/d".into()])
+            .unwrap();
+        assert_eq!(out.changed, vec!["a/b"]);
+        assert_eq!(out.unchanged, vec!["c/d"]);
+    }
+
+    #[test]
+    fn search_keeps_vendor_names_only() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub_ok("composer", "a/b\nplainline\n");
+        let env = t.exec().clone();
+        assert_eq!(Composer.search(&env, "a").unwrap(), vec!["a/b"]);
+    }
+
+    #[test]
     fn idempotent_global_require() {
         let t = dotfiles_testkit::TestEnv::new();
         t.stub("composer", "case \"$1 $2 $3\" in \"global show -N\") echo 'friendsofphp/php-cs-fixer';; esac; exit 0");

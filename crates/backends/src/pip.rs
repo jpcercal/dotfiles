@@ -170,6 +170,67 @@ mod tests {
       esac; exit 0";
 
     #[test]
+    fn upgrade_upgrades_outdated_with_dash_u() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "uv",
+            "case \"$*\" in \"python find\") echo '/usr/bin/python3' ;; *--outdated*) echo '[{\"name\":\"oldpkg\"}]' ;; \"pip list\"*) echo '[]' ;; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = UvPip.upgrade(&env).unwrap();
+        assert_eq!(out.changed, vec!["oldpkg"]);
+        let install = t
+            .calls_of("uv")
+            .into_iter()
+            .find(|c| c.starts_with("pip install"))
+            .expect("pip install call");
+        assert!(install.contains("-U"), "{}", install);
+        assert!(install.ends_with("oldpkg"), "{}", install);
+    }
+
+    #[test]
+    fn upgrade_noop_when_nothing_outdated() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "uv",
+            "case \"$*\" in \"python find\") echo '/usr/bin/python3' ;; *--outdated*) echo '[]' ;; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = UvPip.upgrade(&env).unwrap();
+        assert!(out.changed.is_empty());
+        assert!(!t
+            .calls_of("uv")
+            .iter()
+            .any(|c| c.starts_with("pip install")));
+    }
+
+    #[test]
+    fn remove_uninstalls_each_present_package() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "uv",
+            "case \"$1 $2\" in \"python find\") echo '/usr/bin/python3' ;; \"pip list\") echo '[{\"name\":\"pynvim\"}]' ;; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        let out = UvPip
+            .remove(&env, &["pynvim".into(), "gone".into()])
+            .unwrap();
+        assert_eq!(out.changed, vec!["pynvim"]);
+        assert_eq!(out.unchanged, vec!["gone"]);
+    }
+
+    #[test]
+    fn missing_python_is_an_error() {
+        let t = dotfiles_testkit::TestEnv::new();
+        t.stub(
+            "uv",
+            "case \"$1 $2\" in \"python find\") exit 0 ;; esac; exit 0",
+        );
+        let env = t.exec().clone();
+        assert!(UvPip.install(&env, &["x".into()]).is_err());
+    }
+
+    #[test]
     fn installed_names_from_uv_json() {
         let t = dotfiles_testkit::TestEnv::new();
         t.stub("uv", UV_STUB);
