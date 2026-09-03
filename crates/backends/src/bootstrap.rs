@@ -54,10 +54,15 @@ fn outcome(backend: &'static str) -> BackendOutcome {
 /// (no shell pipeline), feeding answers via stdin.
 fn fzf_keybindings(env: &ExecEnv) -> Result<BackendOutcome> {
     let mut out = outcome("bootstrap:fzf-keybindings");
-    let prefix = env.output("brew", &["--prefix"]).context("brew --prefix")?;
-    let installer = format!("{}/opt/fzf/install", prefix.stdout.trim());
     if env.home.join(".fzf.zsh").exists() {
         out.unchanged.push("~/.fzf.zsh".into());
+        return Ok(out);
+    }
+    let prefix = env.output("brew", &["--prefix"]).context("brew --prefix")?;
+    let installer = format!("{}/opt/fzf/install", prefix.stdout.trim());
+    if !std::path::Path::new(&installer).exists() {
+        // fzf isn't installed (or this is a sandbox) — nothing to configure.
+        out.unchanged.push("fzf not installed".into());
         return Ok(out);
     }
     let res = env.output_stdin(&installer, &["--no-update-rc"], "y\ny\ny\n")?;
@@ -215,6 +220,41 @@ mod tests {
         let out = run("opencode", t.exec()).unwrap();
         assert_eq!(out.unchanged, vec!["opencode"]);
         assert!(t.calls_of("curl").is_empty());
+    }
+
+    #[test]
+    fn fzf_keybindings_skips_when_fzf_not_installed() {
+        let t = TestEnv::new();
+        // brew --prefix resolves somewhere with no fzf installer beneath it
+        t.stub_ok("brew", "/nonexistent/prefix\n");
+        let out = run("fzf-keybindings", t.exec()).unwrap();
+        assert_eq!(out.unchanged, vec!["fzf not installed"]);
+        assert!(out.changed.is_empty());
+    }
+
+    #[test]
+    fn fzf_keybindings_runs_installer_and_answers_prompts() {
+        let t = TestEnv::new();
+        let prefix = t.root().join("homebrew");
+        let installer = prefix.join("opt/fzf/install");
+        std::fs::create_dir_all(installer.parent().unwrap()).unwrap();
+        // fake installer records the stdin it receives next to itself
+        std::fs::write(&installer, "#!/bin/sh\ncat > \"$0.stdin\"\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&installer, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        t.stub("brew", &format!("echo '{}'; exit 0", prefix.display()));
+        let out = run("fzf-keybindings", t.exec()).unwrap();
+        assert_eq!(out.changed, vec!["fzf keybindings"]);
+        let recorded = installer.parent().unwrap().join("install.stdin");
+        let stdin = std::fs::read_to_string(&recorded).unwrap();
+        assert!(
+            stdin.lines().count() >= 3,
+            "installer prompts answered: {:?}",
+            stdin
+        );
     }
 
     #[test]

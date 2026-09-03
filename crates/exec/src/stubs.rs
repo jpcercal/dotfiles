@@ -5,8 +5,10 @@
 use std::path::Path;
 
 /// (name, extra body after argv recording) pairs.
+/// `$SANDBOX` is exported into every stub and points at the sandbox root, so
+/// stubs never resolve paths on the real machine (hermeticity).
 const STANDARD_STUBS: &[(&str, &str)] = &[
-    ("brew", "if [ \"$1\" = --prefix ]; then echo /opt/homebrew; fi; exit 0"),
+    ("brew", "if [ \"$1\" = --prefix ]; then echo \"$SANDBOX/homebrew\"; fi; exit 0"),
     ("mas", "exit 0"),
     ("gem", "exit 0"),
     ("npm", "if [ \"$1\" = ls ]; then echo '{}'; fi; exit 0"),
@@ -24,7 +26,7 @@ const STANDARD_STUBS: &[(&str, &str)] = &[
     ("curl", "exit 0"),
     ("defaults", "exit 0"),
     ("dockutil", "exit 0"),
-    ("dscl", "echo 'UserShell: /opt/homebrew/bin/zsh'; exit 0"),
+    ("dscl", "echo \"UserShell: $SANDBOX/homebrew/bin/zsh\"; exit 0"),
     ("sudo", "exit 0"),
     ("sqlite3", "cat >/dev/null; exit 0"),
     ("launchctl", "exit 0"),
@@ -43,10 +45,16 @@ const STANDARD_STUBS: &[(&str, &str)] = &[
 ];
 
 /// Write the standard stubs into `bin_dir`, recording every call to `log_file`.
-pub fn install_standard_stubs(bin_dir: &Path, log_file: &Path) -> std::io::Result<()> {
+/// `sandbox_root` is exported as `$SANDBOX` inside every stub.
+pub fn install_standard_stubs(
+    bin_dir: &Path,
+    log_file: &Path,
+    sandbox_root: &Path,
+) -> std::io::Result<()> {
     for (name, body) in STANDARD_STUBS {
         let script = format!(
-            "#!/bin/sh\necho '{name} '\"$@\" >> '{log}'\n{body}\n",
+            "#!/bin/sh\nexport SANDBOX='{root}'\necho '{name} '\"$@\" >> '{log}'\n{body}\n",
+            root = sandbox_root.display(),
             name = name,
             log = log_file.display(),
             body = body
@@ -60,4 +68,42 @@ pub fn install_standard_stubs(bin_dir: &Path, log_file: &Path) -> std::io::Resul
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn standard_stubs_record_argv_and_stay_sandboxed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        let log = tmp.path().join("calls.log");
+        std::fs::create_dir_all(&bin).unwrap();
+        install_standard_stubs(&bin, &log, tmp.path()).unwrap();
+
+        // every expected tool has an executable stub
+        for tool in ["brew", "mas", "defaults", "dockutil", "sudo", "launchctl"] {
+            let p = bin.join(tool);
+            assert!(p.is_file(), "missing stub {}", tool);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                assert_ne!(
+                    std::fs::metadata(&p).unwrap().permissions().mode() & 0o111,
+                    0
+                );
+            }
+        }
+
+        // brew --prefix resolves INSIDE the sandbox, never /opt/homebrew
+        let out = std::process::Command::new(bin.join("brew"))
+            .arg("--prefix")
+            .output()
+            .unwrap();
+        let prefix = String::from_utf8(out.stdout).unwrap();
+        assert_eq!(prefix.trim(), tmp.path().join("homebrew").to_string_lossy());
+        let calls = std::fs::read_to_string(&log).unwrap();
+        assert!(calls.contains("brew --prefix"), "{}", calls);
+    }
 }

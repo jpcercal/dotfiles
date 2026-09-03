@@ -73,7 +73,7 @@ pub fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
         let mut sbx = Ctx::sandbox(&root, ctx.env.dry_run)?;
         let bin = root.join("bin");
         let calls = root.join("calls.log");
-        dotfiles_exec::stubs::install_standard_stubs(&bin, &calls)?;
+        dotfiles_exec::stubs::install_standard_stubs(&bin, &calls, &root)?;
         // Isolate from real tools for hermeticity
         sbx.env = sbx
             .env
