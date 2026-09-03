@@ -42,7 +42,13 @@ fn now_secs() -> i64 {
 /// is why output must be scanned as raw chunks, not buffered lines.
 fn looks_like_password_prompt(buf: &str) -> bool {
     let lower = buf.to_lowercase();
-    lower.contains("password for") || lower.contains("[sudo] password") || lower.trim_end().ends_with("password:")
+    lower.contains("password for")
+        || lower.contains("[sudo] password")
+        || lower.trim_end().ends_with("password:")
+        // mas/brew sudo failures that should trigger askpass instead of immediate exit 1
+        || lower.contains("a terminal is required to read the password")
+        || lower.contains("no tty present")
+        || lower.contains("sudo: a password is required")
 }
 
 /// Ask the GUI for a password (SudoPrompt event) and block until answered.
@@ -73,6 +79,22 @@ fn deliver_answer(stdin_writer: &mut Option<ChildStdin>, answer: &str) {
     } else if let Some(w) = stdin_writer.as_mut() {
         let _ = writeln!(w, "{}", answer);
         let _ = w.flush();
+    }
+}
+
+/// Create a temporary `sudo` shim that forces `-A` (askpass) when SUDO_ASKPASS is set.
+/// This makes `mas` and other tools that call `sudo` without `-A` still trigger the GUI prompt.
+/// The shim is placed in a per-run temp dir and prepended to PATH for the child.
+fn sudo_wrapper_dir() -> Option<PathBuf> {
+    let base = std::env::temp_dir().join("dotfiles-sudo-wrapper");
+    let _ = std::fs::create_dir_all(&base);
+    let shim = base.join("sudo");
+    let script = "#!/bin/sh\nexec /usr/bin/sudo -A \"$@\"\n";
+    if std::fs::write(&shim, script).is_ok() {
+        let _ = std::process::Command::new("chmod").args(["+x", shim.to_str()?]).output();
+        Some(base)
+    } else {
+        None
     }
 }
 
@@ -129,9 +151,14 @@ pub fn run_step(
         }
     }
     // Ensure we have a PATH that includes homebrew etc.
-    // Inherit env, but also set SUDO_ASKPASS if provided
+    // Inherit env, but also set SUDO_ASKPASS if provided, and prepend a sudo shim that forces -A
     if let Some(askpass) = sudo_askpass {
         cmd.env("SUDO_ASKPASS", askpass);
+        if let Some(wrapper) = sudo_wrapper_dir() {
+            let cur = std::env::var("PATH").unwrap_or_default();
+            let new_path = format!("{}:{}", wrapper.display(), cur);
+            cmd.env("PATH", new_path);
+        }
     }
 
     // Header for logs
