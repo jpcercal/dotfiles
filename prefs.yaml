@@ -1,0 +1,1524 @@
+# yaml-language-server: $schema=./schema/prefs.schema.json
+---
+prefs:
+  # =========================================================================
+  # Setup: Homebrew perms, login items, quit System Settings
+  # =========================================================================
+  - id: setup.homebrew-share-perms
+    kind: exec
+    program: chmod
+    args: ["g-w", "/opt/homebrew/share"]
+    note: "Homebrew permissions"
+
+  - id: login-item.docker
+    kind: builtin
+    name: login-item
+    app: "/Applications/Docker.app/"
+    hidden: true
+
+  - id: login-item.velja
+    kind: builtin
+    name: login-item
+    app: "/Applications/Velja.app/"
+    hidden: true
+
+  - id: login-item.macs-fan-control
+    kind: builtin
+    name: login-item
+    app: "/Applications/Macs Fan Control.app"
+
+  - id: login-item.alfred
+    kind: builtin
+    name: login-item
+    app: "/Applications/Alfred 5.app"
+
+  - id: login-item.magnet
+    kind: builtin
+    name: login-item
+    app: "/Applications/Magnet.app"
+
+  - id: setup.quit-system-settings
+    kind: exec
+    program: osascript
+    args: ["-e", "tell application \"System Settings\" to quit"]
+    ignore_error: true
+    note: "close System Settings panes so they don't override our changes"
+
+  # =========================================================================
+  # General UI/UX
+  # =========================================================================
+  - id: system.boot-sound-off
+    kind: exec
+    program: nvram
+    args: ["SystemAudioVolume= "]
+    sudo: true
+    note: "disable the sound effects on boot"
+
+  - id: ui.highlight-color
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleHighlightColor
+    type: string
+    value: "0.764700 0.976500 0.568600"
+    note: "set highlight color to green"
+
+  - id: ui.sidebar-icon-size
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSTableViewDefaultSizeMode
+    type: int
+    value: 2
+    note: "set sidebar icon size to medium"
+
+  - id: ui.scrollbars
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleShowScrollBars
+    type: string
+    value: "Always"
+
+  - id: ui.focus-ring-animation
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSUseAnimatedFocusRing
+    type: bool
+    value: false
+    note: "disable the over-the-top focus ring animation"
+
+  - id: ui.window-resize-speed
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSWindowResizeTime
+    type: float
+    value: 0.001
+    note: "increase window resize speed for Cocoa applications"
+
+  - id: ui.save-panel-expanded
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSNavPanelExpandedStateForSaveMode
+    type: bool
+    value: true
+
+  - id: ui.save-panel-expanded-2
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSNavPanelExpandedStateForSaveMode2
+    type: bool
+    value: true
+
+  - id: ui.print-panel-expanded
+    kind: defaults
+    domain: NSGlobalDomain
+    key: PMPrintingExpandedStateForPrint
+    type: bool
+    value: true
+
+  - id: ui.print-panel-expanded-2
+    kind: defaults
+    domain: NSGlobalDomain
+    key: PMPrintingExpandedStateForPrint2
+    type: bool
+    value: true
+
+  - id: ui.printer-quit-when-finished
+    kind: defaults
+    domain: com.apple.print.PrintingPrefs
+    key: "Quit When Finished"
+    type: bool
+    value: true
+
+  - id: ui.disable-quarantine-dialog
+    kind: defaults
+    domain: com.apple.LaunchServices
+    key: LSQuarantine
+    type: bool
+    value: false
+    note: "disable the “Are you sure you want to open this application?” dialog"
+
+  - id: ui.lsregister-rebuild
+    kind: exec
+    program: "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    args: ["-kill", "-r", "-domain", "local", "-domain", "system", "-domain", "user"]
+    note: "remove duplicates in the “Open With” menu"
+
+  - id: ui.text-control-characters
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSTextShowsControlCharacters
+    type: bool
+    value: true
+
+  - id: ui.disable-resume
+    kind: defaults
+    domain: com.apple.systempreferences
+    key: NSQuitAlwaysKeepsWindows
+    type: bool
+    value: false
+    note: "disable Resume system-wide"
+
+  - id: ui.disable-auto-termination
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSDisableAutomaticTermination
+    type: bool
+    value: true
+
+  - id: ui.disable-crash-reporter
+    kind: defaults
+    domain: com.apple.CrashReporter
+    key: DialogType
+    type: string
+    value: "none"
+
+  - id: ui.help-viewer-dev-mode
+    kind: defaults
+    domain: com.apple.helpviewer
+    key: DevMode
+    type: bool
+    value: true
+
+  - id: ui.login-window-hostinfo
+    kind: defaults
+    domain: /Library/Preferences/com.apple.loginwindow
+    key: AdminHostInfo
+    type: string
+    value: "HostName"
+    sudo: true
+
+  - id: system.restart-on-freeze
+    kind: exec
+    program: systemsetup
+    args: ["-setrestartfreeze", "on"]
+    sudo: true
+
+  - id: typing.disable-capitalization
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSAutomaticCapitalizationEnabled
+    type: bool
+    value: false
+
+  - id: typing.disable-smart-dashes
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSAutomaticDashSubstitutionEnabled
+    type: bool
+    value: false
+
+  - id: typing.disable-period-substitution
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSAutomaticPeriodSubstitutionEnabled
+    type: bool
+    value: false
+
+  - id: typing.disable-smart-quotes
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSAutomaticQuoteSubstitutionEnabled
+    type: bool
+    value: false
+
+  - id: typing.disable-auto-correct
+    kind: defaults
+    domain: NSGlobalDomain
+    key: NSAutomaticSpellingCorrectionEnabled
+    type: bool
+    value: false
+
+  # =========================================================================
+  # Trackpad, mouse, keyboard, Bluetooth accessories, and input
+  # =========================================================================
+  - id: trackpad.tap-to-click.user
+    kind: defaults
+    domain: com.apple.driver.AppleBluetoothMultitouch.trackpad
+    key: Clicking
+    type: bool
+    value: true
+
+  - id: trackpad.tap-to-click.login-screen
+    kind: defaults
+    domain: NSGlobalDomain
+    key: com.apple.mouse.tapBehavior
+    type: int
+    value: 1
+    current_host: true
+
+  - id: trackpad.tap-to-click.global
+    kind: defaults
+    domain: NSGlobalDomain
+    key: com.apple.mouse.tapBehavior
+    type: int
+    value: 1
+
+  - id: trackpad.corner-right-click
+    kind: defaults
+    domain: com.apple.driver.AppleBluetoothMultitouch.trackpad
+    key: TrackpadCornerSecondaryClick
+    type: int
+    value: 2
+    note: "map bottom right corner to right-click"
+
+  - id: trackpad.right-click
+    kind: defaults
+    domain: com.apple.driver.AppleBluetoothMultitouch.trackpad
+    key: TrackpadRightClick
+    type: bool
+    value: true
+
+  - id: trackpad.corner-click-behavior
+    kind: defaults
+    domain: NSGlobalDomain
+    key: com.apple.trackpad.trackpadCornerClickBehavior
+    type: int
+    value: 1
+    current_host: true
+
+  - id: trackpad.secondary-click
+    kind: defaults
+    domain: NSGlobalDomain
+    key: com.apple.trackpad.enableSecondaryClick
+    type: bool
+    value: true
+    current_host: true
+
+  - id: bluetooth.audio-bitpool-min
+    kind: defaults
+    domain: com.apple.BluetoothAudioAgent
+    key: "Apple Bitpool Min (editable)"
+    type: int
+    value: 40
+    note: "increase sound quality for Bluetooth headphones/headsets"
+
+  - id: keyboard.full-access
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleKeyboardUIMode
+    type: int
+    value: 3
+    note: "enable full keyboard access for all controls (Tab in modal dialogs)"
+
+  - id: keyboard.zoom-scroll-wheel
+    kind: defaults
+    domain: com.apple.universalaccess
+    key: closeViewScrollWheelToggle
+    type: bool
+    value: true
+    sudo: true
+
+  - id: keyboard.zoom-scroll-modifier
+    kind: defaults
+    domain: com.apple.universalaccess
+    key: HIDScrollZoomModifierMask
+    type: int
+    value: 262144
+    sudo: true
+
+  - id: keyboard.zoom-follows-focus
+    kind: defaults
+    domain: com.apple.universalaccess
+    key: closeViewZoomFollowsFocus
+    type: bool
+    value: true
+    sudo: true
+
+  - id: keyboard.disable-press-and-hold
+    kind: defaults
+    domain: NSGlobalDomain
+    key: ApplePressAndHoldEnabled
+    type: bool
+    value: false
+    note: "favor key repeat over press-and-hold accents"
+
+  - id: keyboard.key-repeat
+    kind: defaults
+    domain: NSGlobalDomain
+    key: KeyRepeat
+    type: int
+    value: 1
+    note: "blazingly fast keyboard repeat rate"
+
+  - id: keyboard.initial-key-repeat
+    kind: defaults
+    domain: NSGlobalDomain
+    key: InitialKeyRepeat
+    type: int
+    value: 10
+
+  - id: locale.languages
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleLanguages
+    type: array
+    value: ["en", "pt_BR"]
+
+  - id: locale.locale
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleLocale
+    type: string
+    value: "en_GB@currency=BRL"
+
+  - id: locale.measurement-units
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleMeasurementUnits
+    type: string
+    value: "Centimeters"
+
+  - id: locale.metric-units
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleMetricUnits
+    type: bool
+    value: true
+
+  - id: locale.login-input-menu
+    kind: defaults
+    domain: /Library/Preferences/com.apple.loginwindow
+    key: showInputMenu
+    type: bool
+    value: true
+    sudo: true
+    note: "show language menu in the top right corner of the boot screen"
+
+  - id: locale.timezone
+    kind: exec
+    program: systemsetup
+    args: ["-settimezone", "America/Sao_Paulo"]
+    sudo: true
+
+  # =========================================================================
+  # Screen
+  # =========================================================================
+  - id: screen.ask-password
+    kind: defaults
+    domain: com.apple.screensaver
+    key: askForPassword
+    type: int
+    value: 1
+    note: "require password immediately after sleep or screen saver begins"
+
+  - id: screen.ask-password-delay
+    kind: defaults
+    domain: com.apple.screensaver
+    key: askForPasswordDelay
+    type: int
+    value: 0
+
+  - id: screen.screenshot-location
+    kind: defaults
+    domain: com.apple.screencapture
+    key: location
+    type: string
+    value: "~/Desktop"
+
+  - id: screen.screenshot-format
+    kind: defaults
+    domain: com.apple.screencapture
+    key: type
+    type: string
+    value: "png"
+
+  - id: screen.screenshot-no-shadow
+    kind: defaults
+    domain: com.apple.screencapture
+    key: disable-shadow
+    type: bool
+    value: true
+
+  - id: screen.font-smoothing
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleFontSmoothing
+    type: int
+    value: 1
+    note: "enable subpixel font rendering on non-Apple LCDs"
+
+  - id: screen.hidpi-modes
+    kind: defaults
+    domain: /Library/Preferences/com.apple.windowserver
+    key: DisplayResolutionEnabled
+    type: bool
+    value: true
+    sudo: true
+
+  # =========================================================================
+  # Finder
+  # =========================================================================
+  - id: finder.disable-animations
+    kind: defaults
+    domain: com.apple.finder
+    key: DisableAllAnimations
+    type: bool
+    value: true
+
+  - id: finder.new-window-target
+    kind: defaults
+    domain: com.apple.finder
+    key: NewWindowTarget
+    type: string
+    value: "PfDe"
+    note: "set Desktop as the default location for new Finder windows"
+
+  - id: finder.new-window-target-path
+    kind: defaults
+    domain: com.apple.finder
+    key: NewWindowTargetPath
+    type: string
+    value: "file://~/Desktop/"
+
+  - id: finder.show-external-drives
+    kind: defaults
+    domain: com.apple.finder
+    key: ShowExternalHardDrivesOnDesktop
+    type: bool
+    value: true
+
+  - id: finder.show-hard-drives
+    kind: defaults
+    domain: com.apple.finder
+    key: ShowHardDrivesOnDesktop
+    type: bool
+    value: true
+
+  - id: finder.show-mounted-servers
+    kind: defaults
+    domain: com.apple.finder
+    key: ShowMountedServersOnDesktop
+    type: bool
+    value: true
+
+  - id: finder.show-removable-media
+    kind: defaults
+    domain: com.apple.finder
+    key: ShowRemovableMediaOnDesktop
+    type: bool
+    value: true
+
+  - id: finder.show-hidden-files
+    kind: defaults
+    domain: com.apple.finder
+    key: AppleShowAllFiles
+    type: bool
+    value: true
+
+  - id: finder.show-all-extensions
+    kind: defaults
+    domain: NSGlobalDomain
+    key: AppleShowAllExtensions
+    type: bool
+    value: true
+
+  - id: finder.show-status-bar
+    kind: defaults
+    domain: com.apple.finder
+    key: ShowStatusBar
+    type: bool
+    value: true
+
+  - id: finder.show-path-bar
+    kind: defaults
+    domain: com.apple.finder
+    key: ShowPathbar
+    type: bool
+    value: true
+
+  - id: finder.posix-path-title
+    kind: defaults
+    domain: com.apple.finder
+    key: _FXShowPosixPathInTitle
+    type: bool
+    value: true
+
+  - id: finder.folders-first
+    kind: defaults
+    domain: com.apple.finder
+    key: _FXSortFoldersFirst
+    type: bool
+    value: true
+
+  - id: finder.search-current-folder
+    kind: defaults
+    domain: com.apple.finder
+    key: FXDefaultSearchScope
+    type: string
+    value: "SCcf"
+
+  - id: finder.no-extension-warning
+    kind: defaults
+    domain: com.apple.finder
+    key: FXEnableExtensionChangeWarning
+    type: bool
+    value: false
+
+  - id: finder.spring-loading
+    kind: defaults
+    domain: NSGlobalDomain
+    key: com.apple.springing.enabled
+    type: bool
+    value: true
+
+  - id: finder.spring-loading-delay
+    kind: defaults
+    domain: NSGlobalDomain
+    key: com.apple.springing.delay
+    type: float
+    value: 0
+
+  - id: finder.no-ds-store-network
+    kind: defaults
+    domain: com.apple.desktopservices
+    key: DSDontWriteNetworkStores
+    type: bool
+    value: true
+
+  - id: finder.no-ds-store-usb
+    kind: defaults
+    domain: com.apple.desktopservices
+    key: DSDontWriteUSBStores
+    type: bool
+    value: true
+
+  - id: finder.auto-open-ro-volumes
+    kind: defaults
+    domain: com.apple.frameworks.diskimages
+    key: auto-open-ro-root
+    type: bool
+    value: true
+
+  - id: finder.auto-open-rw-volumes
+    kind: defaults
+    domain: com.apple.frameworks.diskimages
+    key: auto-open-rw-root
+    type: bool
+    value: true
+
+  - id: finder.open-window-for-new-disk
+    kind: defaults
+    domain: com.apple.finder
+    key: OpenWindowForNewRemovableDisk
+    type: bool
+    value: true
+
+  - id: finder.icon-info.desktop
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :DesktopViewSettings:IconViewSettings:showItemInfo true", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-info.fk-standard
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :FK_StandardViewSettings:IconViewSettings:showItemInfo true", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-info.standard
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :StandardViewSettings:IconViewSettings:showItemInfo true", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-label-right
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set DesktopViewSettings:IconViewSettings:labelOnBottom false", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-grid.desktop
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :DesktopViewSettings:IconViewSettings:arrangeBy grid", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-grid.fk-standard
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :FK_StandardViewSettings:IconViewSettings:arrangeBy grid", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-grid.standard
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :StandardViewSettings:IconViewSettings:arrangeBy grid", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.grid-spacing.desktop
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :DesktopViewSettings:IconViewSettings:gridSpacing 100", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.grid-spacing.fk-standard
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :FK_StandardViewSettings:IconViewSettings:gridSpacing 100", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.grid-spacing.standard
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :StandardViewSettings:IconViewSettings:gridSpacing 100", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-size.desktop
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :DesktopViewSettings:IconViewSettings:iconSize 80", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-size.fk-standard
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :FK_StandardViewSettings:IconViewSettings:iconSize 80", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.icon-size.standard
+    kind: exec
+    program: /usr/libexec/PlistBuddy
+    args: ["-c", "Set :StandardViewSettings:IconViewSettings:iconSize 80", "~/Library/Preferences/com.apple.finder.plist"]
+
+  - id: finder.list-view-default
+    kind: defaults
+    domain: com.apple.finder
+    key: FXPreferredViewStyle
+    type: string
+    value: "Nlsv"
+    note: "use list view in all Finder windows by default"
+
+  - id: finder.airdrop-all-interfaces
+    kind: defaults
+    domain: com.apple.NetworkBrowser
+    key: BrowseAllInterfaces
+    type: bool
+    value: true
+
+  - id: finder.show-home-library
+    kind: exec
+    program: chflags
+    args: ["nohidden", "~/Library"]
+
+  - id: finder.show-volumes
+    kind: exec
+    program: chflags
+    args: ["nohidden", "/Volumes"]
+    sudo: true
+
+  - id: finder.info-panes-expanded
+    kind: defaults
+    domain: com.apple.finder
+    key: FXInfoPanesExpanded
+    type: dict
+    value:
+      General: true
+      OpenWith: true
+      Privileges: true
+    note: "expand General/Open with/Sharing & Permissions File Info panes"
+
+  # =========================================================================
+  # Dock, Dashboard, and hot corners
+  # =========================================================================
+  - id: dock.stack-hover-highlight
+    kind: defaults
+    domain: com.apple.dock
+    key: mouse-over-hilite-stack
+    type: bool
+    value: true
+
+  - id: dock.tile-size
+    kind: defaults
+    domain: com.apple.dock
+    key: tilesize
+    type: int
+    value: 36
+
+  - id: dock.minimize-effect
+    kind: defaults
+    domain: com.apple.dock
+    key: mineffect
+    type: string
+    value: "scale"
+
+  - id: dock.minimize-to-app-icon
+    kind: defaults
+    domain: com.apple.dock
+    key: minimize-to-application
+    type: bool
+    value: true
+
+  - id: dock.spring-load-all
+    kind: defaults
+    domain: com.apple.dock
+    key: enable-spring-load-actions-on-all-items
+    type: bool
+    value: true
+
+  - id: dock.process-indicators
+    kind: defaults
+    domain: com.apple.dock
+    key: show-process-indicators
+    type: bool
+    value: true
+
+  - id: dock.no-launch-anim
+    kind: defaults
+    domain: com.apple.dock
+    key: launchanim
+    type: bool
+    value: false
+
+  - id: dock.mission-control-speed
+    kind: defaults
+    domain: com.apple.dock
+    key: expose-animation-duration
+    type: float
+    value: 0.1
+
+  - id: dock.expose-not-grouped
+    kind: defaults
+    domain: com.apple.dock
+    key: expose-group-by-app
+    type: bool
+    value: false
+
+  - id: dock.dashboard-disabled
+    kind: defaults
+    domain: com.apple.dashboard
+    key: mcx-disabled
+    type: bool
+    value: true
+
+  - id: dock.dashboard-no-space
+    kind: defaults
+    domain: com.apple.dock
+    key: dashboard-in-overlay
+    type: bool
+    value: true
+
+  - id: dock.spaces-no-rearrange
+    kind: defaults
+    domain: com.apple.dock
+    key: mru-spaces
+    type: bool
+    value: false
+
+  - id: dock.autohide-delay-off
+    kind: defaults
+    domain: com.apple.dock
+    key: autohide-delay
+    type: float
+    value: 0
+
+  - id: dock.autohide-anim-off
+    kind: defaults
+    domain: com.apple.dock
+    key: autohide-time-modifier
+    type: float
+    value: 0
+
+  - id: dock.autohide
+    kind: defaults
+    domain: com.apple.dock
+    key: autohide
+    type: bool
+    value: false
+
+  - id: dock.hidden-apps-translucent
+    kind: defaults
+    domain: com.apple.dock
+    key: showhidden
+    type: bool
+    value: true
+
+  - id: dock.no-recent-apps
+    kind: defaults
+    domain: com.apple.dock
+    key: show-recents
+    type: bool
+    value: false
+
+  - id: dock.reset-launchpad-layout
+    kind: exec
+    program: find
+    args: ["~/Library/Application Support/Dock", "-name", "*-*.db", "-maxdepth", "1", "-delete"]
+    ignore_error: true
+    note: "reset Launchpad, but keep the desktop wallpaper intact"
+
+  - id: dock.hot-corner.tl
+    kind: defaults
+    domain: com.apple.dock
+    key: wvous-tl-corner
+    type: int
+    value: 2
+    note: "top left → Mission Control"
+
+  - id: dock.hot-corner.tl-modifier
+    kind: defaults
+    domain: com.apple.dock
+    key: wvous-tl-modifier
+    type: int
+    value: 0
+
+  - id: dock.hot-corner.tr
+    kind: defaults
+    domain: com.apple.dock
+    key: wvous-tr-corner
+    type: int
+    value: 4
+    note: "top right → Desktop"
+
+  - id: dock.hot-corner.tr-modifier
+    kind: defaults
+    domain: com.apple.dock
+    key: wvous-tr-modifier
+    type: int
+    value: 0
+
+  - id: dock.hot-corner.bl
+    kind: defaults
+    domain: com.apple.dock
+    key: wvous-bl-corner
+    type: int
+    value: 11
+    note: "bottom left → Launchpad"
+
+  - id: dock.hot-corner.bl-modifier
+    kind: defaults
+    domain: com.apple.dock
+    key: wvous-bl-modifier
+    type: int
+    value: 0
+
+  - id: dock.hot-corner.br
+    kind: defaults
+    domain: com.apple.dock
+    key: wvous-br-corner
+    type: int
+    value: 11
+    note: "bottom right → Launchpad"
+
+  - id: dock.hot-corner.br-modifier
+    kind: defaults
+    domain: com.apple.dock
+    key: wvous-br-modifier
+    type: int
+    value: 0
+
+  # =========================================================================
+  # Safari & WebKit
+  # =========================================================================
+  - id: safari.no-search-queries-to-apple.search
+    kind: defaults
+    domain: com.apple.Safari
+    key: UniversalSearchEnabled
+    type: bool
+    value: false
+
+  - id: safari.no-search-queries-to-apple.suggestions
+    kind: defaults
+    domain: com.apple.Safari
+    key: SuppressSearchSuggestions
+    type: bool
+    value: true
+
+  - id: safari.tab-highlights-links
+    kind: defaults
+    domain: com.apple.Safari
+    key: WebKitTabToLinksPreferenceKey
+    type: bool
+    value: true
+
+  - id: safari.tab-highlights-links-webkit2
+    kind: defaults
+    domain: com.apple.Safari
+    key: com.apple.Safari.ContentPageGroupIdentifier.WebKit2TabsToLinks
+    type: bool
+    value: true
+
+  - id: safari.full-url
+    kind: defaults
+    domain: com.apple.Safari
+    key: ShowFullURLInSmartSearchField
+    type: bool
+    value: true
+
+  - id: safari.homepage-blank
+    kind: defaults
+    domain: com.apple.Safari
+    key: HomePage
+    type: string
+    value: "about:blank"
+
+  - id: safari.no-auto-open-downloads
+    kind: defaults
+    domain: com.apple.Safari
+    key: AutoOpenSafeDownloads
+    type: bool
+    value: false
+
+  - id: safari.backspace-navigation
+    kind: defaults
+    domain: com.apple.Safari
+    key: com.apple.Safari.ContentPageGroupIdentifier.WebKit2BackspaceKeyNavigationEnabled
+    type: bool
+    value: true
+
+  - id: safari.hide-bookmarks-bar
+    kind: defaults
+    domain: com.apple.Safari
+    key: ShowFavoritesBar
+    type: bool
+    value: false
+
+  - id: safari.hide-top-sites-sidebar
+    kind: defaults
+    domain: com.apple.Safari
+    key: ShowSidebarInTopSites
+    type: bool
+    value: false
+
+  - id: safari.no-thumbnail-cache
+    kind: defaults
+    domain: com.apple.Safari
+    key: DebugSnapshotsUpdatePolicy
+    type: int
+    value: 2
+
+  - id: safari.debug-menu
+    kind: defaults
+    domain: com.apple.Safari
+    key: IncludeInternalDebugMenu
+    type: bool
+    value: true
+
+  - id: safari.find-contains
+    kind: defaults
+    domain: com.apple.Safari
+    key: FindOnPageMatchesWordStartsOnly
+    type: bool
+    value: false
+
+  - id: safari.no-bookmark-proxies
+    kind: exec
+    program: defaults
+    args: ["write", "com.apple.Safari", "ProxiesInBookmarksBar", "()"]
+    note: "remove useless icons from Safari’s bookmarks bar"
+
+  - id: safari.develop-menu
+    kind: defaults
+    domain: com.apple.Safari
+    key: IncludeDevelopMenu
+    type: bool
+    value: true
+
+  - id: safari.web-inspector
+    kind: defaults
+    domain: com.apple.Safari
+    key: WebKitDeveloperExtrasEnabledPreferenceKey
+    type: bool
+    value: true
+
+  - id: safari.web-inspector-webkit2
+    kind: defaults
+    domain: com.apple.Safari
+    key: com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled
+    type: bool
+    value: true
+
+  - id: safari.webview-inspector
+    kind: defaults
+    domain: NSGlobalDomain
+    key: WebKitDeveloperExtras
+    type: bool
+    value: true
+
+  - id: safari.spellchecking
+    kind: defaults
+    domain: com.apple.Safari
+    key: WebContinuousSpellCheckingEnabled
+    type: bool
+    value: true
+
+  - id: safari.no-auto-correct
+    kind: defaults
+    domain: com.apple.Safari
+    key: WebAutomaticSpellingCorrectionEnabled
+    type: bool
+    value: false
+
+  - id: safari.no-autofill.address-book
+    kind: defaults
+    domain: com.apple.Safari
+    key: AutoFillFromAddressBook
+    type: bool
+    value: false
+
+  - id: safari.no-autofill.passwords
+    kind: defaults
+    domain: com.apple.Safari
+    key: AutoFillPasswords
+    type: bool
+    value: false
+
+  - id: safari.no-autofill.credit-cards
+    kind: defaults
+    domain: com.apple.Safari
+    key: AutoFillCreditCardData
+    type: bool
+    value: false
+
+  - id: safari.no-autofill.forms
+    kind: defaults
+    domain: com.apple.Safari
+    key: AutoFillMiscellaneousForms
+    type: bool
+    value: false
+
+  - id: safari.fraud-warning
+    kind: defaults
+    domain: com.apple.Safari
+    key: WarnAboutFraudulentWebsites
+    type: bool
+    value: true
+
+  - id: safari.no-plugins
+    kind: defaults
+    domain: com.apple.Safari
+    key: WebKitPluginsEnabled
+    type: bool
+    value: false
+
+  - id: safari.no-plugins-webkit2
+    kind: defaults
+    domain: com.apple.Safari
+    key: com.apple.Safari.ContentPageGroupIdentifier.WebKit2PluginsEnabled
+    type: bool
+    value: false
+
+  - id: safari.no-java
+    kind: defaults
+    domain: com.apple.Safari
+    key: WebKitJavaEnabled
+    type: bool
+    value: false
+
+  - id: safari.no-java-webkit2
+    kind: defaults
+    domain: com.apple.Safari
+    key: com.apple.Safari.ContentPageGroupIdentifier.WebKit2JavaEnabled
+    type: bool
+    value: false
+
+  - id: safari.block-popups
+    kind: defaults
+    domain: com.apple.Safari
+    key: WebKitJavaScriptCanOpenWindowsAutomatically
+    type: bool
+    value: false
+
+  - id: safari.block-popups-webkit2
+    kind: defaults
+    domain: com.apple.Safari
+    key: com.apple.Safari.ContentPageGroupIdentifier.WebKit2JavaScriptCanOpenWindowsAutomatically
+    type: bool
+    value: false
+
+  - id: safari.do-not-track
+    kind: defaults
+    domain: com.apple.Safari
+    key: SendDoNotTrackHTTPHeader
+    type: bool
+    value: true
+
+  - id: safari.auto-update-extensions
+    kind: defaults
+    domain: com.apple.Safari
+    key: InstallExtensionUpdatesAutomatically
+    type: bool
+    value: true
+
+  # =========================================================================
+  # Mail
+  # =========================================================================
+  - id: mail.no-reply-animations
+    kind: defaults
+    domain: com.apple.mail
+    key: DisableReplyAnimations
+    type: bool
+    value: true
+
+  - id: mail.no-send-animations
+    kind: defaults
+    domain: com.apple.mail
+    key: DisableSendAnimations
+    type: bool
+    value: true
+
+  - id: mail.plain-address-copy
+    kind: defaults
+    domain: com.apple.mail
+    key: AddressesIncludeNameOnPasteboard
+    type: bool
+    value: false
+    note: "copy addresses as foo@example.com instead of Foo Bar <foo@example.com>"
+
+  - id: mail.send-shortcut
+    kind: defaults
+    domain: com.apple.mail
+    key: NSUserKeyEquivalents
+    type: dict
+    add: true
+    value:
+      Send: "@↩"
+    note: "⌘ + Enter sends email"
+
+  - id: mail.threaded-view
+    kind: defaults
+    domain: com.apple.mail
+    key: DraftsViewerAttributes
+    type: dict
+    add: true
+    value:
+      DisplayInThreadedMode: "yes"
+      SortedDescending: "yes"
+      SortOrder: "received-date"
+
+  - id: mail.no-inline-attachments
+    kind: defaults
+    domain: com.apple.mail
+    key: DisableInlineAttachmentViewing
+    type: bool
+    value: true
+
+  - id: mail.no-spell-checking
+    kind: defaults
+    domain: com.apple.mail
+    key: SpellCheckingBehavior
+    type: string
+    value: "NoSpellCheckingEnabled"
+
+  # =========================================================================
+  # Spotlight
+  # =========================================================================
+  - id: spotlight.exclude-volumes
+    kind: defaults
+    domain: .Spotlight-V100/VolumeConfiguration
+    key: Exclusions
+    type: array
+    value: ["/Volumes"]
+    sudo: true
+    note: "disable Spotlight indexing for any newly mounted volume"
+
+  - id: spotlight.ordered-items
+    kind: exec
+    program: defaults
+    args:
+      - "write"
+      - "com.apple.spotlight"
+      - "orderedItems"
+      - "-array"
+      - '{"enabled" = 1;"name" = "APPLICATIONS";}'
+      - '{"enabled" = 1;"name" = "SYSTEM_PREFS";}'
+      - '{"enabled" = 1;"name" = "DIRECTORIES";}'
+      - '{"enabled" = 1;"name" = "PDF";}'
+      - '{"enabled" = 1;"name" = "FONTS";}'
+      - '{"enabled" = 0;"name" = "DOCUMENTS";}'
+      - '{"enabled" = 0;"name" = "MESSAGES";}'
+      - '{"enabled" = 0;"name" = "CONTACT";}'
+      - '{"enabled" = 0;"name" = "EVENT_TODO";}'
+      - '{"enabled" = 0;"name" = "IMAGES";}'
+      - '{"enabled" = 0;"name" = "BOOKMARKS";}'
+      - '{"enabled" = 0;"name" = "MUSIC";}'
+      - '{"enabled" = 0;"name" = "MOVIES";}'
+      - '{"enabled" = 0;"name" = "PRESENTATIONS";}'
+      - '{"enabled" = 0;"name" = "SPREADSHEETS";}'
+      - '{"enabled" = 0;"name" = "SOURCE";}'
+      - '{"enabled" = 0;"name" = "MENU_DEFINITION";}'
+      - '{"enabled" = 0;"name" = "MENU_OTHER";}'
+      - '{"enabled" = 0;"name" = "MENU_CONVERSION";}'
+      - '{"enabled" = 0;"name" = "MENU_EXPRESSION";}'
+      - '{"enabled" = 0;"name" = "MENU_WEBSEARCH";}'
+      - '{"enabled" = 0;"name" = "MENU_SPOTLIGHT_SUGGESTIONS";}'
+    note: "indexing order; disabled categories avoid sending queries to Apple"
+
+  - id: spotlight.reload-mds
+    kind: exec
+    program: killall
+    args: ["mds"]
+    sudo: true
+    ignore_error: true
+    note: "load new settings before rebuilding the index"
+
+  - id: spotlight.enable-main-volume
+    kind: exec
+    program: mdutil
+    args: ["-i", "on", "/"]
+    sudo: true
+
+  - id: spotlight.rebuild-index
+    kind: exec
+    program: mdutil
+    args: ["-E", "/"]
+    sudo: true
+
+  # =========================================================================
+  # Time Machine
+  # =========================================================================
+  - id: timemachine.no-disk-prompts
+    kind: defaults
+    domain: com.apple.TimeMachine
+    key: DoNotOfferNewDisksForBackup
+    type: bool
+    value: true
+
+  # =========================================================================
+  # Activity Monitor
+  # =========================================================================
+  - id: activity-monitor.open-main-window
+    kind: defaults
+    domain: com.apple.ActivityMonitor
+    key: OpenMainWindow
+    type: bool
+    value: true
+
+  - id: activity-monitor.cpu-dock-icon
+    kind: defaults
+    domain: com.apple.ActivityMonitor
+    key: IconType
+    type: int
+    value: 5
+
+  - id: activity-monitor.all-processes
+    kind: defaults
+    domain: com.apple.ActivityMonitor
+    key: ShowCategory
+    type: int
+    value: 0
+
+  - id: activity-monitor.sort-by-cpu
+    kind: defaults
+    domain: com.apple.ActivityMonitor
+    key: SortColumn
+    type: string
+    value: "CPUUsage"
+
+  - id: activity-monitor.sort-direction
+    kind: defaults
+    domain: com.apple.ActivityMonitor
+    key: SortDirection
+    type: int
+    value: 0
+
+  # =========================================================================
+  # Address Book, Dashboard, iCal, TextEdit, Disk Utility, QuickTime
+  # =========================================================================
+  - id: addressbook.debug-menu
+    kind: defaults
+    domain: com.apple.addressbook
+    key: ABShowDebugMenu
+    type: bool
+    value: true
+
+  - id: dashboard.dev-mode
+    kind: defaults
+    domain: com.apple.dashboard
+    key: devmode
+    type: bool
+    value: true
+
+  - id: ical.debug-menu
+    kind: defaults
+    domain: com.apple.iCal
+    key: IncludeDebugMenu
+    type: bool
+    value: true
+
+  - id: textedit.plain-text
+    kind: defaults
+    domain: com.apple.TextEdit
+    key: RichText
+    type: int
+    value: 0
+
+  - id: textedit.utf8-read
+    kind: defaults
+    domain: com.apple.TextEdit
+    key: PlainTextEncoding
+    type: int
+    value: 4
+
+  - id: textedit.utf8-write
+    kind: defaults
+    domain: com.apple.TextEdit
+    key: PlainTextEncodingForWrite
+    type: int
+    value: 4
+
+  - id: diskutility.debug-menu
+    kind: defaults
+    domain: com.apple.DiskUtility
+    key: DUDebugMenuEnabled
+    type: bool
+    value: true
+
+  - id: diskutility.advanced-image-options
+    kind: defaults
+    domain: com.apple.DiskUtility
+    key: advanced-image-options
+    type: bool
+    value: true
+
+  - id: quicktime.autoplay
+    kind: defaults
+    domain: com.apple.QuickTimePlayerX
+    key: MGPlayMovieOnOpen
+    type: bool
+    value: true
+
+  # =========================================================================
+  # Mac App Store / Software Update
+  # =========================================================================
+  - id: appstore.webkit-dev-tools
+    kind: defaults
+    domain: com.apple.appstore
+    key: WebKitDeveloperExtras
+    type: bool
+    value: true
+
+  - id: appstore.debug-menu
+    kind: defaults
+    domain: com.apple.appstore
+    key: ShowDebugMenu
+    type: bool
+    value: true
+
+  - id: softwareupdate.auto-check
+    kind: defaults
+    domain: com.apple.SoftwareUpdate
+    key: AutomaticCheckEnabled
+    type: bool
+    value: true
+
+  - id: softwareupdate.daily
+    kind: defaults
+    domain: com.apple.SoftwareUpdate
+    key: ScheduleFrequency
+    type: int
+    value: 1
+
+  - id: softwareupdate.background-download
+    kind: defaults
+    domain: com.apple.SoftwareUpdate
+    key: AutomaticDownload
+    type: int
+    value: 1
+
+  - id: softwareupdate.critical-install
+    kind: defaults
+    domain: com.apple.SoftwareUpdate
+    key: CriticalUpdateInstall
+    type: int
+    value: 1
+
+  - id: softwareupdate.purchased-other-macs
+    kind: defaults
+    domain: com.apple.SoftwareUpdate
+    key: ConfigDataInstall
+    type: int
+    value: 1
+
+  - id: softwareupdate.app-auto-update
+    kind: defaults
+    domain: com.apple.commerce
+    key: AutoUpdate
+    type: bool
+    value: true
+
+  - id: softwareupdate.allow-reboot
+    kind: defaults
+    domain: com.apple.commerce
+    key: AutoUpdateRestartRequired
+    type: bool
+    value: true
+
+  # =========================================================================
+  # Photos
+  # =========================================================================
+  - id: photos.no-hotplug-open
+    kind: defaults
+    domain: com.apple.ImageCapture
+    key: disableHotPlug
+    type: bool
+    value: true
+    current_host: true
+
+  # =========================================================================
+  # Messages
+  # =========================================================================
+  - id: messages.behaviors
+    kind: defaults
+    domain: com.apple.messageshelper.MessageController
+    key: SOInputLineSettings
+    type: dict
+    add: true
+    value:
+      automaticEmojiSubstitutionEnablediMessage: false
+      automaticQuoteSubstitutionEnabled: false
+      continuousSpellCheckingEnabled: false
+    note: "no emoji substitution, no smart quotes, no continuous spell checking"
+
+  # =========================================================================
+  # Google Chrome & Canary
+  # =========================================================================
+  - id: chrome.no-backswipe.trackpad
+    kind: defaults
+    domain: com.google.Chrome
+    key: AppleEnableSwipeNavigateWithScrolls
+    type: bool
+    value: false
+
+  - id: chrome.no-backswipe.trackpad.canary
+    kind: defaults
+    domain: com.google.Chrome.canary
+    key: AppleEnableSwipeNavigateWithScrolls
+    type: bool
+    value: false
+
+  - id: chrome.no-backswipe.magic-mouse
+    kind: defaults
+    domain: com.google.Chrome
+    key: AppleEnableMouseSwipeNavigateWithScrolls
+    type: bool
+    value: false
+
+  - id: chrome.no-backswipe.magic-mouse.canary
+    kind: defaults
+    domain: com.google.Chrome.canary
+    key: AppleEnableMouseSwipeNavigateWithScrolls
+    type: bool
+    value: false
+
+  - id: chrome.system-print-preview
+    kind: defaults
+    domain: com.google.Chrome
+    key: DisablePrintPreview
+    type: bool
+    value: true
+
+  - id: chrome.system-print-preview.canary
+    kind: defaults
+    domain: com.google.Chrome.canary
+    key: DisablePrintPreview
+    type: bool
+    value: true
+
+  - id: chrome.print-panel-expanded
+    kind: defaults
+    domain: com.google.Chrome
+    key: PMPrintingExpandedStateForPrint2
+    type: bool
+    value: true
+
+  - id: chrome.print-panel-expanded.canary
+    kind: defaults
+    domain: com.google.Chrome.canary
+    key: PMPrintingExpandedStateForPrint2
+    type: bool
+    value: true
+
+  # =========================================================================
+  # Finale: restart affected applications (script's killall loop)
+  # =========================================================================
+  - id: finale.restart-apps
+    kind: builtin
+    name: restart-apps
+    note: "some changes require a logout/restart to take effect"

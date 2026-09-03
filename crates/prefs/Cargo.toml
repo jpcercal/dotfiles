@@ -1,0 +1,21 @@
+[package]
+name = "dotfiles-prefs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Declarative macOS preferences engine (defaults/pmset/nvram/login-items)"
+
+[dependencies]
+dotfiles-exec = { path = "../exec" }
+dotfiles-manifest = { path = "../manifest" }
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+schemars.workspace = true
+
+[dev-dependencies]
+dotfiles-testkit = { path = "../testkit" }
+tempfile.workspace = true
