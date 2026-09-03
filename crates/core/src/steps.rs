@@ -45,10 +45,6 @@ fn looks_like_password_prompt(buf: &str) -> bool {
     lower.contains("password for")
         || lower.contains("[sudo] password")
         || lower.trim_end().ends_with("password:")
-        // mas/brew sudo failures that should trigger askpass instead of immediate exit 1
-        || lower.contains("a terminal is required to read the password")
-        || lower.contains("no tty present")
-        || lower.contains("sudo: a password is required")
 }
 
 /// Ask the GUI for a password (SudoPrompt event) and block until answered.

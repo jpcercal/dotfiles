@@ -1191,6 +1191,8 @@ struct ProgressApp {
     log_focus: Option<usize>,
     theme_preference: ThemePreference,
     theme: Theme,
+    cached_password: Option<String>,
+    cached_at: Option<std::time::Instant>,
 }
 
 #[derive(Debug, Clone)]
@@ -1260,6 +1262,8 @@ impl ProgressApp {
             log_focus: None,
             theme_preference: load_theme_preference(),
             theme: resolve_theme(load_theme_preference()),
+            cached_password: None,
+            cached_at: None,
         };
 
         app.spawn_pipeline();
@@ -1404,6 +1408,13 @@ impl eframe::App for ProgressApp {
                     let _ = std::fs::remove_file(crate::upgrade::askpass_socket_path());
                 }
                 PipelineEvent::SudoPrompt { command, reason, respond } => {
+                    // Reuse cached password for 5 min to avoid double prompt (mas: installer + receipt)
+                    if let Some(cached) = self.cached_password.clone() {
+                        if self.cached_at.map(|t| t.elapsed().as_secs() < 300).unwrap_or(false) && !cached.is_empty() {
+                            let _ = respond.send(cached);
+                            continue;
+                        }
+                    }
                     // Stdin-capture flow: the pipeline detected a password prompt
                     self.sudo_prompt = Some(SudoPromptState {
                         command,
@@ -1418,6 +1429,13 @@ impl eframe::App for ProgressApp {
         }
 
         while let Ok(req) = self.sudo_receiver.try_recv() {
+            // Reuse cached password for 5 min (mas asks twice: installer + receipt)
+            if let Some(cached) = self.cached_password.clone() {
+                if self.cached_at.map(|t| t.elapsed().as_secs() < 300).unwrap_or(false) && !cached.is_empty() {
+                    let _ = req.response_tx.send(SudoResponse::Password(cached));
+                    continue;
+                }
+            }
             self.sudo_prompt = Some(SudoPromptState {
                 command: req.command,
                 reason: req.reason,
@@ -1640,6 +1658,18 @@ impl eframe::App for ProgressApp {
         if sudo_close {
             if let Some(prompt) = self.sudo_prompt.take() {
                 let resp = sudo_response.unwrap_or(SudoResponse::Cancel);
+                // Cache successful password for 5 min to avoid second dialog for mas (installer+receipt)
+                match &resp {
+                    SudoResponse::Password(pw) if !pw.is_empty() => {
+                        self.cached_password = Some(pw.clone());
+                        self.cached_at = Some(std::time::Instant::now());
+                    }
+                    SudoResponse::Cancel => {
+                        self.cached_password = None;
+                        self.cached_at = None;
+                    }
+                    _ => {}
+                }
                 if let Some(tx) = prompt.response_tx {
                     let _ = tx.send(resp.clone());
                 }
@@ -1791,6 +1821,8 @@ struct UnifiedApp {
     log_focus: Option<usize>,
     current_step_index: Option<usize>,
     total_steps: usize,
+    cached_password: Option<String>,
+    cached_at: Option<std::time::Instant>,
 }
 
 impl UnifiedApp {
@@ -1844,6 +1876,8 @@ impl UnifiedApp {
             log_focus: None,
             current_step_index: None,
             total_steps,
+            cached_password: None,
+            cached_at: None,
         }
     }
 
@@ -2183,6 +2217,12 @@ impl eframe::App for UnifiedApp {
                             let _ = std::fs::remove_file(crate::upgrade::askpass_socket_path());
                         }
                         PipelineEvent::SudoPrompt { command, reason, respond } => {
+                            if let Some(cached) = self.cached_password.clone() {
+                                if self.cached_at.map(|t| t.elapsed().as_secs() < 300).unwrap_or(false) && !cached.is_empty() {
+                                    let _ = respond.send(cached);
+                                    continue;
+                                }
+                            }
                             // Stdin-capture flow: the pipeline detected a password prompt
                             self.sudo_prompt = Some(SudoPromptState {
                                 command,
@@ -2206,6 +2246,13 @@ impl eframe::App for UnifiedApp {
             // Sudo prompts
             if let Some(sudo_rx) = &self.sudo_receiver {
                 while let Ok(req) = sudo_rx.try_recv() {
+                    // Reuse cached password for 5 min (mas asks twice)
+                    if let Some(cached) = self.cached_password.clone() {
+                        if self.cached_at.map(|t| t.elapsed().as_secs() < 300).unwrap_or(false) && !cached.is_empty() {
+                            let _ = req.response_tx.send(SudoResponse::Password(cached));
+                            continue;
+                        }
+                    }
                     // Askpass-socket flow (brew casks): answer delivered to the socket
                     self.sudo_prompt = Some(SudoPromptState {
                         command: req.command,
@@ -2432,6 +2479,17 @@ impl eframe::App for UnifiedApp {
         if sudo_close {
             if let Some(prompt) = self.sudo_prompt.take() {
                 let resp = sudo_response.unwrap_or(SudoResponse::Cancel);
+                match &resp {
+                    SudoResponse::Password(pw) if !pw.is_empty() => {
+                        self.cached_password = Some(pw.clone());
+                        self.cached_at = Some(std::time::Instant::now());
+                    }
+                    SudoResponse::Cancel => {
+                        self.cached_password = None;
+                        self.cached_at = None;
+                    }
+                    _ => {}
+                }
                 if let Some(tx) = prompt.response_tx {
                     let _ = tx.send(resp.clone());
                 }

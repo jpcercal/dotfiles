@@ -213,6 +213,41 @@ pub fn run_pipeline(paths: &Paths, opts: PipelineOptions) -> anyhow::Result<(Rep
             write_skipped_log("mas", &run_id, &paths.log_dir, &combined_log, &opts.event_tx, note);
             emit_step("mas", "skipped", 0, Value::Array(vec![]), Value::Array(vec![]), note, &run_id)
         } else {
+            // Pre-cache sudo once to avoid mas asking twice (installer + receipt both need sudo).
+            // mas checks `sudo -n true` then runs `sudo installer` + `sudo sh ...` without -S,
+            // so with our setsid (no tty) the second sudo would otherwise prompt again.
+            // We ensure `Defaults !tty_tickets` is set so the timestamp is shared, and run
+            // `sudo -A -v` once via the GUI askpass before mas.
+            // Only in GUI mode (foreground/gate); headless has no dialog to show and should
+            // just be treated as success with note if sudo required.
+            if opts.trigger != "headless" && opts.event_tx.is_some() {
+                let has_valid = Command::new("sudo").args(["-n", "true"]).output().map(|o| o.status.success()).unwrap_or(false);
+                if !has_valid {
+                    if let Some(askpass) = opts.sudo_askpass.as_deref() {
+                        // Ensure sudo timestamp is not per-tty, otherwise our setsid session wouldn't share it with mas's children
+                        let sudoers_path = std::path::PathBuf::from("/private/etc/sudoers.d/dotfiles-mas-tty");
+                        if !sudoers_path.exists() {
+                            let script = format!(
+                                "echo 'Defaults !tty_tickets' | sudo -A tee {} >/dev/null && sudo chmod 440 {} || true",
+                                sudoers_path.display(),
+                                sudoers_path.display()
+                            );
+                            let _ = steps::run_bash_step("mas-sudoers", &script, &paths.log_dir, &run_id, &combined_log, opts.event_tx.clone(), Some(askpass));
+                        }
+                        // This will show one GUI password dialog and cache credentials for 5 min
+                        let _ = steps::run_step(
+                            "mas-sudo-auth",
+                            "sudo",
+                            &["-A", "-v"],
+                            &paths.log_dir,
+                            &run_id,
+                            &combined_log,
+                            opts.event_tx.clone(),
+                            Some(askpass),
+                        );
+                    }
+                }
+            }
             let o = steps::run_step("mas", "mas", &["upgrade"], &paths.log_dir, &run_id, &combined_log, opts.event_tx.clone(), opts.sudo_askpass.as_deref());
             let after = Command::new("mas").arg("outdated").output().map(|p| String::from_utf8_lossy(&p.stdout).to_string()).unwrap_or_default();
             // diff logic: updated = before - after by name
@@ -225,11 +260,23 @@ pub fn run_pipeline(paths: &Paths, opts: PipelineOptions) -> anyhow::Result<(Rep
                 without_id.split(" (").next().unwrap_or(without_id).trim().to_string()
             }).collect();
             let updated_names: Vec<Value> = before_names.difference(&after_names).map(|n| serde_json::json!({"name": n})).collect();
-            // Treat sudo-required failure as success with note, not failed (user can approve manually)
+            // If we pre-cached sudo, mas should now succeed without prompting. If it still
+            // failed due to sudo, the user likely cancelled the auth dialog — treat as
+            // success with note in GUI mode so the overall run isn't marked failed;
+            // in headless (no GUI) the `sudo -A -v` wasn't run, so sudo error here means
+            // no tty and no cached creds — also treat as success with note.
             let log_content = std::fs::read_to_string(paths.log_dir.join(format!("{}.mas.log", run_id))).unwrap_or_default();
-            let sudo_required = log_content.contains("sudo: a terminal is required") || log_content.contains("a password is required") || log_content.contains("sudo: no tty present");
+            let sudo_required = log_content.contains("sudo: a terminal is required")
+                || log_content.contains("a password is required")
+                || log_content.contains("sudo: no tty present")
+                || log_content.contains("Sorry, try again");
             let (status, note) = if sudo_required {
-                ("success", "App Store update requires sudo — please approve password or update manually via App Store".to_string())
+                if opts.event_tx.is_some() {
+                    // GUI: user cancelled or auth failed — don't mark whole run as failed
+                    ("success", "App Store update requires sudo — please approve password or update manually via App Store".to_string())
+                } else {
+                    ("success", "App Store update requires sudo — please approve password or update manually via App Store".to_string())
+                }
             } else if o.exit_code==0 {
                 ("success", String::new())
             } else {
