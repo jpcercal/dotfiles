@@ -1,0 +1,11 @@
+[package]
+name = "dotfiles-testkit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Test fixtures: sandboxed ExecEnv + stub binaries with argv recording"
+
+[dependencies]
+dotfiles-exec = { path = "../exec" }
+tempfile.workspace = true
