@@ -1,75 +1,101 @@
 # dotfiles
 
-Basically, here you can find the settings of OSX according to my preferences and automatic installation of applications from different sources. 
+A universal **macOS** package & configuration manager — one Rust binary that
+plays the role of `apt`, `brew`, `mas`, `composer`, `cargo`, `npm`, `pip`,
+`go install`, Ansible-style configuration, and macOS preference management in
+a single, idempotent, testable tool. No shell scripts anywhere: everything is
+Rust, driven by two declarative manifests (`apps.yaml`, `prefs.yaml`) validated
+against generated JSON Schemas (`schema/`).
 
-If you liked this idea then please don't forget to give me a star. =]
-
-## How to run it?
-
-Yeah, that's really simple, just run the following on your terminal:
-
-```bash
-make
-```
-
-It will run every job in order: `software_update`, `install_dependencies`, `install_apps`, `configure_apps`, `apply_preferences` and `update_history_commands`.
-
-You can also run any job on its own:
+## Install the binary
 
 ```bash
-make software_update
-make install_dependencies
-make install_apps
-make configure_apps
-make apply_preferences
-make update_history_commands
-make dotfiles_updater
-make install_dotfiles_updater_agent
+cargo build --release
+mkdir -p ~/.local/bin && cp target/release/dotfiles ~/.local/bin/
 ```
 
-To skip one or more jobs while debugging, list them on the `SKIP_JOBS` environment variable (space or comma separated):
+## Everyday commands (apt-like)
 
 ```bash
-SKIP_JOBS="software_update" make
-SKIP_JOBS="install_apps configure_apps" make
+dotfiles search <query>            # search across all backends
+dotfiles info brew:ripgrep         # package info (brew:/cask:/mas:/gem:/npm:/pip:/cargo:/go:/composer:)
+dotfiles list --installed          # per backend; or --outdated
+dotfiles install                   # everything declared in apps.yaml
+dotfiles install cask:iterm2 mas:1352778147
+dotfiles remove brew:git
+dotfiles update                    # refresh indexes (brew update, …)
+dotfiles upgrade                   # upgrade all backends (has --gate/--headless/--dry-run/GUI)
 ```
 
-## dotfiles-updater
-
-A daily (24h) system-update daemon with an interactive gate: every update requires
-your explicit click — **there is no fully-automatic update path**.
+## The full pipeline (used to be `make`)
 
 ```bash
-make dotfiles_updater                # manual run in the terminal
-make install_dotfiles_updater_agent  # install/refresh the LaunchAgent
+dotfiles sync                      # bootstrap → install → apply → prefs → history
+dotfiles sync --skip prefs,history
+dotfiles sync --only apply
+dotfiles sync --sandbox            # full E2E + stub tools + temp HOME (zero real effects)
 ```
 
-- **Scheduling:** the LaunchAgent (`com.jpcercal.dotfiles.updater`) ticks every 6h and
-  at login/boot (`RunAtLoad`), so runs missed while the Mac was off or asleep are
-  caught up. A run is only offered when the last successful run is ≥ 24h old.
-- **Dialog:** shown **at most once per day**; "Postpone until tomorrow" or leaving it
-  unanswered defers to the next day. There are no postpone counters and no forced runs.
-- **Pre-flight gates:** on AC power or battery ≥ 50%, network reachable, ≥ 10 GB free
-  disk, no concurrent brew/mas process. Any failure silently skips to the next tick.
-- **Scope:** brew formulae/casks, App Store (mas), rustup + cargo globals, composer
-  global + audit, latest Node LTS via fnm (global packages migrated, older majors
-  pruned), uv + pynvim/neovim, opencode, neovim vim-plug plugins, gem neovim, tmux TPM.
-  macOS system updates are only *listed* and notified — never installed or rebooted.
-- **State:** `~/.local/state/dotfiles-updater/state.json`
-- **Reports:** `~/dotfiles/logs/dotfiles-updater/*.json` (per-step durations, old→new
-  versions, failures, brew-deprecation + composer audit; 90-day retention)
-
-**Pause the agent:**
+Individual jobs are also commands:
 
 ```bash
-launchctl bootout gui/$(id -u)/com.jpcercal.dotfiles.updater
+dotfiles bootstrap                 # install Homebrew + taps
+dotfiles install                   # apps from apps.yaml (idempotent)
+dotfiles apply                     # dirs, symlinks (.bkp backups), dock, shell, nvim plugins
+dotfiles prefs apply|diff|validate # ~190 declarative macOS preferences (defaults/pmset/dock/login items)
+dotfiles history seed              # seed atuin history from commands.yaml
+dotfiles software-update           # macOS updates (manual only, reboots!)
+dotfiles doctor                    # environment diagnosis
 ```
 
-**Resume the agent:**
+## Scheduled upgrades (LaunchAgent)
 
 ```bash
-make install_dotfiles_updater_agent
+dotfiles agent install             # run `dotfiles upgrade --gate` every 6h + at login
+dotfiles agent status
+dotfiles agent uninstall
+dotfiles agent tick                # one gated tick (what the agent itself runs)
 ```
 
-**Testing hooks:** `DFU_BATTERY_PCT` and `DFU_ON_AC=0|1` override the power gate in
-all modes (e.g. `DFU_BATTERY_PCT=15 DFU_ON_AC=0 make dotfiles_updater`).
+The upgrade flow has pre-flight gates (power, network, disk, package-manager
+locks, 24h cadence, 24h dialog cooldown), an egui consent/progress window
+(terminal fallback), sudo via GUI askpass, JSON reports in
+`~/dotfiles/logs/dotfiles-updater` (90-day retention) and state in
+`~/.local/state/dotfiles-updater/state.json`. macOS system updates are only
+listed, never auto-installed.
+
+## Manifests
+
+- **`apps.yaml`** — packages (brew taps/formulas/casks, gem, npm, pip/uv, go,
+  mas), toolchains (rustup/node/python), typed bootstrap steps, plus config
+  (`mkdir`, `symbolic_links`, `dockutil`). Validated with
+  [# yaml-language-server](schema/apps.schema.json).
+- **`prefs.yaml`** — ~190 declarative macOS preferences: typed `defaults`
+  entries (bool/int/float/string/array/dict, `current_host`, `sudo`,
+  `-dict-add` merge mode), whitelisted `exec` steps (pmset/nvram/PlistBuddy/…),
+  and builtins (`login-item`, `restart-apps`). Guardrails: `prefs validate` in
+  CI, `prefs apply` is idempotent and non-fatal (parity with the old script),
+  `prefs diff` is the drift gate.
+
+## Development
+
+```bash
+cargo test --workspace                 # all tests (≈90)
+cargo nextest run --workspace --no-default-features   # CI mode: parallel, no GUI build
+cargo clippy --workspace --all-targets -- -D warnings
+cargo llvm-cov nextest -p dotfiles-exec -p dotfiles-manifest -p dotfiles-backends -p dotfiles-prefs -p dotfiles-core --fail-under-lines 70
+```
+
+Repo layout:
+
+```
+crates/
+  exec/       execution seam (real vs sandbox env, stubs, dry-run)
+  manifest/   apps.yaml + commands.yaml types, validation, JSON Schema
+  backends/   PackageBackend trait + brew/cask/mas/gem/npm/pip/cargo/go/composer + toolchains + bootstrap
+  prefs/      declarative preferences engine (defaults/exec/builtins, apply/diff)
+  core/       upgrade pipeline state machine (gates, probes, steps, reports)
+  dotfiles/   the CLI binary (+ egui GUI behind the default `gui` feature)
+  testkit/    test fixtures (stub binaries with argv recording)
+schema/       generated JSON Schemas (committed, CI-enforced freshness)
+```
