@@ -79,23 +79,6 @@ listed, never auto-installed.
 
 ## Development
 
-```bash
-cargo test --workspace                 # all tests (≈90)
-cargo nextest run --workspace --no-default-features   # CI mode: parallel, no GUI build
-cargo clippy --workspace --all-targets -- -D warnings
-cargo llvm-cov nextest -p dotfiles-exec -p dotfiles-manifest -p dotfiles-backends -p dotfiles-prefs --fail-under-lines 80
-```
-
-Repo layout:
-
-```
-crates/
-  exec/       execution seam (real vs sandbox env, stubs, dry-run)
-  manifest/   apps.yaml + commands.yaml types, validation, JSON Schema
-  backends/   PackageBackend trait + brew/cask/mas/gem/npm/pip/cargo/go/composer + toolchains + bootstrap
-  prefs/      declarative preferences engine (defaults/exec/builtins, apply/diff)
-  core/       upgrade pipeline state machine (gates, probes, steps, reports)
-  dotfiles/   the CLI binary (+ egui GUI behind the default `gui` feature)
-  testkit/    test fixtures (stub binaries with argv recording)
-schema/       generated JSON Schemas (committed, CI-enforced freshness)
-```
+Build, test, and contribution conventions live in [AGENTS.md](AGENTS.md) —
+including the exact CI verification commands, the execution-seam and
+sandbox rules, and the workspace layout.
