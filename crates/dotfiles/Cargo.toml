@@ -1,0 +1,31 @@
+[package]
+name = "dotfiles"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "dotfiles CLI — dotfiles upgrade and future subcommands"
+default-run = "dotfiles"
+
+[[bin]]
+name = "dotfiles"
+path = "src/main.rs"
+
+[dependencies]
+dotfiles-core = { path = "../core" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+clap.workspace = true
+thiserror.workspace = true
+crossbeam-channel.workspace = true
+dirs.workspace = true
+secrecy.workspace = true
+notify-rust.workspace = true
+eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow"] }
+egui = "0.32"
+dark-light = "2.0"
+
+[features]
+default = []
