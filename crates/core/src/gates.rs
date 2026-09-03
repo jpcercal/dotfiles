@@ -86,10 +86,7 @@ pub fn gate_power(info: &PowerInfo) -> GateResult {
         GateResult {
             name: "power",
             ok: true,
-            reason: format!(
-                "ok: battery {}% (>= {}%)",
-                info.battery_pct, MIN_BATTERY
-            ),
+            reason: format!("ok: battery {}% (>= {}%)", info.battery_pct, MIN_BATTERY),
         }
     } else {
         GateResult {
@@ -127,7 +124,8 @@ pub fn gate_network() -> GateResult {
             .map(|o| o.status.success())
             .unwrap_or(false)
     };
-    if check("https://formulae.brew.sh") && check("https://www.apple.com/library/test/success.html") {
+    if check("https://formulae.brew.sh") && check("https://www.apple.com/library/test/success.html")
+    {
         GateResult {
             name: "network",
             ok: true,
@@ -205,7 +203,12 @@ pub fn gate_dialog_cooldown(state: &State) -> GateResult {
     }
 }
 
-pub fn gate_env(power: &GateResult, network: &GateResult, disk: &GateResult, pkgmgr: &GateResult) -> Option<GateResult> {
+pub fn gate_env(
+    power: &GateResult,
+    network: &GateResult,
+    disk: &GateResult,
+    pkgmgr: &GateResult,
+) -> Option<GateResult> {
     for g in [power, network, disk, pkgmgr] {
         if !g.ok {
             return Some(g.clone());

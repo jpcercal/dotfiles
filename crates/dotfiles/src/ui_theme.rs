@@ -133,16 +133,16 @@ pub fn separator(theme: Theme) -> egui::Color32 {
 // ── System colors — “System Colors/Light|Dark” (macOS 27 values) ────────────
 pub fn system(theme: Theme, hue: Hue) -> egui::Color32 {
     match (theme, hue) {
-        (Theme::Light, Hue::Accent) => egui::Color32::from_rgb(0, 136, 255),    // Blue #0088FF
-        (Theme::Light, Hue::Success) => egui::Color32::from_rgb(52, 199, 89),   // Green #34C759
-        (Theme::Light, Hue::Warning) => egui::Color32::from_rgb(255, 141, 40),  // Orange #FF8D28
-        (Theme::Light, Hue::Danger) => egui::Color32::from_rgb(255, 56, 60),    // Red #FF383C
+        (Theme::Light, Hue::Accent) => egui::Color32::from_rgb(0, 136, 255), // Blue #0088FF
+        (Theme::Light, Hue::Success) => egui::Color32::from_rgb(52, 199, 89), // Green #34C759
+        (Theme::Light, Hue::Warning) => egui::Color32::from_rgb(255, 141, 40), // Orange #FF8D28
+        (Theme::Light, Hue::Danger) => egui::Color32::from_rgb(255, 56, 60), // Red #FF383C
         (Theme::Light, Hue::Neutral) => egui::Color32::from_rgb(142, 142, 147), // Gray #8E8E93
-        (Theme::Dark, Hue::Accent) => egui::Color32::from_rgb(0, 145, 255),     // Blue #0091FF
-        (Theme::Dark, Hue::Success) => egui::Color32::from_rgb(48, 209, 88),    // Green #30D158
-        (Theme::Dark, Hue::Warning) => egui::Color32::from_rgb(255, 146, 48),   // Orange #FF9230
-        (Theme::Dark, Hue::Danger) => egui::Color32::from_rgb(255, 66, 69),     // Red #FF4245
-        (Theme::Dark, Hue::Neutral) => egui::Color32::from_rgb(152, 152, 157),  // Gray #98989D
+        (Theme::Dark, Hue::Accent) => egui::Color32::from_rgb(0, 145, 255),  // Blue #0091FF
+        (Theme::Dark, Hue::Success) => egui::Color32::from_rgb(48, 209, 88), // Green #30D158
+        (Theme::Dark, Hue::Warning) => egui::Color32::from_rgb(255, 146, 48), // Orange #FF9230
+        (Theme::Dark, Hue::Danger) => egui::Color32::from_rgb(255, 66, 69),  // Red #FF4245
+        (Theme::Dark, Hue::Neutral) => egui::Color32::from_rgb(152, 152, 157), // Gray #98989D
     }
 }
 

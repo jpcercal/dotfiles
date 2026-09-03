@@ -10,7 +10,12 @@ pub struct Section {
 }
 
 impl Section {
-    pub fn new(title: impl Into<String>, count: usize, status: impl Into<String>, items: Vec<String>) -> Self {
+    pub fn new(
+        title: impl Into<String>,
+        count: usize,
+        status: impl Into<String>,
+        items: Vec<String>,
+    ) -> Self {
         Self {
             title: title.into(),
             count,
@@ -32,12 +37,21 @@ impl Section {
 }
 
 fn has_command(name: &str) -> bool {
-    Command::new("which").arg(name).output().map(|o| o.status.success()).unwrap_or(false)
+    Command::new("which")
+        .arg(name)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 fn run_with_timeout(secs: u64, program: &str, args: &[&str]) -> Option<String> {
     // try gtimeout if present
-    let timeout_bin = if Command::new("which").arg("gtimeout").output().map(|o| o.status.success()).unwrap_or(false) {
+    let timeout_bin = if Command::new("which")
+        .arg("gtimeout")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         Some("gtimeout")
     } else {
         None
@@ -59,8 +73,17 @@ fn run_with_timeout(secs: u64, program: &str, args: &[&str]) -> Option<String> {
 }
 
 #[allow(dead_code)]
-fn run_with_timeout_stderr(secs: u64, program: &str, args: &[&str]) -> Option<(String, String, bool)> {
-    let timeout_bin = if Command::new("which").arg("gtimeout").output().map(|o| o.status.success()).unwrap_or(false) {
+fn run_with_timeout_stderr(
+    secs: u64,
+    program: &str,
+    args: &[&str],
+) -> Option<(String, String, bool)> {
+    let timeout_bin = if Command::new("which")
+        .arg("gtimeout")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         Some("gtimeout")
     } else {
         None
@@ -93,7 +116,8 @@ pub fn probe_brew() -> Section {
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_else(|_| r#"{"formulae":[],"casks":[]}"#.into());
-    let v: Value = serde_json::from_str(&json_str).unwrap_or(serde_json::json!({"formulae":[],"casks":[]}));
+    let v: Value =
+        serde_json::from_str(&json_str).unwrap_or(serde_json::json!({"formulae":[],"casks":[]}));
     let mut f_items = vec![];
     let mut c_items = vec![];
     if let Some(arr) = v.get("formulae").and_then(|x| x.as_array()) {
@@ -105,7 +129,10 @@ pub fn probe_brew() -> Section {
                 .and_then(|a| a.first())
                 .and_then(|x| x.as_str())
                 .unwrap_or("");
-            let current = f.get("current_version").and_then(|x| x.as_str()).unwrap_or("");
+            let current = f
+                .get("current_version")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
             if !name.is_empty() {
                 f_items.push(format!("{} ({} -> {})", name, installed, current));
             }
@@ -120,7 +147,10 @@ pub fn probe_brew() -> Section {
                 .and_then(|a| a.first())
                 .and_then(|x| x.as_str())
                 .unwrap_or("");
-            let current = c.get("current_version").and_then(|x| x.as_str()).unwrap_or("");
+            let current = c
+                .get("current_version")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
             if !name.is_empty() {
                 c_items.push(format!("{} ({} -> {})", name, installed, current));
             }
@@ -131,7 +161,16 @@ pub fn probe_brew() -> Section {
     // but probe_summary below creates two sections explicitly.
     // This function is not used directly for summary; probe_summary handles both.
     // Return formulae as primary.
-    Section::new("Brew Formulae", f_items.len(), if f_items.is_empty() { "No updates available" } else { "Updates available" }, f_items)
+    Section::new(
+        "Brew Formulae",
+        f_items.len(),
+        if f_items.is_empty() {
+            "No updates available"
+        } else {
+            "Updates available"
+        },
+        f_items,
+    )
 }
 
 pub fn probe_brew_sections() -> Vec<Section> {
@@ -146,7 +185,8 @@ pub fn probe_brew_sections() -> Vec<Section> {
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_else(|_| r#"{"formulae":[],"casks":[]}"#.into());
-    let v: Value = serde_json::from_str(&json_str).unwrap_or(serde_json::json!({"formulae":[],"casks":[]}));
+    let v: Value =
+        serde_json::from_str(&json_str).unwrap_or(serde_json::json!({"formulae":[],"casks":[]}));
     let mut f_items = vec![];
     let mut c_items = vec![];
     if let Some(arr) = v.get("formulae").and_then(|x| x.as_array()) {
@@ -158,7 +198,10 @@ pub fn probe_brew_sections() -> Vec<Section> {
                 .and_then(|a| a.first())
                 .and_then(|x| x.as_str())
                 .unwrap_or("");
-            let current = f.get("current_version").and_then(|x| x.as_str()).unwrap_or("");
+            let current = f
+                .get("current_version")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
             if !name.is_empty() {
                 f_items.push(format!("{} ({} -> {})", name, installed, current));
             }
@@ -173,7 +216,10 @@ pub fn probe_brew_sections() -> Vec<Section> {
                 .and_then(|a| a.first())
                 .and_then(|x| x.as_str())
                 .unwrap_or("");
-            let current = c.get("current_version").and_then(|x| x.as_str()).unwrap_or("");
+            let current = c
+                .get("current_version")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
             if !name.is_empty() {
                 c_items.push(format!("{} ({} -> {})", name, installed, current));
             }
@@ -183,13 +229,21 @@ pub fn probe_brew_sections() -> Vec<Section> {
         Section::new(
             "Brew Formulae",
             f_items.len(),
-            if f_items.is_empty() { "No updates available" } else { "Updates available" },
+            if f_items.is_empty() {
+                "No updates available"
+            } else {
+                "Updates available"
+            },
             f_items,
         ),
         Section::new(
             "Brew Casks",
             c_items.len(),
-            if c_items.is_empty() { "No updates available" } else { "Updates available" },
+            if c_items.is_empty() {
+                "No updates available"
+            } else {
+                "Updates available"
+            },
             c_items,
         ),
     ]
@@ -206,11 +260,17 @@ pub fn probe_mas() -> Section {
             let mut items = vec![];
             for line in s.lines() {
                 let trimmed = line.trim();
-                if trimmed.is_empty() { continue; }
+                if trimmed.is_empty() {
+                    continue;
+                }
                 // bash: sed -E 's/^[0-9]+[[:space:]]+//; s/[[:space:]]+\(([^ ]+) -> ([^)]+)\)$/ (\1 -> \2)/'
                 // Simplified: take line, try to parse.
                 // mas outdated format: "123 AppName (1.0 -> 2.0)"
-                let without_id = trimmed.splitn(2, char::is_whitespace).nth(1).unwrap_or(trimmed).trim();
+                let without_id = trimmed
+                    .split_once(char::is_whitespace)
+                    .map(|x| x.1)
+                    .unwrap_or(trimmed)
+                    .trim();
                 let item = without_id.to_string();
                 items.push(item);
             }
@@ -219,7 +279,11 @@ pub fn probe_mas() -> Section {
             Section::new(
                 "MAS",
                 items.len(),
-                if items.is_empty() { "No updates available" } else { "Updates available" },
+                if items.is_empty() {
+                    "No updates available"
+                } else {
+                    "Updates available"
+                },
                 items,
             )
         }
@@ -245,8 +309,8 @@ pub fn probe_rust() -> Section {
                 // rest: "1.78.0 (abc) -> 1.79.0 (def)"  take first token and third token
                 let parts: Vec<&str> = rest.split("->").collect();
                 if parts.len() >= 2 {
-                    let from = parts[0].trim().split_whitespace().next().unwrap_or("").trim();
-                    let to = parts[1].trim().split_whitespace().next().unwrap_or("").trim();
+                    let from = parts[0].split_whitespace().next().unwrap_or("").trim();
+                    let to = parts[1].split_whitespace().next().unwrap_or("").trim();
                     items.push(format!("{} ({} -> {})", name, from, to));
                 } else {
                     items.push(trimmed.to_string());
@@ -259,7 +323,11 @@ pub fn probe_rust() -> Section {
     Section::new(
         "Rust",
         items.len(),
-        if items.is_empty() { "No updates available" } else { "Updates available" },
+        if items.is_empty() {
+            "No updates available"
+        } else {
+            "Updates available"
+        },
         items,
     )
 }
@@ -269,29 +337,46 @@ pub fn probe_node() -> Section {
         return Section::new("Node (fnm)", 0, "Unavailable (not installed)", vec![]);
     }
     // eval "$(fnm env)" not needed for ls-remote? we try direct.
-    let cur = Command::new("fnm").arg("current").output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+    let cur = Command::new("fnm")
+        .arg("current")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
     let target = run_with_timeout(30, "fnm", &["ls-remote", "--lts"])
-        .and_then(|s| s.lines().last().map(|l| l.split_whitespace().next().unwrap_or("").to_string()))
+        .and_then(|s| {
+            s.lines()
+                .last()
+                .map(|l| l.split_whitespace().next().unwrap_or("").to_string())
+        })
         .unwrap_or_default();
     let mut items = vec![];
-    if !target.is_empty() && !cur.is_empty() && cur != target && cur != "system" && cur != "default" {
+    if !target.is_empty() && !cur.is_empty() && cur != target && cur != "system" && cur != "default"
+    {
         items.push(format!("node ({} -> {})", cur, target));
     }
     // npm outdated -g --json
-    if let Ok(out) = Command::new("npm").args(["outdated", "-g", "--json"]).output() {
+    if let Ok(out) = Command::new("npm")
+        .args(["outdated", "-g", "--json"])
+        .output()
+    {
         let s = String::from_utf8_lossy(&out.stdout);
         // npm outdated exits 1 when outdated; we still parse. Also need to handle stray docs: jq -s '.[0] // {}'
         // So try parse as json, if array take first.
-        let v: Value = serde_json::from_str(&s).or_else(|_| {
-            // try splitting? If there are multiple json objects, take first?
-            // simplest: find first '{' to last '}'
-            let start = s.find('{').unwrap_or(0);
-            let end = s.rfind('}').map(|i| i+1).unwrap_or(s.len());
-            serde_json::from_str(&s[start..end])
-        }).unwrap_or(Value::Object(Default::default()));
+        let v: Value = serde_json::from_str(&s)
+            .or_else(|_| {
+                // try splitting? If there are multiple json objects, take first?
+                // simplest: find first '{' to last '}'
+                let start = s.find('{').unwrap_or(0);
+                let end = s.rfind('}').map(|i| i + 1).unwrap_or(s.len());
+                serde_json::from_str(&s[start..end])
+            })
+            .unwrap_or(Value::Object(Default::default()));
         // If v is array, take first
         let obj = if v.is_array() {
-            v.as_array().and_then(|a| a.first()).cloned().unwrap_or(Value::Object(Default::default()))
+            v.as_array()
+                .and_then(|a| a.first())
+                .cloned()
+                .unwrap_or(Value::Object(Default::default()))
         } else {
             v
         };
@@ -308,7 +393,11 @@ pub fn probe_node() -> Section {
     Section::new(
         "Node (fnm)",
         items.len(),
-        if items.is_empty() { "No updates available" } else { "Updates available" },
+        if items.is_empty() {
+            "No updates available"
+        } else {
+            "Updates available"
+        },
         items,
     )
 }
@@ -318,25 +407,60 @@ pub fn probe_python() -> Section {
         return Section::new("Python (uv)", 0, "Unavailable (not installed)", vec![]);
     }
     let mut items = vec![];
-    let uv_ver = Command::new("uv").args(["--version"]).output().map(|o| {
-        let s = String::from_utf8_lossy(&o.stdout);
-        s.split_whitespace().nth(1).unwrap_or("").to_string()
-    }).unwrap_or_default();
-    let uv_latest = run_with_timeout(8, "curl", &["-fsSL", "--max-time", "8", "https://pypi.org/pypi/uv/json"])
-        .and_then(|s| {
-            let v: Value = serde_json::from_str(&s).ok()?;
-            v.get("info").and_then(|i| i.get("version")).and_then(|x| x.as_str()).map(|s| s.to_string())
+    let uv_ver = Command::new("uv")
+        .args(["--version"])
+        .output()
+        .map(|o| {
+            let s = String::from_utf8_lossy(&o.stdout);
+            s.split_whitespace().nth(1).unwrap_or("").to_string()
         })
         .unwrap_or_default();
+    let uv_latest = run_with_timeout(
+        8,
+        "curl",
+        &["-fsSL", "--max-time", "8", "https://pypi.org/pypi/uv/json"],
+    )
+    .and_then(|s| {
+        let v: Value = serde_json::from_str(&s).ok()?;
+        v.get("info")
+            .and_then(|i| i.get("version"))
+            .and_then(|x| x.as_str())
+            .map(|s| s.to_string())
+    })
+    .unwrap_or_default();
     if !uv_ver.is_empty() && !uv_latest.is_empty() && uv_ver != uv_latest {
         items.push(format!("uv ({} -> {})", uv_ver, uv_latest));
     }
     // Check pynvim/neovim
-    let py = Command::new("uv").args(["python", "find"]).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default();
+    let py = Command::new("uv")
+        .args(["python", "find"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
     if !py.is_empty() {
-        let pip_check = Command::new("uv").args(["pip", "install", "--dry-run", "-U", "--break-system-packages", "--python", &py, "pynvim", "neovim"]).output().map(|o| String::from_utf8_lossy(&o.stdout).to_string() + &String::from_utf8_lossy(&o.stderr)).unwrap_or_default();
+        let pip_check = Command::new("uv")
+            .args([
+                "pip",
+                "install",
+                "--dry-run",
+                "-U",
+                "--break-system-packages",
+                "--python",
+                &py,
+                "pynvim",
+                "neovim",
+            ])
+            .output()
+            .map(|o| {
+                String::from_utf8_lossy(&o.stdout).to_string() + &String::from_utf8_lossy(&o.stderr)
+            })
+            .unwrap_or_default();
         // get current versions
-        let list_out = Command::new("uv").args(["pip", "list", "--python", &py]).output().map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_default();
+        let list_out = Command::new("uv")
+            .args(["pip", "list", "--python", &py])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
         let mut pnv = String::new();
         let mut nv = String::new();
         for line in list_out.lines() {
@@ -352,22 +476,40 @@ pub fn probe_python() -> Section {
         for line in pip_check.lines() {
             let t = line.trim();
             if t.starts_with("+ pynvim==") {
-                pnv_new = t.trim_start_matches("+ pynvim==").split_whitespace().next().unwrap_or("").to_string();
+                pnv_new = t
+                    .trim_start_matches("+ pynvim==")
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
             }
             if t.starts_with("+ neovim==") {
-                nv_new = t.trim_start_matches("+ neovim==").split_whitespace().next().unwrap_or("").to_string();
+                nv_new = t
+                    .trim_start_matches("+ neovim==")
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
             }
             // also handle "+ pynvim==x.y.z"
             if t.contains("pynvim==") && pnv_new.is_empty() {
                 if let Some(idx) = t.find("pynvim==") {
                     let rest = &t[idx + "pynvim==".len()..];
-                    pnv_new = rest.split(|c: char| c.is_whitespace() || c == ')').next().unwrap_or("").to_string();
+                    pnv_new = rest
+                        .split(|c: char| c.is_whitespace() || c == ')')
+                        .next()
+                        .unwrap_or("")
+                        .to_string();
                 }
             }
             if t.contains("neovim==") && nv_new.is_empty() {
                 if let Some(idx) = t.find("neovim==") {
                     let rest = &t[idx + "neovim==".len()..];
-                    nv_new = rest.split(|c: char| c.is_whitespace() || c == ')').next().unwrap_or("").to_string();
+                    nv_new = rest
+                        .split(|c: char| c.is_whitespace() || c == ')')
+                        .next()
+                        .unwrap_or("")
+                        .to_string();
                 }
             }
         }
@@ -381,7 +523,11 @@ pub fn probe_python() -> Section {
     Section::new(
         "Python (uv)",
         items.len(),
-        if items.is_empty() { "No updates available" } else { "Updates available" },
+        if items.is_empty() {
+            "No updates available"
+        } else {
+            "Updates available"
+        },
         items,
     )
 }
@@ -390,13 +536,35 @@ pub fn probe_opencode() -> Section {
     if !has_command("opencode") {
         return Section::new("opencode", 0, "Unavailable (not installed)", vec![]);
     }
-    let cur = Command::new("opencode").args(["--version"]).output().map(|o| String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("").trim().to_string()).unwrap_or_default();
-    let latest = run_with_timeout(8, "curl", &["-fsSL", "--max-time", "8", "https://registry.npmjs.org/opencode-ai/latest"])
-        .and_then(|s| {
-            let v: Value = serde_json::from_str(&s).ok()?;
-            v.get("version").and_then(|x| x.as_str()).map(|s| s.to_string())
+    let cur = Command::new("opencode")
+        .args(["--version"])
+        .output()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string()
         })
         .unwrap_or_default();
+    let latest = run_with_timeout(
+        8,
+        "curl",
+        &[
+            "-fsSL",
+            "--max-time",
+            "8",
+            "https://registry.npmjs.org/opencode-ai/latest",
+        ],
+    )
+    .and_then(|s| {
+        let v: Value = serde_json::from_str(&s).ok()?;
+        v.get("version")
+            .and_then(|x| x.as_str())
+            .map(|s| s.to_string())
+    })
+    .unwrap_or_default();
     let mut items = vec![];
     if !cur.is_empty() && !latest.is_empty() && cur != latest {
         items.push(format!("opencode ({} -> {})", cur, latest));
@@ -404,7 +572,11 @@ pub fn probe_opencode() -> Section {
     Section::new(
         "opencode",
         items.len(),
-        if items.is_empty() { "No updates available" } else { "Updates available" },
+        if items.is_empty() {
+            "No updates available"
+        } else {
+            "Updates available"
+        },
         items,
     )
 }
@@ -426,7 +598,7 @@ pub fn probe_nvim() -> Section {
             if first_char == '\'' || first_char == '"' {
                 let quote = first_char;
                 if let Some(end) = rest[1..].find(quote) {
-                    let name = &rest[1..1+end];
+                    let name = &rest[1..1 + end];
                     items.push(name.to_string());
                 }
             }
@@ -435,7 +607,11 @@ pub fn probe_nvim() -> Section {
     Section::new(
         "Neovim Plugins",
         items.len(),
-        if items.is_empty() { "No updates available" } else { "Checked at run time (results in the JSON report)" },
+        if items.is_empty() {
+            "No updates available"
+        } else {
+            "Checked at run time (results in the JSON report)"
+        },
         items,
     )
 }
@@ -445,14 +621,19 @@ pub fn probe_gem() -> Section {
         return Section::new("Gem", 0, "Unavailable (not installed)", vec![]);
     }
     let out = run_with_timeout(30, "gem", &["outdated"]);
-    let line = out.unwrap_or_default().lines().find(|l| l.starts_with("neovim ")).map(|s| s.to_string()).unwrap_or_default();
+    let line = out
+        .unwrap_or_default()
+        .lines()
+        .find(|l| l.starts_with("neovim "))
+        .map(|s| s.to_string())
+        .unwrap_or_default();
     let mut items = vec![];
     if !line.is_empty() {
         // line: "neovim (0.9.0 < 0.10.0)"
         // bash: s/^([^ ]+) \(([^ ]+) < ([^)]+)\).*/\1 (\2 -> \3)/
         if let Some(start) = line.find('(') {
             let name = line[..start].trim();
-            let inside = line[start+1..].trim_end_matches(')');
+            let inside = line[start + 1..].trim_end_matches(')');
             let parts: Vec<&str> = inside.split('<').collect();
             if parts.len() == 2 {
                 let from = parts[0].trim();
@@ -468,7 +649,11 @@ pub fn probe_gem() -> Section {
     Section::new(
         "Gem",
         items.len(),
-        if items.is_empty() { "No updates available" } else { "Updates available" },
+        if items.is_empty() {
+            "No updates available"
+        } else {
+            "Updates available"
+        },
         items,
     )
 }
@@ -486,7 +671,11 @@ pub fn probe_macos() -> Section {
     Section::new(
         "macOS",
         items.len(),
-        if items.is_empty() { "No updates available" } else { "Updates available (install manually via System Settings)" },
+        if items.is_empty() {
+            "No updates available"
+        } else {
+            "Updates available (install manually via System Settings)"
+        },
         items,
     )
 }
@@ -508,7 +697,9 @@ pub fn probe_tpm() -> Option<Section> {
             }
         }
     }
-    if items.is_empty() { return None; }
+    if items.is_empty() {
+        return None;
+    }
     Some(Section::new(
         "Tmux TPM",
         items.len(),
@@ -521,28 +712,54 @@ pub fn probe_all() -> Vec<Section> {
     // Parallel startup: every independent version check runs concurrently
     // via std::thread::scope, so wall time ≈ max(slowest probe) instead of sum.
     std::thread::scope(|s| {
-        let brew_h = s.spawn(|| probe_brew_sections());
-        let mas_h = s.spawn(|| probe_mas());
-        let rust_h = s.spawn(|| probe_rust());
-        let node_h = s.spawn(|| probe_node());
-        let python_h = s.spawn(|| probe_python());
-        let opencode_h = s.spawn(|| probe_opencode());
-        let nvim_h = s.spawn(|| probe_nvim());
-        let gem_h = s.spawn(|| probe_gem());
-        let macos_h = s.spawn(|| probe_macos());
-        let tpm_h = s.spawn(|| probe_tpm());
+        let brew_h = s.spawn(probe_brew_sections);
+        let mas_h = s.spawn(probe_mas);
+        let rust_h = s.spawn(probe_rust);
+        let node_h = s.spawn(probe_node);
+        let python_h = s.spawn(probe_python);
+        let opencode_h = s.spawn(probe_opencode);
+        let nvim_h = s.spawn(probe_nvim);
+        let gem_h = s.spawn(probe_gem);
+        let macos_h = s.spawn(probe_macos);
+        let tpm_h = s.spawn(probe_tpm);
 
         let mut sections = Vec::with_capacity(11);
         // Preserve original ordering for stable UI.
         sections.extend(brew_h.join().unwrap_or_default());
-        sections.push(mas_h.join().unwrap_or_else(|_| Section::new("MAS", 0, "Unavailable (probe failed)", vec![])));
-        sections.push(rust_h.join().unwrap_or_else(|_| Section::new("Rust", 0, "Unavailable (probe failed)", vec![])));
-        sections.push(node_h.join().unwrap_or_else(|_| Section::new("Node (fnm)", 0, "Unavailable (probe failed)", vec![])));
-        sections.push(python_h.join().unwrap_or_else(|_| Section::new("Python (uv)", 0, "Unavailable (probe failed)", vec![])));
-        sections.push(opencode_h.join().unwrap_or_else(|_| Section::new("opencode", 0, "Unavailable (probe failed)", vec![])));
-        sections.push(nvim_h.join().unwrap_or_else(|_| Section::new("Neovim Plugins", 0, "Unavailable (probe failed)", vec![])));
-        sections.push(gem_h.join().unwrap_or_else(|_| Section::new("Gem", 0, "Unavailable (probe failed)", vec![])));
-        sections.push(macos_h.join().unwrap_or_else(|_| Section::new("macOS", 0, "Unavailable (probe failed)", vec![])));
+        sections.push(
+            mas_h
+                .join()
+                .unwrap_or_else(|_| Section::new("MAS", 0, "Unavailable (probe failed)", vec![])),
+        );
+        sections.push(
+            rust_h
+                .join()
+                .unwrap_or_else(|_| Section::new("Rust", 0, "Unavailable (probe failed)", vec![])),
+        );
+        sections.push(node_h.join().unwrap_or_else(|_| {
+            Section::new("Node (fnm)", 0, "Unavailable (probe failed)", vec![])
+        }));
+        sections.push(python_h.join().unwrap_or_else(|_| {
+            Section::new("Python (uv)", 0, "Unavailable (probe failed)", vec![])
+        }));
+        sections.push(
+            opencode_h.join().unwrap_or_else(|_| {
+                Section::new("opencode", 0, "Unavailable (probe failed)", vec![])
+            }),
+        );
+        sections.push(nvim_h.join().unwrap_or_else(|_| {
+            Section::new("Neovim Plugins", 0, "Unavailable (probe failed)", vec![])
+        }));
+        sections.push(
+            gem_h
+                .join()
+                .unwrap_or_else(|_| Section::new("Gem", 0, "Unavailable (probe failed)", vec![])),
+        );
+        sections.push(
+            macos_h
+                .join()
+                .unwrap_or_else(|_| Section::new("macOS", 0, "Unavailable (probe failed)", vec![])),
+        );
         if let Some(sec) = tpm_h.join().unwrap_or(None) {
             sections.push(sec);
         }

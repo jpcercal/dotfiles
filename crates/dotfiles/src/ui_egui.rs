@@ -1,5 +1,5 @@
-use crate::upgrade::Consent;
 use crate::ui_theme;
+use crate::upgrade::Consent;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use dotfiles_core::gates;
 use dotfiles_core::paths::Paths;
@@ -28,22 +28,22 @@ pub mod typography {
     // ── HIG § “Text styles” → macOS built-in table (144 ppi, HIG “Specifications”) ──
     // Weight/Size/Leading as in the doc; factor = size / BASE_PT
     pub const LARGE_TITLE: f32 = 26.0 / BASE_PT; // 2.0 — Large Title 26/32 Regular/Bold
-    pub const TITLE1: f32 = 22.0 / BASE_PT;      // 1.692 — Title 1 22/26 Regular/Bold
-    pub const TITLE2: f32 = 17.0 / BASE_PT;      // 1.307 — Title 2 17/22 Regular/Bold
-    pub const TITLE3: f32 = 15.0 / BASE_PT;      // 1.154 — Title 3 15/20 Regular/Semibold
-    pub const HEADLINE: f32 = 13.0 / BASE_PT;    // 1.0   — Headline 13/16 Bold → Heavy emphasized
-    pub const BODY: f32 = 13.0 / BASE_PT;        // 1.0   — Body 13/16 Regular → Semibold
-    pub const CALLOUT: f32 = 12.0 / BASE_PT;     // 0.923 — Callout 12/15 Regular → Semibold
+    pub const TITLE1: f32 = 22.0 / BASE_PT; // 1.692 — Title 1 22/26 Regular/Bold
+    pub const TITLE2: f32 = 17.0 / BASE_PT; // 1.307 — Title 2 17/22 Regular/Bold
+    pub const TITLE3: f32 = 15.0 / BASE_PT; // 1.154 — Title 3 15/20 Regular/Semibold
+    pub const HEADLINE: f32 = 13.0 / BASE_PT; // 1.0   — Headline 13/16 Bold → Heavy emphasized
+    pub const BODY: f32 = 13.0 / BASE_PT; // 1.0   — Body 13/16 Regular → Semibold
+    pub const CALLOUT: f32 = 12.0 / BASE_PT; // 0.923 — Callout 12/15 Regular → Semibold
     pub const SUBHEADLINE: f32 = 11.0 / BASE_PT; // 0.846 — Subheadline 11/14 Regular → Semibold
-    pub const FOOTNOTE: f32 = 10.0 / BASE_PT;    // 0.769 — Footnote 10/13 Regular → Semibold
-    pub const CAPTION1: f32 = 12.0 / BASE_PT;    // 0.923 — Caption 1 (iOS parity, used for badges)
-    pub const CAPTION2: f32 = 11.0 / BASE_PT;    // 0.846 — Caption 2 — badge secondary
+    pub const FOOTNOTE: f32 = 10.0 / BASE_PT; // 0.769 — Footnote 10/13 Regular → Semibold
+    pub const CAPTION1: f32 = 12.0 / BASE_PT; // 0.923 — Caption 1 (iOS parity, used for badges)
+    pub const CAPTION2: f32 = 11.0 / BASE_PT; // 0.846 — Caption 2 — badge secondary
 
     // ── HIG § “Ensuring legibility” — platform defaults/minimums ──
     pub const DEFAULT_MACOS: f32 = 13.0 / BASE_PT; // 1.0
     pub const MINIMUM_MACOS: f32 = 10.0 / BASE_PT; // 0.769 — never go below
-    pub const DEFAULT_IOS: f32 = 17.0 / BASE_PT;   // 1.307 — reference only
-    pub const MINIMUM_IOS: f32 = 11.0 / BASE_PT;   // 0.846
+    pub const DEFAULT_IOS: f32 = 17.0 / BASE_PT; // 1.307 — reference only
+    pub const MINIMUM_IOS: f32 = 11.0 / BASE_PT; // 0.846
 
     // ── HIG § “Optical sizes” — SF Pro Text ≤19pt, Display ≥20pt ──
     // At BASE 13 we are in Text (≤19). Factors ≥ 20/13 ≈1.538 would use Display.
@@ -55,7 +55,7 @@ pub mod typography {
     // apply the table. We expose the HIG tracking for the sizes we use, to be applied via
     // `RichText::extra_letter_spacing` where egui supports it.
     pub const TRACKING_BODY_13: f32 = -0.08; // 13pt −6/1000em
-    pub const TRACKING_SMALL_11: f32 = 0.06;  // 11pt +6/1000em
+    pub const TRACKING_SMALL_11: f32 = 0.06; // 11pt +6/1000em
     pub const TRACKING_CAPTION_12: f32 = 0.0; // 12pt 0
 
     #[inline]
@@ -69,19 +69,15 @@ pub mod typography {
 // HIG: respect system appearance by default, let user override, persist choice.
 // Stored at ~/.local/state/dotfiles-updater/ui.json  { "theme": "system"|"light"|"dark" }
 // ─────────────────────────────────────────────────────────────────────────────
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ThemePreference {
     #[serde(rename = "system")]
+    #[default]
     System,
     #[serde(rename = "light")]
     Light,
     #[serde(rename = "dark")]
     Dark,
-}
-impl Default for ThemePreference {
-    fn default() -> Self {
-        Self::System
-    }
 }
 
 fn theme_prefs_path() -> std::path::PathBuf {
@@ -202,9 +198,9 @@ fn dock_icon_data() -> std::sync::Arc<egui::IconData> {
                 continue;
             }
             let ang = fy.atan2(fx).to_degrees(); // -180..180, 0 = +X (3 o’clock), CCW
-            // normalize to 0..360 where 0 = 3 o’clock, 90 = 12 o’clock? Actually atan2 90 = 12? Let's just use standard.
-            // We want gaps at ~90° (12 o’clock) and 270° (6 o’clock) for the two arrows.
-            // Create two arcs: arc A 100°..260°, arc B 280°..80° (wrapping)
+                                                 // normalize to 0..360 where 0 = 3 o’clock, 90 = 12 o’clock? Actually atan2 90 = 12? Let's just use standard.
+                                                 // We want gaps at ~90° (12 o’clock) and 270° (6 o’clock) for the two arrows.
+                                                 // Create two arcs: arc A 100°..260°, arc B 280°..80° (wrapping)
             let norm = if ang < 0.0 { ang + 360.0 } else { ang };
             let in_arc_a = norm > 100.0 && norm < 260.0;
             let in_arc_b = norm > 280.0 || norm < 80.0;
@@ -239,14 +235,17 @@ fn dock_icon_data() -> std::sync::Arc<egui::IconData> {
                 let w0 = (p1.0 - p0.0) * (py - p0.1) - (p1.1 - p0.1) * (px - p0.0);
                 let w1 = (p2.0 - p1.0) * (py - p1.1) - (p2.1 - p1.1) * (px - p1.0);
                 let w2 = (p0.0 - p2.0) * (py - p2.1) - (p0.1 - p2.1) * (px - p2.0);
-                if (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0) || (w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0) {
-                    if x >= 0 && x < size as i32 && y >= 0 && y < size as i32 {
-                        let idx = (y as usize * size + x as usize) * 4;
-                        rgba[idx] = 255;
-                        rgba[idx + 1] = 255;
-                        rgba[idx + 2] = 255;
-                        rgba[idx + 3] = 255;
-                    }
+                if ((w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0) || (w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0))
+                    && x >= 0
+                    && x < size as i32
+                    && y >= 0
+                    && y < size as i32
+                {
+                    let idx = (y as usize * size + x as usize) * 4;
+                    rgba[idx] = 255;
+                    rgba[idx + 1] = 255;
+                    rgba[idx + 2] = 255;
+                    rgba[idx + 3] = 255;
                 }
             }
         }
@@ -283,17 +282,19 @@ fn apply_macos_appearance(ctx: &egui::Context, theme: Theme) {
 
     // Proportional → SF Pro (SFNS) — the macOS system font. 13pt is the macOS standard.
     if let Ok(data) = std::fs::read("/System/Library/Fonts/SFNS.ttf") {
-        fonts
-            .font_data
-            .insert("SFPro".to_owned(), std::sync::Arc::new(egui::FontData::from_owned(data)));
+        fonts.font_data.insert(
+            "SFPro".to_owned(),
+            std::sync::Arc::new(egui::FontData::from_owned(data)),
+        );
         if let Some(fam) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
             fam.insert(0, "SFPro".to_owned());
         }
     } else if let Ok(data) = std::fs::read("/System/Library/Fonts/Helvetica.ttc") {
         // tiny TTC fallback — only index 0 will be used by ab_glyph, still renders correctly for 13pt
-        fonts
-            .font_data
-            .insert("Helvetica".to_owned(), std::sync::Arc::new(egui::FontData::from_owned(data)));
+        fonts.font_data.insert(
+            "Helvetica".to_owned(),
+            std::sync::Arc::new(egui::FontData::from_owned(data)),
+        );
         if let Some(fam) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
             fam.insert(0, "Helvetica".to_owned());
         }
@@ -301,9 +302,10 @@ fn apply_macos_appearance(ctx: &egui::Context, theme: Theme) {
 
     // Monospace → SF Mono (and Menlo as secondary) — Xcode / Terminal style
     if let Ok(data) = std::fs::read("/System/Library/Fonts/SFNSMono.ttf") {
-        fonts
-            .font_data
-            .insert("SFMono".to_owned(), std::sync::Arc::new(egui::FontData::from_owned(data)));
+        fonts.font_data.insert(
+            "SFMono".to_owned(),
+            std::sync::Arc::new(egui::FontData::from_owned(data)),
+        );
         if let Some(fam) = fonts.families.get_mut(&egui::FontFamily::Monospace) {
             fam.insert(0, "SFMono".to_owned());
         }
@@ -357,14 +359,32 @@ fn apply_macos_appearance(ctx: &egui::Context, theme: Theme) {
     use egui::{FontFamily as FF, FontId, TextStyle as TS};
     // HIG macOS built-in — exact point sizes, no custom 50% scale (HIG says test legibility at default/minimum;
     // macOS default 13pt / minimum 10pt — scaling is only via Accessibility > Display > Text size, not arbitrary).
-    style.text_styles.insert(TS::Heading, FontId::new(typography::pt(typography::TITLE3), FF::Proportional)); // Title 3 — factor TITLE3
-    style.text_styles.insert(TS::Body, FontId::new(typography::pt(typography::BODY), FF::Proportional)); // Body — factor BODY
-    style.text_styles.insert(TS::Button, FontId::new(typography::pt(typography::BODY), FF::Proportional)); // controlContentFont — factor BODY
-    style.text_styles.insert(TS::Small, FontId::new(typography::pt(typography::SUBHEADLINE), FF::Proportional)); // Subheadline — factor SUBHEADLINE
-    style.text_styles.insert(TS::Monospace, FontId::new(typography::pt(typography::SUBHEADLINE), FF::Monospace)); // SF Mono 11 — factor SUBHEADLINE
-    style.text_styles.insert(TS::Name("Caption".into()), FontId::new(typography::pt(typography::CAPTION2), FF::Proportional)); // Caption — factor CAPTION2
-    // Additional HIG styles we use explicitly via RichText::size() below are derived from the same table:
-    // Title2 17 for large window titles, Callout 12 for gate details, Footnote 10 for durations — see inline comments.
+    style.text_styles.insert(
+        TS::Heading,
+        FontId::new(typography::pt(typography::TITLE3), FF::Proportional),
+    ); // Title 3 — factor TITLE3
+    style.text_styles.insert(
+        TS::Body,
+        FontId::new(typography::pt(typography::BODY), FF::Proportional),
+    ); // Body — factor BODY
+    style.text_styles.insert(
+        TS::Button,
+        FontId::new(typography::pt(typography::BODY), FF::Proportional),
+    ); // controlContentFont — factor BODY
+    style.text_styles.insert(
+        TS::Small,
+        FontId::new(typography::pt(typography::SUBHEADLINE), FF::Proportional),
+    ); // Subheadline — factor SUBHEADLINE
+    style.text_styles.insert(
+        TS::Monospace,
+        FontId::new(typography::pt(typography::SUBHEADLINE), FF::Monospace),
+    ); // SF Mono 11 — factor SUBHEADLINE
+    style.text_styles.insert(
+        TS::Name("Caption".into()),
+        FontId::new(typography::pt(typography::CAPTION2), FF::Proportional),
+    ); // Caption — factor CAPTION2
+       // Additional HIG styles we use explicitly via RichText::size() below are derived from the same table:
+       // Title2 17 for large window titles, Callout 12 for gate details, Footnote 10 for durations — see inline comments.
 
     // ── Visuals — macOS 27 UI Kit tokens (single source: ui_theme.rs) ───────
     // Opaque window/panel surfaces (#FFFFFF / #1E1E1E), the kit’s 5-level fill
@@ -396,9 +416,11 @@ fn apply_macos_appearance(ctx: &egui::Context, theme: Theme) {
         w.bg_stroke = egui::Stroke::new(1.0_f32, ui_theme::separator(theme));
     }
     visuals.widgets.noninteractive.bg_fill = ui_theme::window_bg(theme);
-    visuals.widgets.noninteractive.weak_bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Quinary);
+    visuals.widgets.noninteractive.weak_bg_fill =
+        ui_theme::fill(theme, ui_theme::FillLevel::Quinary);
     // noninteractive.fg_stroke is egui’s global text color (Visuals::text_color)
-    visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0_f32, ui_theme::label(theme, ui_theme::Level::Primary));
+    visuals.widgets.noninteractive.fg_stroke =
+        egui::Stroke::new(1.0_f32, ui_theme::label(theme, ui_theme::Level::Primary));
     for w in [
         &mut visuals.widgets.inactive,
         &mut visuals.widgets.hovered,
@@ -410,7 +432,8 @@ fn apply_macos_appearance(ctx: &egui::Context, theme: Theme) {
     match theme {
         Theme::Dark => {
             visuals.widgets.inactive.bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Primary);
-            visuals.widgets.inactive.weak_bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Primary);
+            visuals.widgets.inactive.weak_bg_fill =
+                ui_theme::fill(theme, ui_theme::FillLevel::Primary);
             // idle → hover → pressed ladder: white 10% → 13% → 18% over #1E1E1E
             visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(59, 59, 59);
             visuals.widgets.hovered.weak_bg_fill = egui::Color32::from_rgb(59, 59, 59);
@@ -424,11 +447,14 @@ fn apply_macos_appearance(ctx: &egui::Context, theme: Theme) {
             visuals.widgets.inactive.weak_bg_fill = ui_theme::window_bg(theme);
             // idle → hover → pressed ladder: white → 5% black → 10% black
             visuals.widgets.hovered.bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Tertiary);
-            visuals.widgets.hovered.weak_bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Tertiary);
+            visuals.widgets.hovered.weak_bg_fill =
+                ui_theme::fill(theme, ui_theme::FillLevel::Tertiary);
             visuals.widgets.open.bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Tertiary);
-            visuals.widgets.open.weak_bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Tertiary);
+            visuals.widgets.open.weak_bg_fill =
+                ui_theme::fill(theme, ui_theme::FillLevel::Tertiary);
             visuals.widgets.active.bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Primary);
-            visuals.widgets.active.weak_bg_fill = ui_theme::fill(theme, ui_theme::FillLevel::Primary);
+            visuals.widgets.active.weak_bg_fill =
+                ui_theme::fill(theme, ui_theme::FillLevel::Primary);
         }
     }
     visuals.selection.bg_fill = ui_theme::system(theme, ui_theme::Hue::Accent);
@@ -590,30 +616,54 @@ impl eframe::App for ConsentApp {
                         tint_frame(ui_theme::tint(self.theme, ui_theme::Hue::Warning))
                             .inner_margin(egui::Margin::symmetric(10, 6))
                             .show(ui, |ui| {
-                                ui.add(egui::Label::new(
-                                    egui::RichText::new("Some checks failed — will still update if you proceed")
+                                ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(
+                                            "Some checks failed — will still update if you proceed",
+                                        )
                                         .size(typography::pt(typography::SUBHEADLINE))
-                                        .color(ui_theme::tint(self.theme, ui_theme::Hue::Warning).fg),
-                                ).wrap());
+                                        .color(
+                                            ui_theme::tint(self.theme, ui_theme::Hue::Warning).fg,
+                                        ),
+                                    )
+                                    .wrap(),
+                                );
                             });
                     } else {
-                        ui.add(egui::Label::new(
-                            egui::RichText::new("Press Enter to update • Esc to postpone")
-                                .size(typography::pt(typography::SUBHEADLINE))
-                                .weak()
-                                .italics(),
-                        ).wrap());
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new("Press Enter to update • Esc to postpone")
+                                    .size(typography::pt(typography::SUBHEADLINE))
+                                    .weak()
+                                    .italics(),
+                            )
+                            .wrap(),
+                        );
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Right: buttons — primary is trailing (rightmost) per HIG
-                        if kit_button(ui, "Update Now", ui_theme::primary_button(self.theme), Some([124.0, 32.0])).clicked() {
+                        if kit_button(
+                            ui,
+                            "Update Now",
+                            ui_theme::primary_button(self.theme),
+                            Some([124.0, 32.0]),
+                        )
+                        .clicked()
+                        {
                             eprintln!("[dotfiles] Update Now clicked");
                             if let Some(tx) = self.tx.take() {
                                 let _ = tx.send(Consent::Proceed);
                             }
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
-                        if kit_button(ui, "Postpone", ui_theme::bordered_button(self.theme), Some([124.0, 32.0])).clicked() {
+                        if kit_button(
+                            ui,
+                            "Postpone",
+                            ui_theme::bordered_button(self.theme),
+                            Some([124.0, 32.0]),
+                        )
+                        .clicked()
+                        {
                             eprintln!("[dotfiles] Postpone clicked");
                             if let Some(tx) = self.tx.take() {
                                 let _ = tx.send(Consent::Postpone);
@@ -643,11 +693,7 @@ impl eframe::App for ConsentApp {
                             .corner_radius(10)
                             .inner_margin(6)
                             .show(ui, |ui| {
-                                ui.label(
-                                    egui::RichText::new("↻")
-                                        .size(22.0)
-                                        .color(accent_tint.fg),
-                                );
+                                ui.label(egui::RichText::new("↻").size(22.0).color(accent_tint.fg));
                             });
                         ui.add_space(8.0);
                         ui.vertical(|ui| {
@@ -658,9 +704,11 @@ impl eframe::App for ConsentApp {
                                     .line_height(Some(20.0)),
                             );
                             ui.label(
-                                egui::RichText::new("Review what will change — you choose when to run it")
-                                    .size(typography::pt(typography::SUBHEADLINE) * 1.25) // HIG Subheadline 11pt Regular / 14 leading
-                                    .weak(),
+                                egui::RichText::new(
+                                    "Review what will change — you choose when to run it",
+                                )
+                                .size(typography::pt(typography::SUBHEADLINE) * 1.25) // HIG Subheadline 11pt Regular / 14 leading
+                                .weak(),
                             );
                         });
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -682,21 +730,35 @@ impl eframe::App for ConsentApp {
                                 .corner_radius(20)
                                 .inner_margin(egui::Margin::symmetric(12, 6))
                                 .show(ui, |ui| {
-                                    ui.label(egui::RichText::new(badge_text).size(typography::pt(typography::CALLOUT) * 1.05).strong().color(badge_fg));
+                                    ui.label(
+                                        egui::RichText::new(badge_text)
+                                            .size(typography::pt(typography::CALLOUT) * 1.05)
+                                            .strong()
+                                            .color(badge_fg),
+                                    );
                                     if sources_with_updates > 0 {
                                         ui.label(
-                                            egui::RichText::new(format!("{} sources", sources_with_updates))
-                                                .size(typography::pt(typography::SUBHEADLINE) * 1.05)
-                                                .color(badge_fg),
+                                            egui::RichText::new(format!(
+                                                "{} sources",
+                                                sources_with_updates
+                                            ))
+                                            .size(typography::pt(typography::SUBHEADLINE) * 1.05)
+                                            .color(badge_fg),
                                         );
                                     }
                                 });
                             // Theme toggle — System → Light → Dark, persisted
                             ui.add_space(6.0);
                             let icon = theme_icon(self.theme_preference);
-                            let tip = format!("Theme: {:?} — click to cycle (System follows macOS)", self.theme_preference);
+                            let tip = format!(
+                                "Theme: {:?} — click to cycle (System follows macOS)",
+                                self.theme_preference
+                            );
                             if ui
-                                .add(egui::Button::new(egui::RichText::new(icon).size(16.0)).frame(false))
+                                .add(
+                                    egui::Button::new(egui::RichText::new(icon).size(16.0))
+                                        .frame(false),
+                                )
                                 .on_hover_text(tip)
                                 .clicked()
                             {
@@ -723,11 +785,7 @@ impl eframe::App for ConsentApp {
                             .inner_margin(egui::Margin::symmetric(10, 8))
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
-                                    ui.label(
-                                        egui::RichText::new("●")
-                                            .size(9.0)
-                                            .color(ok_tint.fg),
-                                    );
+                                    ui.label(egui::RichText::new("●").size(9.0).color(ok_tint.fg));
                                     ui.label(
                                         egui::RichText::new("All system checks passed")
                                             .size(typography::pt(typography::CALLOUT) * 1.25)
@@ -753,7 +811,10 @@ impl eframe::App for ConsentApp {
                         let warn_tint = ui_theme::tint(self.theme, ui_theme::Hue::Warning);
                         egui::Frame::new()
                             .fill(warn_tint.bg)
-                            .stroke(egui::Stroke::new(1.0_f32, warn_tint.fg.gamma_multiply(0.35)))
+                            .stroke(egui::Stroke::new(
+                                1.0_f32,
+                                warn_tint.fg.gamma_multiply(0.35),
+                            ))
                             .corner_radius(8)
                             .inner_margin(10)
                             .show(ui, |ui| {
@@ -766,20 +827,31 @@ impl eframe::App for ConsentApp {
                                     );
                                     ui.add_space(2.0);
                                     // Dots sit on the warning tint — use tint-fg variants for AA
-                                    let ok_dot = ui_theme::tint(self.theme, ui_theme::Hue::Success).fg;
-                                    let fail_dot = ui_theme::tint(self.theme, ui_theme::Hue::Danger).fg;
+                                    let ok_dot =
+                                        ui_theme::tint(self.theme, ui_theme::Hue::Success).fg;
+                                    let fail_dot =
+                                        ui_theme::tint(self.theme, ui_theme::Hue::Danger).fg;
                                     for g in &self.gate_status {
                                         let dot_col = if g.ok { ok_dot } else { fail_dot };
                                         ui.horizontal(|ui| {
-                                            ui.label(egui::RichText::new("●").size(8.0).color(dot_col));
                                             ui.label(
-                                                egui::RichText::new(format!("{} — {}", g.name, g.reason))
-                                                    .size(typography::pt(typography::SUBHEADLINE))
-                                                    .color(if g.ok {
-                                                        ui.visuals().weak_text_color()
-                                                    } else {
-                                                        ui_theme::tint(self.theme, ui_theme::Hue::Danger).fg
-                                                    }),
+                                                egui::RichText::new("●").size(8.0).color(dot_col),
+                                            );
+                                            ui.label(
+                                                egui::RichText::new(format!(
+                                                    "{} — {}",
+                                                    g.name, g.reason
+                                                ))
+                                                .size(typography::pt(typography::SUBHEADLINE))
+                                                .color(if g.ok {
+                                                    ui.visuals().weak_text_color()
+                                                } else {
+                                                    ui_theme::tint(
+                                                        self.theme,
+                                                        ui_theme::Hue::Danger,
+                                                    )
+                                                    .fg
+                                                }),
                                             );
                                         });
                                     }
@@ -802,7 +874,12 @@ impl eframe::App for ConsentApp {
                             .fill(card_fill)
                             .stroke(egui::Stroke::new(1.0_f32, border_col))
                             .corner_radius(10)
-                            .inner_margin(egui::Margin { left: 12, right: 12, top: 10, bottom: 10 })
+                            .inner_margin(egui::Margin {
+                                left: 12,
+                                right: 12,
+                                top: 10,
+                                bottom: 10,
+                            })
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     ui.label(
@@ -815,32 +892,46 @@ impl eframe::App for ConsentApp {
                                                 ui.visuals().weak_text_color()
                                             }),
                                     );
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        // count badge
-                                        let (fill, fg) = if is_populated {
-                                            (
-                                                ui_theme::system(self.theme, ui_theme::Hue::Accent),
-                                                egui::Color32::WHITE,
-                                            )
-                                        } else {
-                                            (
-                                                ui_theme::fill(self.theme, ui_theme::FillLevel::Quaternary),
-                                                ui.visuals().weak_text_color(),
-                                            )
-                                        };
-                                        egui::Frame::new()
-                                            .fill(fill)
-                                            .corner_radius(10)
-                                            .inner_margin(egui::Margin::symmetric(8, 3))
-                                            .show(ui, |ui| {
-                                                ui.label(
-                                                    egui::RichText::new(format!("{}", sec.count))
-                                                        .size(typography::pt(typography::SUBHEADLINE))
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            // count badge
+                                            let (fill, fg) = if is_populated {
+                                                (
+                                                    ui_theme::system(
+                                                        self.theme,
+                                                        ui_theme::Hue::Accent,
+                                                    ),
+                                                    egui::Color32::WHITE,
+                                                )
+                                            } else {
+                                                (
+                                                    ui_theme::fill(
+                                                        self.theme,
+                                                        ui_theme::FillLevel::Quaternary,
+                                                    ),
+                                                    ui.visuals().weak_text_color(),
+                                                )
+                                            };
+                                            egui::Frame::new()
+                                                .fill(fill)
+                                                .corner_radius(10)
+                                                .inner_margin(egui::Margin::symmetric(8, 3))
+                                                .show(ui, |ui| {
+                                                    ui.label(
+                                                        egui::RichText::new(format!(
+                                                            "{}",
+                                                            sec.count
+                                                        ))
+                                                        .size(typography::pt(
+                                                            typography::SUBHEADLINE,
+                                                        ))
                                                         .strong()
                                                         .color(fg),
-                                                );
-                                            });
-                                    });
+                                                    );
+                                                });
+                                        },
+                                    );
                                 });
 
                                 if has_items {
@@ -850,11 +941,12 @@ impl eframe::App for ConsentApp {
                                     // items list with subtle rows
                                     for item in &sec.items {
                                         // Split "name (old -> new)" to style arrow part muted
-                                        let (name_part, ver_part) = if let Some(idx) = item.find(" (") {
-                                            (&item[..idx], Some(&item[idx..]))
-                                        } else {
-                                            (item.as_str(), None)
-                                        };
+                                        let (name_part, ver_part) =
+                                            if let Some(idx) = item.find(" (") {
+                                                (&item[..idx], Some(&item[idx..]))
+                                            } else {
+                                                (item.as_str(), None)
+                                            };
                                         egui::Frame::new()
                                             .fill(ui.visuals().faint_bg_color.gamma_multiply(0.0))
                                             .inner_margin(egui::Margin::symmetric(2, 2))
@@ -862,19 +954,30 @@ impl eframe::App for ConsentApp {
                                                 ui.horizontal(|ui| {
                                                     ui.label(
                                                         egui::RichText::new("·")
-                                                            .size(typography::pt(typography::CALLOUT))
+                                                            .size(typography::pt(
+                                                                typography::CALLOUT,
+                                                            ))
                                                             .color(ui.visuals().weak_text_color()),
                                                     );
                                                     ui.label(
                                                         egui::RichText::new(name_part)
-                                                            .size(typography::pt(typography::CALLOUT) * 1.05)
+                                                            .size(
+                                                                typography::pt(typography::CALLOUT)
+                                                                    * 1.05,
+                                                            )
                                                             .color(ui.visuals().text_color()),
                                                     );
                                                     if let Some(v) = ver_part {
                                                         ui.label(
                                                             egui::RichText::new(v)
-                                                                .size(typography::pt(typography::SUBHEADLINE) * 1.05)
-                                                                .color(ui.visuals().weak_text_color())
+                                                                .size(
+                                                                    typography::pt(
+                                                                        typography::SUBHEADLINE,
+                                                                    ) * 1.05,
+                                                                )
+                                                                .color(
+                                                                    ui.visuals().weak_text_color(),
+                                                                )
                                                                 .monospace(),
                                                         );
                                                     }
@@ -890,7 +993,10 @@ impl eframe::App for ConsentApp {
                                             ""
                                         })
                                         .size(typography::pt(typography::SUBHEADLINE))
-                                        .color(ui_theme::label(self.theme, ui_theme::Level::Tertiary))
+                                        .color(ui_theme::label(
+                                            self.theme,
+                                            ui_theme::Level::Tertiary,
+                                        ))
                                         .italics(),
                                     );
                                 }
@@ -904,7 +1010,11 @@ impl eframe::App for ConsentApp {
                             .corner_radius(8)
                             .inner_margin(12)
                             .show(ui, |ui| {
-                                ui.label(egui::RichText::new(&self.summary).size(typography::pt(typography::CALLOUT)).weak());
+                                ui.label(
+                                    egui::RichText::new(&self.summary)
+                                        .size(typography::pt(typography::CALLOUT))
+                                        .weak(),
+                                );
                             });
                     }
 
@@ -965,7 +1075,12 @@ struct LogEntry {
 /// side panel and the legacy progress sidebar. Icons:
 /// ○ pending, spinner (animated) while updating, ✓ updated, ✗ errored, – skipped.
 /// Rows are clickable: clicking focuses the log on that step's first output.
-fn render_step_row(ui: &mut egui::Ui, theme: Theme, step: &StepState, selected: bool) -> egui::Response {
+fn render_step_row(
+    ui: &mut egui::Ui,
+    theme: Theme,
+    step: &StepState,
+    selected: bool,
+) -> egui::Response {
     let id = egui::Id::new(("dotfiles_step_row", step.name.clone()));
     // Hover state from the previous frame — the row is painted before the
     // interaction pass, so live hover styling must come from the cached response.
@@ -1032,7 +1147,12 @@ fn render_step_row(ui: &mut egui::Ui, theme: Theme, step: &StepState, selected: 
                 }
             });
             if !step.note.is_empty() {
-                ui.label(egui::RichText::new(&step.note).size(typography::pt(typography::FOOTNOTE)).weak().italics());
+                ui.label(
+                    egui::RichText::new(&step.note)
+                        .size(typography::pt(typography::FOOTNOTE))
+                        .weak()
+                        .italics(),
+                );
             }
         });
     ui.interact(inner.response.rect, id, egui::Sense::click())
@@ -1056,10 +1176,7 @@ fn render_log_view(
     // stdout/stderr; otherwise show the combined view.
     let filtered: Vec<&LogEntry> = if let Some(idx) = filter {
         if let Some(step) = steps.get(idx) {
-            entries
-                .iter()
-                .filter(|e| e.step == step.name)
-                .collect()
+            entries.iter().filter(|e| e.step == step.name).collect()
         } else {
             vec![]
         }
@@ -1112,7 +1229,10 @@ fn push_log_lines(log: &mut Vec<LogEntry>, step: &str, text: &str) {
     log.extend(
         text.split('\n')
             .map(|s| s.trim_end_matches('\r').to_string())
-            .map(|line| LogEntry { step: step.to_string(), line }),
+            .map(|line| LogEntry {
+                step: step.to_string(),
+                line,
+            }),
     );
 }
 
@@ -1224,8 +1344,18 @@ struct SudoPromptState {
 impl ProgressApp {
     fn new(paths: Paths, trigger: String) -> Self {
         let step_names = vec![
-            "brew", "rtk-repatch", "mas", "rust", "php", "node-fn", "python-uv", "opencode",
-            "neovim-plugins", "gem", "tmux-tpm", "macos",
+            "brew",
+            "rtk-repatch",
+            "mas",
+            "rust",
+            "php",
+            "node-fn",
+            "python-uv",
+            "opencode",
+            "neovim-plugins",
+            "gem",
+            "tmux-tpm",
+            "macos",
         ];
         let steps = step_names
             .into_iter()
@@ -1244,7 +1374,10 @@ impl ProgressApp {
             paths: paths.clone(),
             trigger: trigger.clone(),
             steps,
-            log_lines: vec![LogEntry { step: String::new(), line: "Waiting for log…".into() }],
+            log_lines: vec![LogEntry {
+                step: String::new(),
+                line: "Waiting for log…".into(),
+            }],
             log_receiver: log_rx,
             log_sender: log_tx.clone(),
             sudo_receiver: sudo_rx,
@@ -1334,11 +1467,23 @@ fn handle_askpass_conn(stream: std::os::unix::net::UnixStream, sudo_tx: Sender<S
         Ok(v) => v,
         Err(_) => return,
     };
-    let cmd = v.get("command").and_then(|x| x.as_str()).unwrap_or("sudo operation").to_string();
-    let reason = v.get("reason").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let cmd = v
+        .get("command")
+        .and_then(|x| x.as_str())
+        .unwrap_or("sudo operation")
+        .to_string();
+    let reason = v
+        .get("reason")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string();
 
     let (resp_tx, resp_rx) = unbounded::<SudoResponse>();
-    let req = SudoRequest { command: cmd, reason, response_tx: resp_tx };
+    let req = SudoRequest {
+        command: cmd,
+        reason,
+        response_tx: resp_tx,
+    };
     let _ = sudo_tx.send(req);
 
     let resp = resp_rx.recv().unwrap_or(SudoResponse::Cancel);
@@ -1399,18 +1544,40 @@ impl eframe::App for ProgressApp {
                         s.note = report.note.clone();
                     }
                 }
-                PipelineEvent::RunFinished { status, report_path } => {
+                PipelineEvent::RunFinished {
+                    status,
+                    report_path,
+                } => {
                     self.finished = true;
                     self.overall_status = status;
                     self.report_path = Some(report_path);
-                    push_log_lines(&mut self.log_lines, "", &format!("\n\n✓ Update finished — see {}", self.report_path.as_ref().unwrap().display()));
-                    crate::notify::notify("dotfiles", &format!("Update finished ({})", self.overall_status));
+                    push_log_lines(
+                        &mut self.log_lines,
+                        "",
+                        &format!(
+                            "\n\n✓ Update finished — see {}",
+                            self.report_path.as_ref().unwrap().display()
+                        ),
+                    );
+                    crate::notify::notify(
+                        "dotfiles",
+                        &format!("Update finished ({})", self.overall_status),
+                    );
                     let _ = std::fs::remove_file(crate::upgrade::askpass_socket_path());
                 }
-                PipelineEvent::SudoPrompt { command, reason, respond } => {
+                PipelineEvent::SudoPrompt {
+                    command,
+                    reason,
+                    respond,
+                } => {
                     // Reuse cached password for 5 min to avoid double prompt (mas: installer + receipt)
                     if let Some(cached) = self.cached_password.clone() {
-                        if self.cached_at.map(|t| t.elapsed().as_secs() < 300).unwrap_or(false) && !cached.is_empty() {
+                        if self
+                            .cached_at
+                            .map(|t| t.elapsed().as_secs() < 300)
+                            .unwrap_or(false)
+                            && !cached.is_empty()
+                        {
                             let _ = respond.send(cached);
                             continue;
                         }
@@ -1431,7 +1598,12 @@ impl eframe::App for ProgressApp {
         while let Ok(req) = self.sudo_receiver.try_recv() {
             // Reuse cached password for 5 min (mas asks twice: installer + receipt)
             if let Some(cached) = self.cached_password.clone() {
-                if self.cached_at.map(|t| t.elapsed().as_secs() < 300).unwrap_or(false) && !cached.is_empty() {
+                if self
+                    .cached_at
+                    .map(|t| t.elapsed().as_secs() < 300)
+                    .unwrap_or(false)
+                    && !cached.is_empty()
+                {
                     let _ = req.response_tx.send(SudoResponse::Password(cached));
                     continue;
                 }
@@ -1449,7 +1621,12 @@ impl eframe::App for ProgressApp {
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let elapsed = self.start_time.elapsed().as_secs();
-                ui.label(egui::RichText::new(format!("{}m {:02}s", elapsed / 60, elapsed % 60)).size(typography::pt(typography::CALLOUT)).monospace().weak());
+                ui.label(
+                    egui::RichText::new(format!("{}m {:02}s", elapsed / 60, elapsed % 60))
+                        .size(typography::pt(typography::CALLOUT))
+                        .monospace()
+                        .weak(),
+                );
                 ui.separator();
                 if self.finished {
                     let ok_tint = ui_theme::tint(self.theme, ui_theme::Hue::Success);
@@ -1468,8 +1645,18 @@ impl eframe::App for ProgressApp {
                         });
                 } else {
                     ui.spinner();
-                    ui.label(egui::RichText::new("Running").size(typography::pt(typography::CALLOUT)).weak());
-                    let pct = self.steps.iter().filter(|s| s.status != StepStatus::Pending && s.status != StepStatus::Running).count() as f32
+                    ui.label(
+                        egui::RichText::new("Running")
+                            .size(typography::pt(typography::CALLOUT))
+                            .weak(),
+                    );
+                    let pct = self
+                        .steps
+                        .iter()
+                        .filter(|s| {
+                            s.status != StepStatus::Pending && s.status != StepStatus::Running
+                        })
+                        .count() as f32
                         / self.steps.len() as f32;
                     egui::ProgressBar::new(pct)
                         .desired_width(120.0)
@@ -1481,7 +1668,10 @@ impl eframe::App for ProgressApp {
                     let t_icon = theme_icon(self.theme_preference);
                     if ui
                         .add(egui::Button::new(egui::RichText::new(t_icon).size(14.0)).frame(false))
-                        .on_hover_text(format!("Theme: {:?} — click to cycle (System follows macOS)", self.theme_preference))
+                        .on_hover_text(format!(
+                            "Theme: {:?} — click to cycle (System follows macOS)",
+                            self.theme_preference
+                        ))
                         .clicked()
                     {
                         let next = next_theme_preference(self.theme_preference);
@@ -1504,10 +1694,11 @@ impl eframe::App for ProgressApp {
                             let _ = std::process::Command::new("open").arg(path).spawn();
                         }
                         let ps = ui_theme::primary_button(self.theme);
-                        let done_btn = egui::Button::new(egui::RichText::new("Done").strong().color(ps.text))
-                            .fill(ps.fill)
-                            .stroke(ps.stroke)
-                            .corner_radius(8);
+                        let done_btn =
+                            egui::Button::new(egui::RichText::new("Done").strong().color(ps.text))
+                                .fill(ps.fill)
+                                .stroke(ps.stroke)
+                                .corner_radius(8);
                         if ui.add(done_btn).clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
@@ -1521,7 +1712,13 @@ impl eframe::App for ProgressApp {
             .resizable(false)
             .show(ctx, |ui| {
                 ui.add_space(6.0);
-                ui.label(egui::RichText::new("STEPS").size(typography::pt(typography::FOOTNOTE)).weak().strong().extra_letter_spacing(1.0));
+                ui.label(
+                    egui::RichText::new("STEPS")
+                        .size(typography::pt(typography::FOOTNOTE))
+                        .weak()
+                        .strong()
+                        .extra_letter_spacing(1.0),
+                );
                 ui.add_space(4.0);
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for idx in 0..self.steps.len() {
@@ -1552,7 +1749,12 @@ impl eframe::App for ProgressApp {
                 "Live log".to_string()
             };
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(title).size(typography::pt(typography::SUBHEADLINE)).strong().weak());
+                ui.label(
+                    egui::RichText::new(title)
+                        .size(typography::pt(typography::SUBHEADLINE))
+                        .strong()
+                        .weak(),
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if self.log_focus.is_some() && ui.small_button("Show all").clicked() {
                         self.log_focus = None;
@@ -1561,12 +1763,25 @@ impl eframe::App for ProgressApp {
                     if ui.small_button("Copy").clicked() {
                         let text = if let Some(idx) = self.log_focus {
                             if let Some(s) = self.steps.get(idx) {
-                                self.log_lines.iter().filter(|e| e.step == s.name).map(|e| e.line.as_str()).collect::<Vec<_>>().join("\n")
+                                self.log_lines
+                                    .iter()
+                                    .filter(|e| e.step == s.name)
+                                    .map(|e| e.line.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join("\n")
                             } else {
-                                self.log_lines.iter().map(|e| e.line.as_str()).collect::<Vec<_>>().join("\n")
+                                self.log_lines
+                                    .iter()
+                                    .map(|e| e.line.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join("\n")
                             }
                         } else {
-                            self.log_lines.iter().map(|e| e.line.as_str()).collect::<Vec<_>>().join("\n")
+                            self.log_lines
+                                .iter()
+                                .map(|e| e.line.as_str())
+                                .collect::<Vec<_>>()
+                                .join("\n")
                         };
                         ui.ctx().copy_text(text);
                     }
@@ -1579,7 +1794,14 @@ impl eframe::App for ProgressApp {
                 });
             });
             ui.separator();
-            render_log_view(ui, self.theme, &self.log_lines, &self.steps, self.log_focus, self.auto_scroll);
+            render_log_view(
+                ui,
+                self.theme,
+                &self.log_lines,
+                &self.steps,
+                self.log_focus,
+                self.auto_scroll,
+            );
         });
 
         // Sudo modal — polished card
@@ -1603,10 +1825,19 @@ impl eframe::App for ProgressApp {
                             .corner_radius(20)
                             .inner_margin(8)
                             .show(ui, |ui| {
-                                ui.label(egui::RichText::new("!").size(14.0).strong().color(danger_tint.fg));
+                                ui.label(
+                                    egui::RichText::new("!")
+                                        .size(14.0)
+                                        .strong()
+                                        .color(danger_tint.fg),
+                                );
                             });
                         ui.add_space(6.0);
-                        ui.label(egui::RichText::new("Administrator password required").size(typography::pt(typography::BODY)).strong());
+                        ui.label(
+                            egui::RichText::new("Administrator password required")
+                                .size(typography::pt(typography::BODY))
+                                .strong(),
+                        );
                     });
                     ui.add_space(8.0);
                     egui::Frame::new()
@@ -1615,13 +1846,25 @@ impl eframe::App for ProgressApp {
                         .inner_margin(10)
                         .stroke(egui::Stroke::new(1.0_f32, ui_theme::separator(self.theme)))
                         .show(ui, |ui| {
-                            ui.label(egui::RichText::new(&prompt.command).monospace().size(typography::pt(typography::SUBHEADLINE)));
+                            ui.label(
+                                egui::RichText::new(&prompt.command)
+                                    .monospace()
+                                    .size(typography::pt(typography::SUBHEADLINE)),
+                            );
                             ui.add_space(4.0);
-                            ui.label(egui::RichText::new(&prompt.reason).size(typography::pt(typography::SUBHEADLINE)).weak());
+                            ui.label(
+                                egui::RichText::new(&prompt.reason)
+                                    .size(typography::pt(typography::SUBHEADLINE))
+                                    .weak(),
+                            );
                         });
                     ui.add_space(12.0);
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Password").size(typography::pt(typography::SUBHEADLINE)).weak());
+                        ui.label(
+                            egui::RichText::new("Password")
+                                .size(typography::pt(typography::SUBHEADLINE))
+                                .weak(),
+                        );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.checkbox(&mut prompt.show_password, "Show");
                         });
@@ -1639,8 +1882,16 @@ impl eframe::App for ProgressApp {
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if kit_button(ui, "Unlock", ui_theme::primary_button(self.theme), Some([96.0, 28.0])).clicked() {
-                                sudo_response = Some(SudoResponse::Password(prompt.password.clone()));
+                            if kit_button(
+                                ui,
+                                "Unlock",
+                                ui_theme::primary_button(self.theme),
+                                Some([96.0, 28.0]),
+                            )
+                            .clicked()
+                            {
+                                sudo_response =
+                                    Some(SudoResponse::Password(prompt.password.clone()));
                                 sudo_close = true;
                             }
                             if ui.button("Cancel").clicked() {
@@ -1836,8 +2087,18 @@ impl UnifiedApp {
         theme: Theme,
     ) -> Self {
         let steps: Vec<StepState> = vec![
-            "brew", "rtk-repatch", "mas", "rust", "php", "node-fn", "python-uv", "opencode",
-            "neovim-plugins", "gem", "tmux-tpm", "macos",
+            "brew",
+            "rtk-repatch",
+            "mas",
+            "rust",
+            "php",
+            "node-fn",
+            "python-uv",
+            "opencode",
+            "neovim-plugins",
+            "gem",
+            "tmux-tpm",
+            "macos",
         ]
         .into_iter()
         .map(|n| StepState {
@@ -1858,7 +2119,10 @@ impl UnifiedApp {
             theme_preference,
             theme,
             steps,
-            log_lines: vec![LogEntry { step: String::new(), line: "Waiting for log…".into() }],
+            log_lines: vec![LogEntry {
+                step: String::new(),
+                line: "Waiting for log…".into(),
+            }],
             log_receiver: None,
             log_sender: None,
             sudo_receiver: None,
@@ -1885,7 +2149,10 @@ impl UnifiedApp {
         self.mode = UnifiedMode::Progress;
         self.finished = false;
         self.start_time = Some(std::time::Instant::now());
-        self.log_lines = vec![LogEntry { step: String::new(), line: "Waiting for log…".into() }];
+        self.log_lines = vec![LogEntry {
+            step: String::new(),
+            line: "Waiting for log…".into(),
+        }];
         // Reset progress tracking for the new run
         self.current_step_index = None;
         self.total_steps = self.steps.len();
@@ -1979,13 +2246,26 @@ impl UnifiedApp {
                 });
             ui.add_space(8.0);
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Updates ready").size(typography::pt(typography::TITLE3)).strong().line_height(Some(20.0)));
-                ui.label(egui::RichText::new("Review what will change — you choose when to run it").size(typography::pt(typography::SUBHEADLINE) * 1.25).weak());
+                ui.label(
+                    egui::RichText::new("Updates ready")
+                        .size(typography::pt(typography::TITLE3))
+                        .strong()
+                        .line_height(Some(20.0)),
+                );
+                ui.label(
+                    egui::RichText::new("Review what will change — you choose when to run it")
+                        .size(typography::pt(typography::SUBHEADLINE) * 1.25)
+                        .weak(),
+                );
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let success_tint = ui_theme::tint(self.theme, ui_theme::Hue::Success);
                 let (badge_fill, badge_fg, badge_text) = if total_updates > 0 {
-                    (success_tint.bg, success_tint.fg, format!("{} updates", total_updates))
+                    (
+                        success_tint.bg,
+                        success_tint.fg,
+                        format!("{} updates", total_updates),
+                    )
                 } else {
                     let neutral = ui_theme::tint(self.theme, ui_theme::Hue::Neutral);
                     (neutral.bg, neutral.fg, "Up to date".to_string())
@@ -1996,14 +2276,30 @@ impl UnifiedApp {
                     .corner_radius(20)
                     .inner_margin(egui::Margin::symmetric(12, 6))
                     .show(ui, |ui| {
-                        ui.label(egui::RichText::new(badge_text).size(typography::pt(typography::CALLOUT) * 1.05).strong().color(badge_fg));
+                        ui.label(
+                            egui::RichText::new(badge_text)
+                                .size(typography::pt(typography::CALLOUT) * 1.05)
+                                .strong()
+                                .color(badge_fg),
+                        );
                         if sources_with_updates > 0 {
-                            ui.label(egui::RichText::new(format!("{} sources", sources_with_updates)).size(typography::pt(typography::SUBHEADLINE) * 1.05).color(badge_fg));
+                            ui.label(
+                                egui::RichText::new(format!("{} sources", sources_with_updates))
+                                    .size(typography::pt(typography::SUBHEADLINE) * 1.05)
+                                    .color(badge_fg),
+                            );
                         }
                     });
                 ui.add_space(6.0);
                 let icon = theme_icon(self.theme_preference);
-                if ui.add(egui::Button::new(egui::RichText::new(icon).size(16.0)).frame(false)).on_hover_text(format!("Theme: {:?} — click to cycle (System follows macOS)", self.theme_preference)).clicked() {
+                if ui
+                    .add(egui::Button::new(egui::RichText::new(icon).size(16.0)).frame(false))
+                    .on_hover_text(format!(
+                        "Theme: {:?} — click to cycle (System follows macOS)",
+                        self.theme_preference
+                    ))
+                    .clicked()
+                {
                     let next = next_theme_preference(self.theme_preference);
                     self.theme_preference = next;
                     self.theme = resolve_theme(next);
@@ -2024,22 +2320,44 @@ impl UnifiedApp {
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("●").size(9.0).color(ok_tint.fg));
-                        ui.label(egui::RichText::new("All system checks passed").size(typography::pt(typography::CALLOUT) * 1.25).strong().color(ok_tint.fg));
+                        ui.label(
+                            egui::RichText::new("All system checks passed")
+                                .size(typography::pt(typography::CALLOUT) * 1.25)
+                                .strong()
+                                .color(ok_tint.fg),
+                        );
                         ui.separator();
-                        let details: Vec<String> = self.gate_status.iter().filter(|g| g.name == "power" || g.name == "disk").map(|g| g.reason.clone()).collect();
-                        ui.label(egui::RichText::new(details.join("  ·  ")).size(typography::pt(typography::SUBHEADLINE) * 1.15).weak());
+                        let details: Vec<String> = self
+                            .gate_status
+                            .iter()
+                            .filter(|g| g.name == "power" || g.name == "disk")
+                            .map(|g| g.reason.clone())
+                            .collect();
+                        ui.label(
+                            egui::RichText::new(details.join("  ·  "))
+                                .size(typography::pt(typography::SUBHEADLINE) * 1.15)
+                                .weak(),
+                        );
                     });
                 });
         } else {
             let warn_tint = ui_theme::tint(self.theme, ui_theme::Hue::Warning);
             egui::Frame::new()
                 .fill(warn_tint.bg)
-                .stroke(egui::Stroke::new(1.0_f32, warn_tint.fg.gamma_multiply(0.35)))
+                .stroke(egui::Stroke::new(
+                    1.0_f32,
+                    warn_tint.fg.gamma_multiply(0.35),
+                ))
                 .corner_radius(8)
                 .inner_margin(10)
                 .show(ui, |ui| {
                     ui.vertical(|ui| {
-                        ui.label(egui::RichText::new("Pre-flight checks").size(typography::pt(typography::SUBHEADLINE)).strong().color(warn_tint.fg));
+                        ui.label(
+                            egui::RichText::new("Pre-flight checks")
+                                .size(typography::pt(typography::SUBHEADLINE))
+                                .strong()
+                                .color(warn_tint.fg),
+                        );
                         ui.add_space(2.0);
                         // Dots sit on the warning tint — use tint-fg variants for AA
                         let ok_dot = ui_theme::tint(self.theme, ui_theme::Hue::Success).fg;
@@ -2048,7 +2366,15 @@ impl UnifiedApp {
                             let dot_col = if g.ok { ok_dot } else { fail_dot };
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new("●").size(8.0).color(dot_col));
-                                ui.label(egui::RichText::new(format!("{} — {}", g.name, g.reason)).size(typography::pt(typography::SUBHEADLINE)).color(if g.ok { ui.visuals().weak_text_color() } else { ui_theme::tint(self.theme, ui_theme::Hue::Danger).fg }));
+                                ui.label(
+                                    egui::RichText::new(format!("{} — {}", g.name, g.reason))
+                                        .size(typography::pt(typography::SUBHEADLINE))
+                                        .color(if g.ok {
+                                            ui.visuals().weak_text_color()
+                                        } else {
+                                            ui_theme::tint(self.theme, ui_theme::Hue::Danger).fg
+                                        }),
+                                );
                             });
                         }
                     });
@@ -2066,15 +2392,48 @@ impl UnifiedApp {
                 .fill(card_fill)
                 .stroke(egui::Stroke::new(1.0_f32, border_col))
                 .corner_radius(10)
-                .inner_margin(egui::Margin { left: 12, right: 12, top: 10, bottom: 10 })
+                .inner_margin(egui::Margin {
+                    left: 12,
+                    right: 12,
+                    top: 10,
+                    bottom: 10,
+                })
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(&sec.title).size(typography::pt(typography::BODY) * 1.05).strong().color(if is_populated { ui.visuals().text_color() } else { ui.visuals().weak_text_color() }));
+                        ui.label(
+                            egui::RichText::new(&sec.title)
+                                .size(typography::pt(typography::BODY) * 1.05)
+                                .strong()
+                                .color(if is_populated {
+                                    ui.visuals().text_color()
+                                } else {
+                                    ui.visuals().weak_text_color()
+                                }),
+                        );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let (fill, fg) = if is_populated { (ui_theme::system(self.theme, ui_theme::Hue::Accent), egui::Color32::WHITE) } else { (ui_theme::fill(self.theme, ui_theme::FillLevel::Quaternary), ui.visuals().weak_text_color()) };
-                            egui::Frame::new().fill(fill).corner_radius(10).inner_margin(egui::Margin::symmetric(8, 3)).show(ui, |ui| {
-                                ui.label(egui::RichText::new(format!("{}", sec.count)).size(typography::pt(typography::SUBHEADLINE)).strong().color(fg));
-                            });
+                            let (fill, fg) = if is_populated {
+                                (
+                                    ui_theme::system(self.theme, ui_theme::Hue::Accent),
+                                    egui::Color32::WHITE,
+                                )
+                            } else {
+                                (
+                                    ui_theme::fill(self.theme, ui_theme::FillLevel::Quaternary),
+                                    ui.visuals().weak_text_color(),
+                                )
+                            };
+                            egui::Frame::new()
+                                .fill(fill)
+                                .corner_radius(10)
+                                .inner_margin(egui::Margin::symmetric(8, 3))
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!("{}", sec.count))
+                                            .size(typography::pt(typography::SUBHEADLINE))
+                                            .strong()
+                                            .color(fg),
+                                    );
+                                });
                         });
                     });
                     if has_items {
@@ -2082,28 +2441,64 @@ impl UnifiedApp {
                         ui.separator();
                         ui.add_space(6.0);
                         for item in &sec.items {
-                            let (name_part, ver_part) = if let Some(idx) = item.find(" (") { (&item[..idx], Some(&item[idx..])) } else { (item.as_str(), None) };
-                            egui::Frame::new().fill(ui.visuals().faint_bg_color.gamma_multiply(0.0)).inner_margin(egui::Margin::symmetric(2, 2)).show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new("·").size(typography::pt(typography::CALLOUT)).color(ui.visuals().weak_text_color()));
-                                    ui.label(egui::RichText::new(name_part).size(typography::pt(typography::CALLOUT) * 1.05).color(ui.visuals().text_color()));
-                                    if let Some(v) = ver_part {
-                                        ui.label(egui::RichText::new(v).size(typography::pt(typography::SUBHEADLINE) * 1.05).color(ui.visuals().weak_text_color()).monospace());
-                                    }
+                            let (name_part, ver_part) = if let Some(idx) = item.find(" (") {
+                                (&item[..idx], Some(&item[idx..]))
+                            } else {
+                                (item.as_str(), None)
+                            };
+                            egui::Frame::new()
+                                .fill(ui.visuals().faint_bg_color.gamma_multiply(0.0))
+                                .inner_margin(egui::Margin::symmetric(2, 2))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new("·")
+                                                .size(typography::pt(typography::CALLOUT))
+                                                .color(ui.visuals().weak_text_color()),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new(name_part)
+                                                .size(typography::pt(typography::CALLOUT) * 1.05)
+                                                .color(ui.visuals().text_color()),
+                                        );
+                                        if let Some(v) = ver_part {
+                                            ui.label(
+                                                egui::RichText::new(v)
+                                                    .size(
+                                                        typography::pt(typography::SUBHEADLINE)
+                                                            * 1.05,
+                                                    )
+                                                    .color(ui.visuals().weak_text_color())
+                                                    .monospace(),
+                                            );
+                                        }
+                                    });
                                 });
-                            });
                         }
                     } else {
                         ui.add_space(4.0);
-                        ui.label(egui::RichText::new(if sec.count == 0 { "No changes" } else { "" }).size(typography::pt(typography::SUBHEADLINE)).color(ui_theme::label(self.theme, ui_theme::Level::Tertiary)).italics());
+                        ui.label(
+                            egui::RichText::new(if sec.count == 0 { "No changes" } else { "" })
+                                .size(typography::pt(typography::SUBHEADLINE))
+                                .color(ui_theme::label(self.theme, ui_theme::Level::Tertiary))
+                                .italics(),
+                        );
                     }
                 });
             ui.add_space(8.0);
         }
         if self.sections.is_empty() {
-            egui::Frame::new().fill(ui_theme::fill(self.theme, ui_theme::FillLevel::Tertiary)).corner_radius(8).inner_margin(12).show(ui, |ui| {
-                ui.label(egui::RichText::new(&self.summary).size(typography::pt(typography::CALLOUT)).weak());
-            });
+            egui::Frame::new()
+                .fill(ui_theme::fill(self.theme, ui_theme::FillLevel::Tertiary))
+                .corner_radius(8)
+                .inner_margin(12)
+                .show(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new(&self.summary)
+                            .size(typography::pt(typography::CALLOUT))
+                            .weak(),
+                    );
+                });
         }
     }
 
@@ -2120,7 +2515,12 @@ impl UnifiedApp {
             "Live log".to_string()
         };
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(title).size(typography::pt(typography::SUBHEADLINE)).strong().weak());
+            ui.label(
+                egui::RichText::new(title)
+                    .size(typography::pt(typography::SUBHEADLINE))
+                    .strong()
+                    .weak(),
+            );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.log_focus.is_some() && ui.small_button("Show all").clicked() {
                     self.log_focus = None;
@@ -2129,12 +2529,25 @@ impl UnifiedApp {
                 if ui.small_button("Copy").clicked() {
                     let text = if let Some(idx) = self.log_focus {
                         if let Some(s) = self.steps.get(idx) {
-                            self.log_lines.iter().filter(|e| e.step == s.name).map(|e| e.line.as_str()).collect::<Vec<_>>().join("\n")
+                            self.log_lines
+                                .iter()
+                                .filter(|e| e.step == s.name)
+                                .map(|e| e.line.as_str())
+                                .collect::<Vec<_>>()
+                                .join("\n")
                         } else {
-                            self.log_lines.iter().map(|e| e.line.as_str()).collect::<Vec<_>>().join("\n")
+                            self.log_lines
+                                .iter()
+                                .map(|e| e.line.as_str())
+                                .collect::<Vec<_>>()
+                                .join("\n")
                         }
                     } else {
-                        self.log_lines.iter().map(|e| e.line.as_str()).collect::<Vec<_>>().join("\n")
+                        self.log_lines
+                            .iter()
+                            .map(|e| e.line.as_str())
+                            .collect::<Vec<_>>()
+                            .join("\n")
                     };
                     ui.ctx().copy_text(text);
                 }
@@ -2147,7 +2560,14 @@ impl UnifiedApp {
             });
         });
         ui.separator();
-        render_log_view(ui, self.theme, &self.log_lines, &self.steps, self.log_focus, self.auto_scroll);
+        render_log_view(
+            ui,
+            self.theme,
+            &self.log_lines,
+            &self.steps,
+            self.log_focus,
+            self.auto_scroll,
+        );
     }
 }
 
@@ -2168,7 +2588,10 @@ impl eframe::App for UnifiedApp {
                             let pos = if self.steps.get(index.saturating_sub(1)).is_some() {
                                 index.saturating_sub(1)
                             } else {
-                                self.steps.iter().position(|s| s.name == name).unwrap_or(usize::MAX)
+                                self.steps
+                                    .iter()
+                                    .position(|s| s.name == name)
+                                    .unwrap_or(usize::MAX)
                             };
                             if pos < self.steps.len() {
                                 self.steps[pos].status = StepStatus::Running;
@@ -2183,7 +2606,9 @@ impl eframe::App for UnifiedApp {
                             let clean = strip_ansi(&line);
                             // First output line of a just-started step anchors its section
                             if let Some(pos) = self.pending_anchor {
-                                if !clean.trim().is_empty() && self.step_anchors.get(pos) == Some(&None) {
+                                if !clean.trim().is_empty()
+                                    && self.step_anchors.get(pos) == Some(&None)
+                                {
                                     self.step_anchors[pos] = Some(self.log_lines.len());
                                 }
                                 self.pending_anchor = None;
@@ -2208,17 +2633,36 @@ impl eframe::App for UnifiedApp {
                                 s.note = report.note.clone();
                             }
                         }
-                        PipelineEvent::RunFinished { status, report_path: rp } => {
+                        PipelineEvent::RunFinished {
+                            status,
+                            report_path: rp,
+                        } => {
                             finished = true;
                             report_path = Some(rp.clone());
                             overall_status = status.clone();
-                            push_log_lines(&mut self.log_lines, "", &format!("\n\n✓ Update finished — see {}", rp.display()));
-                            crate::notify::notify("dotfiles", &format!("Update finished ({})", status));
+                            push_log_lines(
+                                &mut self.log_lines,
+                                "",
+                                &format!("\n\n✓ Update finished — see {}", rp.display()),
+                            );
+                            crate::notify::notify(
+                                "dotfiles",
+                                &format!("Update finished ({})", status),
+                            );
                             let _ = std::fs::remove_file(crate::upgrade::askpass_socket_path());
                         }
-                        PipelineEvent::SudoPrompt { command, reason, respond } => {
+                        PipelineEvent::SudoPrompt {
+                            command,
+                            reason,
+                            respond,
+                        } => {
                             if let Some(cached) = self.cached_password.clone() {
-                                if self.cached_at.map(|t| t.elapsed().as_secs() < 300).unwrap_or(false) && !cached.is_empty() {
+                                if self
+                                    .cached_at
+                                    .map(|t| t.elapsed().as_secs() < 300)
+                                    .unwrap_or(false)
+                                    && !cached.is_empty()
+                                {
                                     let _ = respond.send(cached);
                                     continue;
                                 }
@@ -2248,7 +2692,12 @@ impl eframe::App for UnifiedApp {
                 while let Ok(req) = sudo_rx.try_recv() {
                     // Reuse cached password for 5 min (mas asks twice)
                     if let Some(cached) = self.cached_password.clone() {
-                        if self.cached_at.map(|t| t.elapsed().as_secs() < 300).unwrap_or(false) && !cached.is_empty() {
+                        if self
+                            .cached_at
+                            .map(|t| t.elapsed().as_secs() < 300)
+                            .unwrap_or(false)
+                            && !cached.is_empty()
+                        {
                             let _ = req.response_tx.send(SudoResponse::Password(cached));
                             continue;
                         }
@@ -2272,21 +2721,53 @@ impl eframe::App for UnifiedApp {
                 ui.horizontal(|ui| {
                     if let Some(start) = self.start_time {
                         let elapsed = start.elapsed().as_secs();
-                        ui.label(egui::RichText::new(format!("{}m {:02}s", elapsed/60, elapsed%60)).size(typography::pt(typography::CALLOUT)).monospace().weak());
+                        ui.label(
+                            egui::RichText::new(format!("{}m {:02}s", elapsed / 60, elapsed % 60))
+                                .size(typography::pt(typography::CALLOUT))
+                                .monospace()
+                                .weak(),
+                        );
                         ui.separator();
                     }
                     if self.finished {
                         let ok_tint = ui_theme::tint(self.theme, ui_theme::Hue::Success);
-                        egui::Frame::new().fill(ok_tint.bg).stroke(egui::Stroke::new(1.0_f32, ok_tint.fg.gamma_multiply(0.35))).corner_radius(20).inner_margin(egui::Margin::symmetric(10, 4)).show(ui, |ui| {
-                            ui.label(egui::RichText::new(format!("Finished — {}", self.overall_status)).size(typography::pt(typography::CALLOUT)).strong().color(ok_tint.fg));
-                        });
+                        egui::Frame::new()
+                            .fill(ok_tint.bg)
+                            .stroke(egui::Stroke::new(1.0_f32, ok_tint.fg.gamma_multiply(0.35)))
+                            .corner_radius(20)
+                            .inner_margin(egui::Margin::symmetric(10, 4))
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "Finished — {}",
+                                        self.overall_status
+                                    ))
+                                    .size(typography::pt(typography::CALLOUT))
+                                    .strong()
+                                    .color(ok_tint.fg),
+                                );
+                            });
                     } else {
                         ui.spinner();
-                        ui.label(egui::RichText::new("Running").size(typography::pt(typography::CALLOUT)).weak());
+                        ui.label(
+                            egui::RichText::new("Running")
+                                .size(typography::pt(typography::CALLOUT))
+                                .weak(),
+                        );
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let icon = theme_icon(self.theme_preference);
-                        if ui.add(egui::Button::new(egui::RichText::new(icon).size(14.0)).frame(false)).on_hover_text(format!("Theme: {:?} (click to cycle)", self.theme_preference)).clicked() {
+                        if ui
+                            .add(
+                                egui::Button::new(egui::RichText::new(icon).size(14.0))
+                                    .frame(false),
+                            )
+                            .on_hover_text(format!(
+                                "Theme: {:?} (click to cycle)",
+                                self.theme_preference
+                            ))
+                            .clicked()
+                        {
                             let next = next_theme_preference(self.theme_preference);
                             self.theme_preference = next;
                             self.theme = resolve_theme(next);
@@ -2303,32 +2784,48 @@ impl eframe::App for UnifiedApp {
                                 let _ = std::process::Command::new("open").arg(path).spawn();
                             }
                             let ps = ui_theme::primary_button(self.theme);
-                            let done_btn = egui::Button::new(egui::RichText::new("Done").strong().color(ps.text)).fill(ps.fill).stroke(ps.stroke).corner_radius(8);
-                            if ui.add(done_btn).clicked() { ctx.send_viewport_cmd(egui::ViewportCommand::Close); }
+                            let done_btn = egui::Button::new(
+                                egui::RichText::new("Done").strong().color(ps.text),
+                            )
+                            .fill(ps.fill)
+                            .stroke(ps.stroke)
+                            .corner_radius(8);
+                            if ui.add(done_btn).clicked() {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
                         }
                     });
                 });
             });
-            egui::SidePanel::left("unified_steps").exact_width(200.0).resizable(false).show(ctx, |ui| {
-                ui.add_space(6.0);
-                ui.label(egui::RichText::new("STEPS").size(typography::pt(typography::FOOTNOTE)).weak().strong().extra_letter_spacing(1.0));
-                ui.add_space(4.0);
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    for idx in 0..self.steps.len() {
-                        let selected = self.log_focus == Some(idx);
-                        let resp = render_step_row(ui, self.theme, &self.steps[idx], selected);
-                        if resp.clicked() {
-                            if selected {
-                                self.log_focus = None;
-                                self.auto_scroll = true;
-                            } else {
-                                self.auto_scroll = false;
-                                self.log_focus = Some(idx);
+            egui::SidePanel::left("unified_steps")
+                .exact_width(200.0)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.add_space(6.0);
+                    ui.label(
+                        egui::RichText::new("STEPS")
+                            .size(typography::pt(typography::FOOTNOTE))
+                            .weak()
+                            .strong()
+                            .extra_letter_spacing(1.0),
+                    );
+                    ui.add_space(4.0);
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        for idx in 0..self.steps.len() {
+                            let selected = self.log_focus == Some(idx);
+                            let resp = render_step_row(ui, self.theme, &self.steps[idx], selected);
+                            if resp.clicked() {
+                                if selected {
+                                    self.log_focus = None;
+                                    self.auto_scroll = true;
+                                } else {
+                                    self.auto_scroll = false;
+                                    self.log_focus = Some(idx);
+                                }
                             }
                         }
-                    }
+                    });
                 });
-            });
             // ── Footer status bar: centered progress bar with in-bar label ──
             // Keeps the progress bar in the middle of the footer, with text like
             // "upgrading 3 out of 12 apps" inside the bar (current index / total).
@@ -2337,16 +2834,25 @@ impl eframe::App for UnifiedApp {
                     egui::Frame::new()
                         .fill(ctx.style().visuals.panel_fill)
                         .inner_margin(egui::Margin::symmetric(16, 10))
-                        .stroke(egui::Stroke::new(1.0_f32, ctx.style().visuals.widgets.noninteractive.bg_stroke.color)),
+                        .stroke(egui::Stroke::new(
+                            1.0_f32,
+                            ctx.style().visuals.widgets.noninteractive.bg_stroke.color,
+                        )),
                 )
                 .show(ctx, |ui| {
                     let total = self.total_steps.max(1);
                     let completed = self
                         .steps
                         .iter()
-                        .filter(|s| s.status != StepStatus::Pending && s.status != StepStatus::Running)
+                        .filter(|s| {
+                            s.status != StepStatus::Pending && s.status != StepStatus::Running
+                        })
                         .count();
-                    let pct = if self.finished { 1.0 } else { completed as f32 / total as f32 };
+                    let pct = if self.finished {
+                        1.0
+                    } else {
+                        completed as f32 / total as f32
+                    };
                     let label = if self.finished {
                         format!("upgraded {} out of {} apps", total, total)
                     } else if let Some(idx) = self.current_step_index {
@@ -2361,7 +2867,10 @@ impl eframe::App for UnifiedApp {
                         let pad = ((available - bar_width) / 2.0).max(0.0);
                         ui.add_space(pad);
                         egui::ProgressBar::new(pct)
-                            .text(egui::RichText::new(label).size(typography::pt(typography::FOOTNOTE)))
+                            .text(
+                                egui::RichText::new(label)
+                                    .size(typography::pt(typography::FOOTNOTE)),
+                            )
                             .desired_width(bar_width)
                             .animate(!self.finished)
                             .ui(ui);
@@ -2372,7 +2881,10 @@ impl eframe::App for UnifiedApp {
         match self.mode {
             UnifiedMode::Consent => {
                 // Bottom bar
-                let has_gate_fail = self.gate_status.iter().any(|g| !g.ok && g.name != "schedule" && g.name != "dialog_cooldown");
+                let has_gate_fail = self
+                    .gate_status
+                    .iter()
+                    .any(|g| !g.ok && g.name != "schedule" && g.name != "dialog_cooldown");
                 egui::TopBottomPanel::bottom("consent_actions")
                     .frame(egui::Frame::new().fill(ctx.style().visuals.panel_fill).inner_margin(egui::Margin { left: 16, right: 16, top: 12, bottom: 12 }).stroke(egui::Stroke::new(1.0_f32, ctx.style().visuals.widgets.noninteractive.bg_stroke.color)))
                     .show(ctx, |ui| {
@@ -2401,15 +2913,18 @@ impl eframe::App for UnifiedApp {
                         });
                     });
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-                        self.consent_ui(ctx, ui);
-                    });
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false; 2])
+                        .show(ui, |ui| {
+                            self.consent_ui(ctx, ui);
+                        });
                 });
                 if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                     self.start_progress(ctx);
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                    let mut s = dotfiles_core::state::State::load(&self.paths.state_file).unwrap_or_default();
+                    let mut s = dotfiles_core::state::State::load(&self.paths.state_file)
+                        .unwrap_or_default();
                     s.last_outcome = Some("postponed".into());
                     s.last_dialog_at = Some(chrono::Utc::now().timestamp());
                     let _ = s.save(&self.paths.state_file);
@@ -2431,28 +2946,69 @@ impl eframe::App for UnifiedApp {
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .frame(egui::Frame::window(&ctx.style()).corner_radius(12).inner_margin(16))
+                .frame(
+                    egui::Frame::window(&ctx.style())
+                        .corner_radius(12)
+                        .inner_margin(16),
+                )
                 .show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
                         let danger_tint = ui_theme::tint(self.theme, ui_theme::Hue::Danger);
-                        egui::Frame::new().fill(danger_tint.bg).corner_radius(20).inner_margin(8).show(ui, |ui| {
-                            ui.label(egui::RichText::new("!").size(14.0).strong().color(danger_tint.fg));
-                        });
+                        egui::Frame::new()
+                            .fill(danger_tint.bg)
+                            .corner_radius(20)
+                            .inner_margin(8)
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new("!")
+                                        .size(14.0)
+                                        .strong()
+                                        .color(danger_tint.fg),
+                                );
+                            });
                         ui.add_space(6.0);
-                        ui.label(egui::RichText::new("Administrator password required").size(typography::pt(typography::BODY)).strong());
+                        ui.label(
+                            egui::RichText::new("Administrator password required")
+                                .size(typography::pt(typography::BODY))
+                                .strong(),
+                        );
                     });
                     ui.add_space(8.0);
-                    egui::Frame::new().fill(ui_theme::fill(self.theme, ui_theme::FillLevel::Secondary)).corner_radius(8).inner_margin(10).stroke(egui::Stroke::new(1.0_f32, ui_theme::separator(self.theme))).show(ui, |ui| {
-                        ui.label(egui::RichText::new(&prompt.command).monospace().size(typography::pt(typography::SUBHEADLINE)));
-                        ui.add_space(4.0);
-                        ui.label(egui::RichText::new(&prompt.reason).size(typography::pt(typography::SUBHEADLINE)).weak());
-                    });
+                    egui::Frame::new()
+                        .fill(ui_theme::fill(self.theme, ui_theme::FillLevel::Secondary))
+                        .corner_radius(8)
+                        .inner_margin(10)
+                        .stroke(egui::Stroke::new(1.0_f32, ui_theme::separator(self.theme)))
+                        .show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new(&prompt.command)
+                                    .monospace()
+                                    .size(typography::pt(typography::SUBHEADLINE)),
+                            );
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new(&prompt.reason)
+                                    .size(typography::pt(typography::SUBHEADLINE))
+                                    .weak(),
+                            );
+                        });
                     ui.add_space(12.0);
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Password").size(typography::pt(typography::SUBHEADLINE)).weak());
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| { ui.checkbox(&mut prompt.show_password, "Show"); });
+                        ui.label(
+                            egui::RichText::new("Password")
+                                .size(typography::pt(typography::SUBHEADLINE))
+                                .weak(),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.checkbox(&mut prompt.show_password, "Show");
+                        });
                     });
-                    let resp = egui::TextEdit::singleline(&mut prompt.password).password(!prompt.show_password).hint_text("Enter password").desired_width(f32::INFINITY).show(ui).response;
+                    let resp = egui::TextEdit::singleline(&mut prompt.password)
+                        .password(!prompt.show_password)
+                        .hint_text("Enter password")
+                        .desired_width(f32::INFINITY)
+                        .show(ui)
+                        .response;
                     if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                         sudo_response = Some(SudoResponse::Password(prompt.password.clone()));
                         sudo_close = true;
@@ -2460,8 +3016,16 @@ impl eframe::App for UnifiedApp {
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if kit_button(ui, "Unlock", ui_theme::primary_button(self.theme), Some([96.0, 28.0])).clicked() {
-                                sudo_response = Some(SudoResponse::Password(prompt.password.clone()));
+                            if kit_button(
+                                ui,
+                                "Unlock",
+                                ui_theme::primary_button(self.theme),
+                                Some([96.0, 28.0]),
+                            )
+                            .clicked()
+                            {
+                                sudo_response =
+                                    Some(SudoResponse::Password(prompt.password.clone()));
                                 sudo_close = true;
                             }
                             if ui.button("Cancel").clicked() {
@@ -2513,7 +3077,8 @@ impl eframe::App for UnifiedApp {
         let _ = std::fs::remove_file(crate::upgrade::askpass_socket_path());
         if self.mode == UnifiedMode::Consent {
             // Treat window close as Postpone (same as old on_exit)
-            let mut s = dotfiles_core::state::State::load(&self.paths.state_file).unwrap_or_default();
+            let mut s =
+                dotfiles_core::state::State::load(&self.paths.state_file).unwrap_or_default();
             s.last_outcome = Some("postponed".into());
             let _ = s.save(&self.paths.state_file);
         }
@@ -2529,20 +3094,26 @@ fn strip_ansi(s: &str) -> String {
                 if next == '[' {
                     chars.next();
                     for ch in chars.by_ref() {
-                        if ch.is_ascii_alphabetic() { break; }
+                        if ch.is_ascii_alphabetic() {
+                            break;
+                        }
                     }
                     continue;
                 } else if next == ']' {
                     chars.next();
                     for ch in chars.by_ref() {
-                        if ch == '\x07' { break; }
+                        if ch == '\x07' {
+                            break;
+                        }
                     }
                     continue;
                 }
             }
             continue;
         }
-        if c == '\r' { continue; }
+        if c == '\r' {
+            continue;
+        }
         out.push(c);
     }
     out

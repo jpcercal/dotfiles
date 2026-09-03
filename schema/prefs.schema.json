@@ -1,0 +1,209 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PrefsFile",
+  "description": "Root of `prefs.yaml` — declarative macOS preferences.",
+  "type": "object",
+  "properties": {
+    "prefs": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/PrefEntry"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "DefaultsValue": {
+      "description": "Typed defaults value (`-array` entries and `-dict` values may nest).",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer",
+          "format": "int64"
+        },
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DefaultsValue"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/DefaultsValue"
+          }
+        }
+      ]
+    },
+    "PrefEntry": {
+      "description": "One preference. The `kind` tag selects how it's applied: `defaults` | `exec` | `builtin`. (serde cannot combine `flatten` with a tagged enum, so the entry itself is the tagged enum.)",
+      "oneOf": [
+        {
+          "description": "`defaults write`",
+          "type": "object",
+          "required": [
+            "domain",
+            "id",
+            "key",
+            "kind",
+            "type",
+            "value"
+          ],
+          "properties": {
+            "add": {
+              "description": "Merge into the existing array/dict instead of replacing it (`-array-add` / `-dict-add` semantics).",
+              "default": false,
+              "type": "boolean"
+            },
+            "current_host": {
+              "description": "`defaults -currentHost write`",
+              "default": false,
+              "type": "boolean"
+            },
+            "domain": {
+              "type": "string"
+            },
+            "id": {
+              "description": "Unique dotted identifier, e.g. `ui.scrollbars`.",
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "defaults"
+              ]
+            },
+            "note": {
+              "description": "Human note (from the original script's comments).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sudo": {
+              "default": false,
+              "type": "boolean"
+            },
+            "type": {
+              "$ref": "#/definitions/Typ"
+            },
+            "value": {
+              "$ref": "#/definitions/DefaultsValue"
+            }
+          }
+        },
+        {
+          "description": "Whitelisted system tool invocation (pmset/nvram/killall/...).",
+          "type": "object",
+          "required": [
+            "id",
+            "kind",
+            "program"
+          ],
+          "properties": {
+            "args": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "id": {
+              "type": "string"
+            },
+            "ignore_error": {
+              "description": "Don't record non-zero exits as failures (e.g. killall for an app that isn't running — matches the script's `… &> /dev/null`).",
+              "default": false,
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "exec"
+              ]
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "program": {
+              "type": "string"
+            },
+            "sudo": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "description": "Named engine builtin (e.g. `restart-apps`, `login-item`).",
+          "type": "object",
+          "required": [
+            "id",
+            "kind",
+            "name"
+          ],
+          "properties": {
+            "app": {
+              "description": "For `login-item`: absolute .app path.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "hidden": {
+              "description": "For `login-item`: hide the app on login.",
+              "default": false,
+              "type": "boolean"
+            },
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "builtin"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "Typ": {
+      "type": "string",
+      "enum": [
+        "bool",
+        "int",
+        "float",
+        "string",
+        "array",
+        "dict"
+      ]
+    }
+  }
+}

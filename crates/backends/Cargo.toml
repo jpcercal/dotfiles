@@ -1,0 +1,19 @@
+[package]
+name = "dotfiles-backends"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "PackageBackend trait and macOS backend implementations"
+
+[dependencies]
+dotfiles-exec = { path = "../exec" }
+dotfiles-manifest = { path = "../manifest" }
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+dotfiles-testkit = { path = "../testkit" }
+tempfile.workspace = true

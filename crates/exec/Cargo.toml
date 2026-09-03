@@ -1,0 +1,13 @@
+[package]
+name = "dotfiles-exec"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Execution environment abstraction (real vs sandbox) with dry-run support"
+
+[dependencies]
+anyhow.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

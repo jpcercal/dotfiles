@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "dotfiles CLI — dotfiles upgrade and future subcommands"
+description = "dotfiles CLI — universal macOS package & configuration manager"
 default-run = "dotfiles"
 
 [[bin]]
@@ -13,19 +13,32 @@ path = "src/main.rs"
 
 [dependencies]
 dotfiles-core = { path = "../core" }
+dotfiles-exec = { path = "../exec" }
+dotfiles-manifest = { path = "../manifest" }
+dotfiles-backends = { path = "../backends" }
+dotfiles-prefs = { path = "../prefs" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 chrono.workspace = true
 clap.workspace = true
+clap_complete = "4.5"
 thiserror.workspace = true
 crossbeam-channel.workspace = true
 dirs.workspace = true
 secrecy.workspace = true
 notify-rust.workspace = true
-eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow"] }
-egui = "0.32"
-dark-light = "2.0"
+ulid.workspace = true
+libc = "0.2"
+eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow"], optional = true }
+egui = { version = "0.32", optional = true }
+dark-light = { version = "2.0", optional = true }
+
+[dev-dependencies]
+dotfiles-testkit = { path = "../testkit" }
+tempfile.workspace = true
 
 [features]
-default = []
+default = ["gui"]
+gui = ["dep:eframe", "dep:egui", "dep:dark-light"]

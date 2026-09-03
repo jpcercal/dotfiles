@@ -25,9 +25,7 @@ impl FileLock {
                         let is_stale = if rc == 0 {
                             false
                         } else {
-                            let errno = std::io::Error::last_os_error()
-                                .raw_os_error()
-                                .unwrap_or(0);
+                            let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
                             errno == libc::ESRCH
                         };
                         if is_stale {

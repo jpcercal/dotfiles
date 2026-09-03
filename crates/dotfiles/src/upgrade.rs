@@ -40,7 +40,9 @@ pub fn askpass_wrapper_path() -> Option<PathBuf> {
     let wrapper = dir.join("askpass-wrapper.sh");
     let content = format!("#!/bin/sh\nexec \"{}\" __askpass \"$@\"\n", exe.display());
     if std::fs::write(&wrapper, content).is_ok() {
-        let _ = std::process::Command::new("chmod").args(["+x", wrapper.to_str()?]).output();
+        let _ = std::process::Command::new("chmod")
+            .args(["+x", wrapper.to_str()?])
+            .output();
         Some(wrapper)
     } else {
         None
@@ -123,7 +125,11 @@ fn dry_run(paths: &Paths) -> anyhow::Result<()> {
     println!();
 
     let started_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-    let run_id = format!("{}-{}", chrono::Local::now().format("%Y%m%d%H%M%S"), std::process::id());
+    let run_id = format!(
+        "{}-{}",
+        chrono::Local::now().format("%Y%m%d%H%M%S"),
+        std::process::id()
+    );
     let skeleton = serde_json::json!({
         "schema": "dotfiles-updater@1",
         "run_id": run_id,
@@ -146,7 +152,10 @@ fn dry_run(paths: &Paths) -> anyhow::Result<()> {
 fn headless_run(paths: &Paths, trigger: &str) -> anyhow::Result<()> {
     let lock = dotfiles_core::lock::FileLock::acquire(&paths.lock_dir)?;
     if lock.is_none() {
-        anyhow::bail!("another run in progress (lock: {})", paths.lock_dir.display());
+        anyhow::bail!(
+            "another run in progress (lock: {})",
+            paths.lock_dir.display()
+        );
     }
     let _lock = lock.unwrap();
 
@@ -165,10 +174,17 @@ fn headless_run(paths: &Paths, trigger: &str) -> anyhow::Result<()> {
                 PipelineEvent::StepFinished { report } => {
                     eprintln!("  {} -> {}", report.name, report.status);
                 }
-                PipelineEvent::RunFinished { status, report_path } => {
+                PipelineEvent::RunFinished {
+                    status,
+                    report_path,
+                } => {
                     eprintln!("finished: {} report: {}", status, report_path.display());
                 }
-                PipelineEvent::SudoPrompt { command, reason, respond } => {
+                PipelineEvent::SudoPrompt {
+                    command,
+                    reason,
+                    respond,
+                } => {
                     eprint!("Sudo required for {} ({}): ", command, reason);
                     let _ = std::io::Write::flush(&mut std::io::stderr());
                     let mut pw = String::new();
@@ -191,6 +207,20 @@ fn headless_run(paths: &Paths, trigger: &str) -> anyhow::Result<()> {
     println!("{}", serde_json::to_string_pretty(&report)?);
     eprintln!("report: {}", path.display());
     Ok(())
+}
+
+/// Open the unified consent→progress window; without the `gui` feature, fall
+/// back to the terminal JSON-lines headless run.
+fn open_upgrade_window(paths: &Paths, mode: &str) -> anyhow::Result<()> {
+    #[cfg(feature = "gui")]
+    {
+        crate::ui_egui::run_upgrade_window(paths, mode)
+    }
+    #[cfg(not(feature = "gui"))]
+    {
+        eprintln!("(no GUI support in this build — running headless)");
+        headless_run(paths, mode)
+    }
 }
 
 fn gate_run(paths: &Paths) -> anyhow::Result<()> {
@@ -232,13 +262,16 @@ fn gate_run(paths: &Paths) -> anyhow::Result<()> {
     }
 
     // Single-window consent → progress (fixes macOS “Choose Application” + hang from two run_natives)
-    crate::ui_egui::run_upgrade_window(paths, "gate")
+    open_upgrade_window(paths, "gate")
 }
 
 fn foreground_run(paths: &Paths) -> anyhow::Result<()> {
     let lock = dotfiles_core::lock::FileLock::acquire(&paths.lock_dir)?;
     if lock.is_none() {
-        anyhow::bail!("another run is in progress (lock: {})", paths.lock_dir.display());
+        anyhow::bail!(
+            "another run is in progress (lock: {})",
+            paths.lock_dir.display()
+        );
     }
     let _lock = lock.unwrap();
 
@@ -284,7 +317,7 @@ fn foreground_run(paths: &Paths) -> anyhow::Result<()> {
     }
 
     // Single-window consent → progress (same fix)
-    crate::ui_egui::run_upgrade_window(paths, "foreground")
+    open_upgrade_window(paths, "foreground")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -304,8 +337,13 @@ fn has_gui() -> bool {
     return std::env::var("DISPLAY").is_ok() || std::env::var("WAYLAND_DISPLAY").is_ok();
 }
 
+#[cfg(feature = "gui")]
 #[allow(dead_code)]
-fn solicit_consent_gui(paths: &Paths, summary: &str, sections: &[probes::Section]) -> anyhow::Result<Consent> {
+fn solicit_consent_gui(
+    paths: &Paths,
+    summary: &str,
+    sections: &[probes::Section],
+) -> anyhow::Result<Consent> {
     // Stamp last_dialog_at BEFORE showing (covers dismiss/locked-screen)
     {
         let mut s = State::load(&paths.state_file).unwrap_or_default();
@@ -332,6 +370,7 @@ fn solicit_consent_gui(paths: &Paths, summary: &str, sections: &[probes::Section
     Ok(consent)
 }
 
+#[cfg(feature = "gui")]
 #[allow(dead_code)]
 fn run_pipeline_with_gui(paths: &Paths, trigger: &str) -> anyhow::Result<()> {
     // This will open the egui progress window and run the pipeline in a background thread,

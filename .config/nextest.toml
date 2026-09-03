@@ -1,0 +1,12 @@
+# cargo-nextest configuration: fully parallel + process-isolated tests.
+# Every test runs in its own process; fixtures (dotfiles-testkit) give each
+# test its own sandboxed HOME/PATH, so nothing is shared between tests.
+
+[profile.default]
+test-threads = "num-cpus"
+
+[profile.ci]
+fail-fast = false
+test-threads = "num-cpus"
+failure-output = "immediate-final"
+slow-timeout = { period = "60s", terminate-after = 2, grace-period = "5s" }

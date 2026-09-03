@@ -22,7 +22,6 @@ pub fn notify(title: &str, msg: &str) {
                     ),
                 ])
                 .output();
-            return;
         }
         #[cfg(not(target_os = "macos"))]
         {

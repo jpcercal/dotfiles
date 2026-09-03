@@ -79,7 +79,9 @@ fn try_socket_askpass(socket: &std::path::Path, cmd: &str, reason: &str) -> Opti
     if v.get("cancel").and_then(|x| x.as_bool()).unwrap_or(false) {
         std::process::exit(1);
     }
-    v.get("password").and_then(|x| x.as_str()).map(|s| s.to_string())
+    v.get("password")
+        .and_then(|x| x.as_str())
+        .map(|s| s.to_string())
 }
 
 fn try_osascript_askpass(cmd: &str, reason: &str) -> Option<String> {
@@ -94,7 +96,10 @@ fn try_osascript_askpass(cmd: &str, reason: &str) -> Option<String> {
 end tell"#,
         cmd_esc, reason_esc
     );
-    let out = std::process::Command::new("osascript").args(["-e", &script]).output().ok()?;
+    let out = std::process::Command::new("osascript")
+        .args(["-e", &script])
+        .output()
+        .ok()?;
     if out.status.success() {
         Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {

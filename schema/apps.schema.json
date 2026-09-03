@@ -1,0 +1,512 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Manifest",
+  "description": "Root of `apps.yaml` — the declarative installation + configuration manifest.",
+  "type": "object",
+  "properties": {
+    "config": {
+      "default": {
+        "dockutil": {
+          "_before": {
+            "removeAll": false,
+            "reset": false
+          },
+          "add": []
+        },
+        "mkdir": [],
+        "symbolic_links": []
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/Config"
+        }
+      ]
+    },
+    "install": {
+      "default": {
+        "bootstrap": [],
+        "brew": {
+          "casks": [],
+          "customCommands": [],
+          "formulas": [],
+          "taps": []
+        },
+        "gem": {
+          "rubygems": []
+        },
+        "go": {
+          "packages": []
+        },
+        "mas": {
+          "apps": []
+        },
+        "npm": {
+          "global": {
+            "packages": []
+          }
+        },
+        "pip": {
+          "packages": []
+        },
+        "toolchains": {
+          "node": null,
+          "python": null,
+          "rustup": null
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/Install"
+        }
+      ]
+    },
+    "schema_version": {
+      "description": "Manifest format version; bump + migrate on breaking changes.",
+      "default": 1,
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 1.0
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Brew": {
+      "type": "object",
+      "properties": {
+        "casks": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "customCommands": {
+          "description": "DEPRECATED: transitional escape hatch for shell one-liners. Entries are migrated to typed backend/toolchain entries over time.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "formulas": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "taps": {
+          "description": "Third-party taps in `owner/repo` form. Trusted automatically unless `homebrew/*`.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Config": {
+      "type": "object",
+      "properties": {
+        "dockutil": {
+          "default": {
+            "_before": {
+              "removeAll": false,
+              "reset": false
+            },
+            "add": []
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Dockutil"
+            }
+          ]
+        },
+        "mkdir": {
+          "description": "Directories to create (supports `~`/`$HOME`).",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "symbolic_links": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SymLink"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DockBefore": {
+      "type": "object",
+      "properties": {
+        "removeAll": {
+          "description": "`dockutil --remove all` before adding.",
+          "default": false,
+          "type": "boolean"
+        },
+        "reset": {
+          "description": "`defaults delete com.apple.dock && killall Dock` before rebuilding.",
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DockEntry": {
+      "type": "object",
+      "required": [
+        "app"
+      ],
+      "properties": {
+        "after": {
+          "description": "Dock item to position this entry after (e.g. \"Finder\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "app": {
+          "description": "Absolute path of the .app bundle.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Dockutil": {
+      "type": "object",
+      "properties": {
+        "_before": {
+          "description": "Destructive pre-steps applied before adding entries.",
+          "default": {
+            "removeAll": false,
+            "reset": false
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/DockBefore"
+            }
+          ]
+        },
+        "add": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DockEntry"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Gem": {
+      "type": "object",
+      "properties": {
+        "rubygems": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "GoPackages": {
+      "type": "object",
+      "properties": {
+        "packages": {
+          "description": "Module paths with version suffix, e.g. `github.com/oklog/ulid/v2/cmd/ulid@latest`.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Install": {
+      "type": "object",
+      "properties": {
+        "bootstrap": {
+          "description": "Typed, idempotent setup steps (replacements for customCommands).",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "brew": {
+          "default": {
+            "casks": [],
+            "customCommands": [],
+            "formulas": [],
+            "taps": []
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Brew"
+            }
+          ]
+        },
+        "gem": {
+          "default": {
+            "rubygems": []
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Gem"
+            }
+          ]
+        },
+        "go": {
+          "default": {
+            "packages": []
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/GoPackages"
+            }
+          ]
+        },
+        "mas": {
+          "default": {
+            "apps": []
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Mas"
+            }
+          ]
+        },
+        "npm": {
+          "default": {
+            "global": {
+              "packages": []
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Npm"
+            }
+          ]
+        },
+        "pip": {
+          "default": {
+            "packages": []
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Pip"
+            }
+          ]
+        },
+        "toolchains": {
+          "description": "Language toolchains to ensure (rustup/node/python).",
+          "default": {
+            "node": null,
+            "python": null,
+            "rustup": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Toolchains"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LinkFrom": {
+      "type": "object",
+      "required": [
+        "relative_path"
+      ],
+      "properties": {
+        "relative_path": {
+          "description": "Path relative to the dotfiles repo root.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "LinkTo": {
+      "type": "object",
+      "required": [
+        "absolute_path"
+      ],
+      "properties": {
+        "absolute_path": {
+          "description": "Destination path (supports `~`/`$HOME`).",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Mas": {
+      "type": "object",
+      "properties": {
+        "apps": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MasApp"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "MasApp": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "description": "Numeric App Store product id (as string, mas takes strings).",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "NodeToolchain": {
+      "type": "object",
+      "properties": {
+        "ensure": {
+          "description": "Currently only `lts` (via fnm).",
+          "default": "lts",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Npm": {
+      "type": "object",
+      "properties": {
+        "global": {
+          "default": {
+            "packages": []
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/NpmGlobal"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "NpmGlobal": {
+      "type": "object",
+      "properties": {
+        "packages": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Pip": {
+      "type": "object",
+      "properties": {
+        "packages": {
+          "description": "Packages installed into the uv-managed python.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "PythonToolchain": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "description": "Currently only `uv`.",
+          "default": "uv",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RustupToolchain": {
+      "type": "object",
+      "properties": {
+        "channel": {
+          "default": "stable",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SymLink": {
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/definitions/LinkFrom"
+        },
+        "to": {
+          "$ref": "#/definitions/LinkTo"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Toolchains": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NodeToolchain"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "python": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PythonToolchain"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rustup": {
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RustupToolchain"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

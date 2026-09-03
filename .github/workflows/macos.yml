@@ -1,20 +1,79 @@
-name: MacOS Workflow
+name: macOS
+
 on:
+  push:
+    branches: [master, main]
+  pull_request:
   workflow_dispatch:
-# on: [push]  # temporarily disabled
+
+env:
+  CARGO_TERM_COLOR: always
+  HOMEBREW_NO_AUTO_UPDATE: 1
 
 jobs:
-  config:
-      name: Configure
-      runs-on: macos-latest
-      timeout-minutes: 180
-      env:
-        HOMEBREW_NO_AUTO_UPDATE: "1"
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v7
+  lint:
+    name: fmt + clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
-        - name: run
-          env:
-            SKIP_JOBS: software_update
-          run: make
+  test:
+    name: unit + integration + e2e (parallel, sandboxed)
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-test
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      # No GUI feature: skips eframe/egui build (~halves compile time).
+      # Unit + backend integration (stub binaries) + `sync --sandbox` E2E.
+      - run: cargo nextest run --workspace --no-default-features --profile ci
+
+  build-release:
+    name: release binary (with GUI)
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-release
+      - run: cargo build --release --workspace
+      - run: ./target/release/dotfiles --version
+
+  coverage:
+    name: coverage (exec/manifest/backends/prefs)
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-coverage
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      # dotfiles-core is intentionally excluded: its pipeline/probes execute
+      # real system tools and are covered by the `sync --sandbox` E2E test,
+      # not by line coverage.
+      - run: >-
+          cargo llvm-cov nextest --profile ci
+          -p dotfiles-exec -p dotfiles-manifest -p dotfiles-backends -p dotfiles-prefs
+          --fail-under-lines 80 --summary-only
