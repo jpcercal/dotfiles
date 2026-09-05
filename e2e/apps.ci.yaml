@@ -27,6 +27,7 @@ install:
       - "go"
       - "dockutil"
       - "mas"
+      - "neovim"
       - "ruby"
     casks:
       - "caffeine"
@@ -56,11 +57,16 @@ install:
   bootstrap:
     - "fzf-keybindings"
     - "python-links"
+    - "nvim-plug"
 config:
   mkdir:
     - ~/.config/nvim/
     - ~/.config/tmux/
   symbolic_links:
+    - from:
+        relative_path: "e2e/vimrc.ci"
+      to:
+        absolute_path: "~/.config/nvim/init.vim"
     - from:
         relative_path: ".editorconfig"
       to:
