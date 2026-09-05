@@ -21,6 +21,7 @@ mod ui_egui;
 #[cfg(feature = "gui")]
 mod ui_theme;
 mod upgrade;
+mod verify;
 
 #[derive(Parser)]
 #[command(
@@ -73,6 +74,8 @@ enum Commands {
     Cache(cache::CacheArgs),
     /// Print the apps.yaml JSON Schema
     Schema(schema::SchemaArgs),
+    /// Verify every apps.yaml reference exists and is wired correctly
+    Verify(verify::VerifyArgs),
     /// Generate shell completions
     Completion(completion::CompletionArgs),
     /// Hidden SUDO_ASKPASS helper
@@ -103,6 +106,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Agent(args) => agent::run(&ctx, args),
         Commands::Cache(args) => cache::run(&ctx, args),
         Commands::Schema(args) => schema::run(args),
+        Commands::Verify(args) => verify::run(&ctx, args),
         Commands::Completion(args) => completion::run(args),
         Commands::Askpass(args) => askpass::run(args),
     }
