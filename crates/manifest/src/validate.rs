@@ -1,27 +1,28 @@
 use crate::apps::Manifest;
 use crate::error::ManifestError;
-use std::collections::BTreeSet;
+use crate::units;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Semantic validation beyond YAML shape. Errors (not warnings): anything that
 /// would make an install run fail ambiguously or silently do the wrong thing.
 pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
     let mut errors: Vec<String> = vec![];
 
-    dup_check(
+    dup_check_entries(
         "install.brew.formulas",
         &m.install.brew.formulas,
         &mut errors,
     );
-    dup_check("install.brew.casks", &m.install.brew.casks, &mut errors);
+    dup_check_entries("install.brew.casks", &m.install.brew.casks, &mut errors);
     dup_check("install.brew.taps", &m.install.brew.taps, &mut errors);
-    dup_check("install.gem.rubygems", &m.install.gem.rubygems, &mut errors);
-    dup_check(
+    dup_check_entries("install.gem.rubygems", &m.install.gem.rubygems, &mut errors);
+    dup_check_entries(
         "install.npm.global.packages",
         &m.install.npm.global.packages,
         &mut errors,
     );
-    dup_check("install.pip.packages", &m.install.pip.packages, &mut errors);
-    dup_check("install.go.packages", &m.install.go.packages, &mut errors);
+    dup_check_entries("install.pip.packages", &m.install.pip.packages, &mut errors);
+    dup_check_entries("install.go.packages", &m.install.go.packages, &mut errors);
 
     for step in &m.install.bootstrap {
         if !crate::apps::KNOWN_BOOTSTRAP_STEPS.contains(&step.as_str()) {
@@ -120,11 +121,143 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
         }
     }
 
+    validate_graph(m, &mut errors);
+
     if errors.is_empty() {
         Ok(())
     } else {
         Err(ManifestError::Validation(errors))
     }
+}
+
+/// Dependency-graph validation for the parallel execution engine:
+/// `requires:` targets must resolve to declared units, the combined
+/// explicit+implicit edge set must be acyclic, and `install.execution.locks`
+/// must be well-formed (`brew` is capped at 1 — concurrent `brew`
+/// invocations are unsupported by Homebrew).
+fn validate_graph(m: &Manifest, errors: &mut Vec<String>) {
+    let universe = units::unit_ids(m);
+
+    for (source, target) in units::explicit_edges(m) {
+        match units::split_unit_id(&target) {
+            None => errors.push(format!(
+                "graph: '{}' requires '{}': unknown unit prefix (known: {})",
+                source,
+                target,
+                units::UNIT_PREFIXES.join(", ")
+            )),
+            Some(_) => {
+                if !universe.contains(&target) {
+                    errors.push(format!(
+                        "graph: '{}' requires '{}': no such package declared in apps.yaml",
+                        source, target
+                    ));
+                }
+            }
+        }
+    }
+
+    // Cycle detection (iterative DFS with an explicit stack; deterministic via
+    // BTreeMap/BTreeSet ordering) over explicit ∪ implicit edges.
+    let mut adjacency: BTreeMap<&String, Vec<&String>> = BTreeMap::new();
+    let edges = units::all_edges(m);
+    for (source, target) in edges.iter() {
+        adjacency.entry(source).or_default().push(target);
+    }
+    let mut state: BTreeMap<&String, u8> = BTreeMap::new(); // 0=unseen 1=open 2=done
+    for id in universe.iter() {
+        state.insert(id, 0);
+    }
+    let mut stack: Vec<&String> = vec![];
+    for id in universe.iter() {
+        if state[id] != 0 {
+            continue;
+        }
+        let mut work: Vec<(&String, bool)> = vec![(id, false)];
+        while let Some((node, exiting)) = work.pop() {
+            if exiting {
+                state.insert(node, 2);
+                stack.pop();
+                continue;
+            }
+            if state[node] == 2 {
+                continue;
+            }
+            if state[node] == 1 {
+                let pos = stack.iter().position(|s| *s == node).unwrap_or(0);
+                let mut cycle: Vec<String> = stack[pos..].iter().map(|s| (*s).clone()).collect();
+                cycle.push(node.clone());
+                errors.push(format!(
+                    "graph: dependency cycle detected: {}",
+                    cycle.join(" -> ")
+                ));
+                continue;
+            }
+            state.insert(node, 1);
+            stack.push(node);
+            work.push((node, true));
+            if let Some(nexts) = adjacency.get(node) {
+                let mut ordered: Vec<&String> = nexts.clone();
+                ordered.reverse();
+                for next in ordered {
+                    work.push((next, false));
+                }
+            }
+        }
+    }
+
+    for (class, limit) in &m.install.execution.locks {
+        if !units::is_valid_lock_name(class) {
+            errors.push(format!(
+                "install.execution.locks: '{}' is not a valid lock-class name",
+                class
+            ));
+        }
+        if class == "brew" && *limit > 1 {
+            errors.push(
+                "install.execution.locks: 'brew' is capped at 1 (concurrent `brew` invocations are unsupported)"
+                    .to_string(),
+            );
+        }
+    }
+
+    for entries in [
+        &m.install.brew.formulas,
+        &m.install.brew.casks,
+        &m.install.gem.rubygems,
+        &m.install.npm.global.packages,
+        &m.install.pip.packages,
+        &m.install.go.packages,
+    ] {
+        for e in entries {
+            if let Some(lock) = e.lock() {
+                if !units::is_valid_lock_name(lock) {
+                    errors.push(format!(
+                        "graph: '{}' has an invalid lock name '{}'",
+                        e.name(),
+                        lock
+                    ));
+                }
+            }
+            for req in e.requires() {
+                if req.trim().is_empty() {
+                    errors.push(format!("graph: '{}' has an empty requires entry", e.name()));
+                }
+            }
+        }
+    }
+    for app in &m.install.mas.apps {
+        for req in &app.requires {
+            if req.trim().is_empty() {
+                errors.push(format!("graph: mas:{} has an empty requires entry", app.id));
+            }
+        }
+    }
+}
+
+fn dup_check_entries(field: &str, items: &[crate::apps::PkgEntry], errors: &mut Vec<String>) {
+    let names: Vec<String> = items.iter().map(|e| e.name().to_string()).collect();
+    dup_check(field, &names, errors);
 }
 
 fn dup_check(field: &str, items: &[String], errors: &mut Vec<String>) {

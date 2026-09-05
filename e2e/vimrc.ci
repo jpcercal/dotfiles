@@ -1,0 +1,7 @@
+" Minimal init for the real-machine CI E2E job. Exercises the genuine
+" plug.vim → PlugInstall chain (plus apply's plugged-dir assertion) with a
+" single tiny plugin — never the 17-plugin production .vimrc with its
+" composer hook. Linked to ~/.config/nvim/init.vim by e2e/apps.ci.yaml.
+call plug#begin('~/nvim/plugged')
+Plug 'tpope/vim-commentary'
+call plug#end()

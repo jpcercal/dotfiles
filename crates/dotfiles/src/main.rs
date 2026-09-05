@@ -14,6 +14,7 @@ mod notify;
 mod pkg;
 mod prefs_cmd;
 mod schema;
+mod smoke;
 mod software_update;
 mod sync;
 #[cfg(feature = "gui")]
@@ -21,6 +22,7 @@ mod ui_egui;
 #[cfg(feature = "gui")]
 mod ui_theme;
 mod upgrade;
+mod verify;
 
 #[derive(Parser)]
 #[command(
@@ -56,7 +58,7 @@ enum Commands {
     /// Bootstrap the machine itself (Homebrew, taps)
     Bootstrap(bootstrap::BootstrapArgs),
     /// Diagnose the environment (brew, shell, PATH, manifest)
-    Doctor,
+    Doctor(doctor::DoctorArgs),
     /// Apply configuration: dirs, symlinks, dock, shell, nvim plugins
     Apply(apply::ApplyArgs),
     /// Declarative macOS preferences (defaults/pmset/dock/login-items)
@@ -73,6 +75,8 @@ enum Commands {
     Cache(cache::CacheArgs),
     /// Print the apps.yaml JSON Schema
     Schema(schema::SchemaArgs),
+    /// Verify every apps.yaml reference exists and is wired correctly
+    Verify(verify::VerifyArgs),
     /// Generate shell completions
     Completion(completion::CompletionArgs),
     /// Hidden SUDO_ASKPASS helper
@@ -94,7 +98,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Update(args) => pkg::update(&ctx, args),
         Commands::Upgrade(args) => upgrade::run(args),
         Commands::Bootstrap(args) => bootstrap::run(&ctx, args),
-        Commands::Doctor => doctor::run(&ctx),
+        Commands::Doctor(args) => doctor::run(&ctx, args),
         Commands::Apply(args) => apply::run(&ctx, args),
         Commands::Prefs(args) => prefs_cmd::run(&ctx, args),
         Commands::History(args) => history::run(&ctx, args),
@@ -103,6 +107,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Agent(args) => agent::run(&ctx, args),
         Commands::Cache(args) => cache::run(&ctx, args),
         Commands::Schema(args) => schema::run(args),
+        Commands::Verify(args) => verify::run(&ctx, args),
         Commands::Completion(args) => completion::run(args),
         Commands::Askpass(args) => askpass::run(args),
     }

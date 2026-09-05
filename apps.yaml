@@ -2,6 +2,16 @@
 ---
 schema_version: 1
 install:
+  # Parallel execution tuning for the dependency-graph engine: worker count
+  # (0 = number of CPUs) + per lock-class concurrency. `brew` is capped at 1
+  # (concurrent `brew` invocations are unsupported by Homebrew); every other
+  # ecosystem installs in parallel with it.
+  execution:
+    max_jobs: 0
+    locks:
+      brew: 1
+      mas: 4
+      go: 4
   brew:
     taps:
       - "anomalyco/tap"
@@ -55,10 +65,15 @@ install:
       - "moreutils"
       - "neovim"
       - "openssh"
-      - "php-code-sniffer"
-      - "php-cs-fixer"
       - "php"
-      - "phpstan"
+      # Detailed entries declare dependency-graph edges: these tools run on
+      # the Homebrew php, so they install only after `brew-formula:php`.
+      - name: "php-code-sniffer"
+        requires: ["brew-formula:php"]
+      - name: "php-cs-fixer"
+        requires: ["brew-formula:php"]
+      - name: "phpstan"
+        requires: ["brew-formula:php"]
       - "rclone"
       - "ripgrep"
       - "rsync"
@@ -198,10 +213,6 @@ install:
     apps:    
       - id: "1018301773"
         name: "AdBlock Pro" 
-      - id: "824171161" 
-        name: "Affinity Designer" 
-      - id: "824183456" 
-        name: "Affinity Photo" 
       - id: "918858936" 
         name: "Airmail" 
       - id: "1352778147"
@@ -210,8 +221,6 @@ install:
         name: "Encrypto" 
       - id: "975937182" 
         name: "Fantastical 2" 
-      - id: "412448059" 
-        name: "ForkLift" 
       - id: "682658836" 
         name: "GarageBand" 
       - id: "668208984" 
@@ -220,7 +229,7 @@ install:
         name: "iA Writer" 
       - id: "408981434" 
         name: "iMovie" 
-      - id: "409183694" 
+      - id: "361285480" 
         name: "Keynote" 
       - id: "302584613"
         name: "Kindle"
@@ -230,9 +239,9 @@ install:
         name: "MenubarX" 
       - id: "1295203466"
         name: "Microsoft Remote Desktop" 
-      - id: "409203825" 
+      - id: "361304891" 
         name: "Numbers" 
-      - id: "409201541" 
+      - id: "361309726" 
         name: "Pages" 
       - id: "1153157709"
         name: "Speedtest" 
@@ -244,8 +253,11 @@ install:
         name: "Webcam Settings" 
 config:
   mkdir: 
+    - ~/.config/
     - ~/.config/nvim/
     - ~/.config/tmux/
+    - ~/.config/opencode/
+    - ~/Library/Application Support/rtk/
   symbolic_links:  
     - from: 
         relative_path: ".curlrc"

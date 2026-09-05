@@ -1,11 +1,13 @@
 pub mod apps;
 pub mod commands;
 pub mod error;
+pub mod units;
 pub mod validate;
 
 pub use apps::*;
 pub use commands::*;
 pub use error::ManifestError;
+pub use units::*;
 
 use std::path::Path;
 

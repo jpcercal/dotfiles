@@ -4,11 +4,13 @@ mod cargo;
 mod composer;
 mod gem;
 mod go;
+pub mod graph;
 mod mas;
 mod npm;
 pub mod orchestrate;
 pub mod outcome;
 mod pip;
+pub mod schedule;
 pub mod spec;
 pub mod toolchain;
 

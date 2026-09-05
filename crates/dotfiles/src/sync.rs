@@ -23,6 +23,15 @@ pub struct SyncArgs {
     /// sandbox root (kept for inspection).
     #[arg(long)]
     pub sandbox: bool,
+
+    /// Max parallel install units for the install job (default: manifest
+    /// `install.execution.max_jobs`, 0 = number of CPUs).
+    #[arg(long)]
+    pub jobs: Option<usize>,
+
+    /// Run the install job with the legacy sequential installer.
+    #[arg(long)]
+    pub sequential: bool,
 }
 
 /// Job selection (pure, unit-tested).
@@ -103,7 +112,14 @@ pub fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
             "bootstrap" => {
                 crate::bootstrap::run(ctx, crate::bootstrap::BootstrapArgs { no_update: true })
             }
-            "install" => crate::pkg::install(ctx, crate::pkg::InstallArgs { specs: vec![] }),
+            "install" => crate::pkg::install(
+                ctx,
+                crate::pkg::InstallArgs {
+                    specs: vec![],
+                    jobs: args.jobs,
+                    sequential: args.sequential,
+                },
+            ),
             "apply" => crate::apply::run(
                 ctx,
                 crate::apply::ApplyArgs {
@@ -125,7 +141,10 @@ pub fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
             ),
             "software-update" => crate::software_update::run(
                 ctx,
-                crate::software_update::SoftwareUpdateArgs { yes: false },
+                crate::software_update::SoftwareUpdateArgs {
+                    yes: false,
+                    list_only: false,
+                },
             ),
             other => anyhow::bail!("unknown job {}", other),
         };

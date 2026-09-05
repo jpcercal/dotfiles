@@ -29,6 +29,12 @@ impl Spec {
         if name.is_empty() {
             return Err(SpecError::EmptyName);
         }
+        // Taps are ensured (`dotfiles bootstrap`), never installed.
+        if backend == "brew-tap" {
+            return Err(SpecError::UnknownBackend(
+                "brew-tap (taps are ensured with `dotfiles bootstrap`, not installed)".to_string(),
+            ));
+        }
         if !crate::known_backend_names().contains(&backend.as_str()) {
             return Err(SpecError::UnknownBackend(backend));
         }
@@ -39,10 +45,14 @@ impl Spec {
     }
 }
 
-/// Accept aliases: `formula`→`brew`, `formula/cask` spelled out, etc.
+/// Accept aliases: `formula`→`brew`, `formula/cask` spelled out, and the
+/// canonical dependency-graph prefixes `brew-formula:`/`brew-cask:` (so
+/// `requires:` entries, `install` args and `verify` output spell a package
+/// identically everywhere).
 fn normalize_alias(b: &str) -> String {
     match b.trim().to_ascii_lowercase().as_str() {
-        "formula" | "homebrew" => "brew".to_string(),
+        "formula" | "homebrew" | "brew-formula" => "brew".to_string(),
+        "brew-cask" => "cask".to_string(),
         "mas" => "mas".to_string(),
         other => other.to_string(),
     }
@@ -70,6 +80,17 @@ mod tests {
         assert_eq!(Spec::parse("cask:iterm2").unwrap().backend, "cask");
         assert_eq!(Spec::parse("mas:1352778147").unwrap().name, "1352778147");
         assert_eq!(Spec::parse("formula:git").unwrap().backend, "brew");
+    }
+
+    #[test]
+    fn graph_prefix_aliases() {
+        // Canonical dependency-graph IDs are accepted as install specs.
+        let s = Spec::parse("brew-formula:git").unwrap();
+        assert_eq!((s.backend.as_str(), s.name.as_str()), ("brew", "git"));
+        let s = Spec::parse("brew-cask:iterm2").unwrap();
+        assert_eq!((s.backend.as_str(), s.name.as_str()), ("cask", "iterm2"));
+        let err = Spec::parse("brew-tap:hashicorp/tap").unwrap_err();
+        assert!(err.to_string().contains("bootstrap"), "{}", err);
     }
 
     #[test]

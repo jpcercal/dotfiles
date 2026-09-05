@@ -77,3 +77,73 @@ jobs:
           cargo llvm-cov nextest --profile ci
           -p dotfiles-exec -p dotfiles-manifest -p dotfiles-backends -p dotfiles-prefs
           --fail-under-lines 80 --summary-only
+
+  # Real-machine E2E: the successor of the old make pipeline
+  # (software_update → install_dependencies → configure_apps →
+  # apply_preferences), running the parallel dependency-graph engine for real
+  # against a reduced fixture manifest (DOTFILES_MANIFEST / DOTFILES_PREFS
+  # overrides). MAS apps are excluded (no App Store sign-in on CI) — they are
+  # covered by `verify-manifest` instead.
+  e2e-machine:
+    name: e2e real-machine install (parallel engine)
+    runs-on: macos-15
+    timeout-minutes: 45
+    # Checkout lands in $GITHUB_WORKSPACE, not ~/dotfiles (the `Ctx::real`
+    # default): point the binary at the repo so the manifest loads and
+    # symlink sources resolve.
+    env:
+      DOTFILES_DIR: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-e2e
+      - run: cargo build --release --no-default-features
+      # Old `make software_update`, routed through the binary: report-only on
+      # CI (`--list-only` runs just `softwareupdate --list`, which can neither
+      # install nor reboot — a real `--install` reboots the runner and never
+      # belongs in CI).
+      - name: list software updates
+        run: ./target/release/dotfiles software-update --list-only
+      - name: bootstrap (Homebrew + taps)
+        run: DOTFILES_MANIFEST=e2e/apps.ci.yaml ./target/release/dotfiles bootstrap
+      - name: install (parallel dependency-graph engine)
+        run: DOTFILES_MANIFEST=e2e/apps.ci.yaml ./target/release/dotfiles install
+      - name: configure (dirs, symlinks)
+        run: DOTFILES_MANIFEST=e2e/apps.ci.yaml ./target/release/dotfiles apply
+      - name: prefs apply + drift gate
+        run: |
+          DOTFILES_PREFS=e2e/prefs.ci.yaml ./target/release/dotfiles prefs apply
+          DOTFILES_PREFS=e2e/prefs.ci.yaml ./target/release/dotfiles prefs diff
+      - name: smoke-test installed tools
+        run: DOTFILES_MANIFEST=e2e/apps.ci.yaml ./target/release/dotfiles doctor --smoke
+      - name: assert fixture links landed
+        run: |
+          test -L ~/.editorconfig
+          test -L ~/.config/starship.toml
+
+  # Full-manifest reference check: every formula/cask/MAS id/npm/pip/go
+  # module/tap listed in the production apps.yaml exists upstream and every
+  # symlink/dock/bootstrap reference is wired correctly. Read-only probes,
+  # fanned out in parallel by `dotfiles verify`.
+  verify-manifest:
+    name: verify apps.yaml references
+    runs-on: macos-15
+    timeout-minutes: 20
+    # Same as e2e-machine: checkout is $GITHUB_WORKSPACE, not ~/dotfiles.
+    env:
+      DOTFILES_DIR: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-verify
+      - run: cargo build --release --no-default-features
+      # The runner image has no `mas` CLI, which would downgrade every MAS
+      # reference to SKIP. Install it so the drift gate really probes them
+      # (`mas info` needs no App Store sign-in).
+      - name: install mas (App Store probe tool)
+        run: brew install mas
+      - run: ./target/release/dotfiles verify

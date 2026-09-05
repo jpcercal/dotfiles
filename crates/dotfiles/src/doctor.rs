@@ -1,16 +1,34 @@
 //! `dotfiles doctor` — environment diagnosis with ok/warn/fail rows.
+//! With `--smoke`, validates every manifest package by invoking it instead
+//! (post-install smoke test, see `crate::smoke`).
 
 use crate::ctx::Ctx;
 use anyhow::Result;
+use clap::Parser;
 
-struct Check {
-    name: &'static str,
-    critical: bool,
-    status: &'static str, // ok | warn | fail
-    detail: String,
+#[derive(Parser, Debug)]
+pub struct DoctorArgs {
+    /// Invoke every manifest package to prove it runs (fails on any broken
+    /// package; missing invoking tools SKIP like `verify`)
+    #[arg(long)]
+    pub smoke: bool,
 }
 
-pub fn run(ctx: &Ctx) -> Result<()> {
+pub fn run(ctx: &Ctx, args: DoctorArgs) -> Result<()> {
+    if args.smoke {
+        return crate::smoke::run(ctx);
+    }
+    run_diagnosis(ctx)
+}
+
+fn run_diagnosis(ctx: &Ctx) -> Result<()> {
+    struct Check {
+        name: &'static str,
+        critical: bool,
+        status: &'static str, // ok | warn | fail
+        detail: String,
+    }
+
     let mut checks = vec![];
 
     let brew = ctx.env.has_command("brew");

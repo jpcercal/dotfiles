@@ -88,22 +88,45 @@ dotfiles schema --kind prefs --write
 ```
 crates/
   exec/       execution seam (real vs sandbox env, stubs, dry-run)
-  manifest/   apps.yaml + commands.yaml types, validation, JSON Schema
+  manifest/   apps.yaml + commands.yaml types, validation, JSON Schema (+ units: unit-ID namespace)
   backends/   PackageBackend trait + brew/cask/mas/gem/npm/pip/cargo/go/composer + toolchains + bootstrap
+              + graph (manifest → DAG) + schedule (parallel ready-queue executor) + orchestrate (engine wiring)
   prefs/      declarative preferences engine (defaults/exec/builtins, apply/diff)
   core/       upgrade pipeline state machine (gates, probes, steps, reports)
   dotfiles/   the CLI binary (+ egui GUI behind the default `gui` feature)
   testkit/    test fixtures (stub binaries with argv recording)
 schema/       generated JSON Schemas (committed, CI-enforced freshness)
+e2e/          reduced fixture manifests for the real-machine CI E2E job
 ```
+
+## Install engine (dependency graph + parallel scheduler)
+
+`apps.yaml` is the source of truth for install dependencies. Package entries
+are either bare names (`- "git"`) or detailed (`- { name: "phpstan",
+requires: ["brew-formula:php"] }`); detailed or referenced packages split out
+of their backend's batched install into schedulable units. Canonical unit IDs
+(`crates/manifest/src/units.rs`): `brew-formula:x`, `brew-cask:x`,
+`brew-tap:o/r`, `mas:<id>`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`,
+`composer:`, `toolchain:rustup|node|python`, `bootstrap:<step>`. Implicit
+edges (taps → brew units, toolchains → npm/pip, tool binaries → bootstrap
+steps) live in `units::implicit_requires`; validation rejects unknown targets
+and cycles. `install.execution` tunes the engine (`max_jobs`, per lock-class
+`locks`; `brew` capped at 1). Execution: `graph::build` → `schedule::run`
+(`std::thread::scope` ready-queue; failures block dependents as
+`skipped (blocked by …)`, never abort). CLI: `install`/`sync` accept
+`--jobs <N>` / `--sequential` (legacy path: `install_all_sequential`).
+`dotfiles install` specs also accept the `brew-formula:`/`brew-cask:` aliases.
 
 ## CLI surface (orientation)
 
-- `dotfiles sync [--only <job>] [--skip <jobs>] [--sandbox]` — full pipeline:
+- `dotfiles sync [--only <job>] [--skip <jobs>] [--sandbox] [--jobs <N>] [--sequential]` — full pipeline:
   bootstrap → install → apply → prefs → history
-- `dotfiles install [pkg...]`, `remove`, `search`, `info`, `list`, `update`,
+- `dotfiles install [pkg...] [--jobs <N>] [--sequential]`, `remove`, `search`, `info`, `list`, `update`,
   `upgrade` (apt-like package ops; `--gate/--headless/--dry-run` on upgrade)
 - `dotfiles bootstrap|apply|history|software-update|doctor`
+- `dotfiles verify [--local-only]` — parallel read-only reference check: every
+  apps.yaml formula/cask/tap/MAS id/gem/npm/pip/go module exists upstream and
+  every symlink/dock reference resolves (exit non-zero on any miss)
 - `dotfiles prefs apply|diff|validate`
 - `dotfiles agent install|status|uninstall|tick` (LaunchAgent, gated upgrades)
 - `dotfiles schema --kind <apps|prefs> [--write]`

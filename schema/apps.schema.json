@@ -31,6 +31,10 @@
           "formulas": [],
           "taps": []
         },
+        "execution": {
+          "locks": {},
+          "max_jobs": 0
+        },
         "gem": {
           "rubygems": []
         },
@@ -77,7 +81,7 @@
           "default": [],
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/PkgEntry"
           }
         },
         "customCommands": {
@@ -92,7 +96,7 @@
           "default": [],
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/PkgEntry"
           }
         },
         "taps": {
@@ -203,6 +207,30 @@
       },
       "additionalProperties": false
     },
+    "Execution": {
+      "description": "Parallel execution tuning for the install phase. `apps.yaml` is the source of truth for the dependency graph; this section tunes the engine that executes it (worker count + per lock-class concurrency).",
+      "type": "object",
+      "properties": {
+        "locks": {
+          "description": "Per lock-class concurrency overrides, e.g. `{ mas: 4, go: 4 }`. Keys are lock classes (`brew`, `mas`, `gem`, `npm`, `pip`, `cargo`, `go`, `composer`, `toolchain`, `bootstrap`); `brew` is capped at 1 (concurrent `brew` invocations are unsupported by Homebrew).",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        },
+        "max_jobs": {
+          "description": "Max parallel install units; 0 = number of available CPUs. Default 0.",
+          "default": 0,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
     "Gem": {
       "type": "object",
       "properties": {
@@ -210,7 +238,7 @@
           "default": [],
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/PkgEntry"
           }
         }
       },
@@ -224,7 +252,7 @@
           "default": [],
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/PkgEntry"
           }
         }
       },
@@ -251,6 +279,18 @@
           "allOf": [
             {
               "$ref": "#/definitions/Brew"
+            }
+          ]
+        },
+        "execution": {
+          "description": "Parallel execution tuning for the install phase (the DAG engine).",
+          "default": {
+            "locks": {},
+            "max_jobs": 0
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Execution"
             }
           ]
         },
@@ -374,6 +414,14 @@
         },
         "name": {
           "type": "string"
+        },
+        "requires": {
+          "description": "Unit IDs that must complete first, e.g. `[\"brew-formula:git\"]`. See `crate::units` for the canonical `<prefix>:<name>` namespace.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -412,7 +460,7 @@
           "default": [],
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/PkgEntry"
           }
         }
       },
@@ -426,11 +474,50 @@
           "default": [],
           "type": "array",
           "items": {
+            "$ref": "#/definitions/PkgEntry"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "PkgDetail": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "lock": {
+          "description": "Resource-class override (default = the backend's own lock class).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "requires": {
+          "description": "Unit IDs that must complete first, e.g. `[\"brew-formula:php\"]`. See `crate::units` for the canonical `<prefix>:<name>` namespace.",
+          "default": [],
+          "type": "array",
+          "items": {
             "type": "string"
           }
         }
       },
       "additionalProperties": false
+    },
+    "PkgEntry": {
+      "description": "A package list entry: either a bare name (`- \"git\"`) or a detailed form (`- { name: \"phpstan\", requires: [\"brew-formula:php\"] }`) that declares dependency-graph edges for the parallel execution engine. The detailed form splits the package out of its backend's batched install into its own schedulable unit.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/PkgDetail"
+        }
+      ]
     },
     "PythonToolchain": {
       "type": "object",

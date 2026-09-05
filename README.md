@@ -20,7 +20,7 @@ mkdir -p ~/.local/bin && cp target/release/dotfiles ~/.local/bin/
 dotfiles search <query>            # search across all backends
 dotfiles info brew:ripgrep         # package info (brew:/cask:/mas:/gem:/npm:/pip:/cargo:/go:/composer:)
 dotfiles list --installed          # per backend; or --outdated
-dotfiles install                   # everything declared in apps.yaml
+dotfiles install                   # everything declared in apps.yaml (parallel DAG engine; --jobs N/--sequential)
 dotfiles install cask:iterm2 mas:1352778147
 dotfiles remove brew:git
 dotfiles update                    # refresh indexes (brew update, …)
@@ -46,6 +46,7 @@ dotfiles prefs apply|diff|validate # ~190 declarative macOS preferences (default
 dotfiles history seed              # seed atuin history from commands.yaml
 dotfiles software-update           # macOS updates (manual only, reboots!)
 dotfiles doctor                    # environment diagnosis
+dotfiles verify                    # every apps.yaml reference exists upstream and is wired correctly
 ```
 
 ## Scheduled upgrades (LaunchAgent)
@@ -68,8 +69,10 @@ listed, never auto-installed.
 
 - **`apps.yaml`** — packages (brew taps/formulas/casks, gem, npm, pip/uv, go,
   mas), toolchains (rustup/node/python), typed bootstrap steps, plus config
-  (`mkdir`, `symbolic_links`, `dockutil`). Validated with
-  [# yaml-language-server](schema/apps.schema.json).
+  (`mkdir`, `symbolic_links`, `dockutil`). Package entries may declare
+  `requires:` dependency edges (`brew-formula:php` style unit IDs) executed by
+  the parallel install engine (`install.execution` tunes workers/locks).
+  Validated with [# yaml-language-server](schema/apps.schema.json).
 - **`prefs.yaml`** — ~190 declarative macOS preferences: typed `defaults`
   entries (bool/int/float/string/array/dict, `current_host`, `sudo`,
   `-dict-add` merge mode), whitelisted `exec` steps (pmset/nvram/PlistBuddy/…),
