@@ -2,10 +2,10 @@
 //! `install-apps.sh` + brew tap bootstrapping from `install-dependencies.sh`.
 
 use crate::outcome::BackendOutcome;
-use crate::{bootstrap, brew, toolchain, Spec};
+use crate::{bootstrap, brew, graph, schedule, toolchain, Spec};
 use anyhow::Result;
 use dotfiles_exec::ExecEnv;
-use dotfiles_manifest::Manifest;
+use dotfiles_manifest::{Manifest, PkgEntry};
 
 /// `brew tap` + `brew trust` (skips taps already tapped; `homebrew/*` needs no trust).
 pub fn ensure_taps(env: &ExecEnv, taps: &[String]) -> Result<BackendOutcome> {
@@ -48,37 +48,73 @@ pub fn ensure_taps(env: &ExecEnv, taps: &[String]) -> Result<BackendOutcome> {
     Ok(out)
 }
 
-/// Install everything declared in the manifest, in dependency-safe order.
-/// Mirrors the old scripts exactly: taps → formulas → casks → gems → npm →
-/// pip → go → mas → toolchains → bootstrap steps.
+/// Install everything declared in the manifest via the dependency-graph
+/// parallel execution engine (`graph` + `schedule`). Units run as soon as
+/// their `requires:` edges (explicit in apps.yaml plus implicit tool edges)
+/// succeed and their lock class has a free slot; cross-ecosystem installs
+/// overlap while same-tool work serializes (`brew` is capped at 1).
+/// A failed unit never aborts the run — its dependents are reported as
+/// `skipped (blocked by <id>)`.
 pub fn install_all(env: &ExecEnv, m: &Manifest) -> Result<Vec<BackendOutcome>> {
+    install_all_with_opts(env, m, &sched_opts_from_manifest(m))
+}
+
+/// `install_all` with explicit scheduler tuning (the CLI layers `--jobs` /
+/// `--sequential` over the manifest's `install.execution` defaults).
+pub fn install_all_with_opts(
+    env: &ExecEnv,
+    m: &Manifest,
+    opts: &schedule::SchedOpts,
+) -> Result<Vec<BackendOutcome>> {
+    preflight_sudo(env, m)?;
+    let g = graph::build(m)?;
+    Ok(schedule::run(&g, opts, env, &|unit, env| {
+        run_unit(env, m, unit)
+    }))
+}
+
+/// Scheduler tuning from `install.execution` (manifest = source of truth).
+pub fn sched_opts_from_manifest(m: &Manifest) -> schedule::SchedOpts {
+    schedule::SchedOpts {
+        max_jobs: m.install.execution.max_jobs,
+        lock_limits: m.install.execution.locks.clone(),
+    }
+}
+
+/// Legacy sequential install (taps → formulas → casks → … → bootstrap),
+/// kept for `--sequential`. New code should use the graph engine.
+pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<BackendOutcome>> {
     let mut results: Vec<BackendOutcome> = vec![];
 
     results.push(ensure_taps(env, &m.install.brew.taps)?);
 
     let brew = brew::Brew;
     let cask = brew::BrewCask;
-    results.push(run_if_available(env, &brew, &m.install.brew.formulas));
-    results.push(run_if_available(env, &cask, &m.install.brew.casks));
+    results.push(run_if_available(
+        env,
+        &brew,
+        &names(&m.install.brew.formulas),
+    ));
+    results.push(run_if_available(env, &cask, &names(&m.install.brew.casks)));
     results.push(run_if_available(
         env,
         &crate::gem::Gem,
-        &m.install.gem.rubygems,
+        &names(&m.install.gem.rubygems),
     ));
     results.push(run_if_available(
         env,
         &crate::npm::Npm,
-        &m.install.npm.global.packages,
+        &names(&m.install.npm.global.packages),
     ));
     results.push(run_if_available(
         env,
         &crate::pip::UvPip,
-        &m.install.pip.packages,
+        &names(&m.install.pip.packages),
     ));
     results.push(run_if_available(
         env,
         &crate::go::Go,
-        &m.install.go.packages,
+        &names(&m.install.go.packages),
     ));
 
     let mas_ids: Vec<String> = m.install.mas.apps.iter().map(|a| a.id.clone()).collect();
@@ -101,6 +137,82 @@ pub fn install_all(env: &ExecEnv, m: &Manifest) -> Result<Vec<BackendOutcome>> {
     }
 
     Ok(results)
+}
+
+fn names(entries: &[PkgEntry]) -> Vec<String> {
+    entries.iter().map(|e| e.name().to_string()).collect()
+}
+
+/// Cache `sudo` credentials once before the parallel run so concurrent cask
+/// installs never race on an interactive password prompt (mirrors the prefs
+/// `sudo -v` pre-flight). Best-effort: failures are ignored here and surface
+/// per-unit like any other error.
+fn preflight_sudo(env: &ExecEnv, m: &Manifest) -> Result<()> {
+    if m.install.brew.casks.is_empty() || !env.has_command("sudo") {
+        return Ok(());
+    }
+    let _ = env.output("sudo", &["-v"])?;
+    Ok(())
+}
+
+/// Execute one graph unit. Backend errors become failed outcomes (the
+/// scheduler blocks dependents); only spawn-level failures escape as `Err`.
+fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
+    let res: Result<BackendOutcome> = match &unit.kind {
+        graph::UnitKind::Taps => ensure_taps(env, &unit.packages),
+        graph::UnitKind::Batch("brew") | graph::UnitKind::Package("brew") => {
+            Ok(run_if_available(env, &brew::Brew, &unit.packages))
+        }
+        graph::UnitKind::Batch("cask") | graph::UnitKind::Package("cask") => {
+            Ok(run_if_available(env, &brew::BrewCask, &unit.packages))
+        }
+        graph::UnitKind::Batch("gem") | graph::UnitKind::Package("gem") => {
+            Ok(run_if_available(env, &crate::gem::Gem, &unit.packages))
+        }
+        graph::UnitKind::Batch("npm") | graph::UnitKind::Package("npm") => {
+            Ok(run_if_available(env, &crate::npm::Npm, &unit.packages))
+        }
+        graph::UnitKind::Batch("pip") | graph::UnitKind::Package("pip") => {
+            Ok(run_if_available(env, &crate::pip::UvPip, &unit.packages))
+        }
+        graph::UnitKind::Batch("go") | graph::UnitKind::Package("go") => {
+            Ok(run_if_available(env, &crate::go::Go, &unit.packages))
+        }
+        graph::UnitKind::Batch("mas") | graph::UnitKind::Package("mas") => {
+            Ok(run_if_available(env, &crate::mas::Mas, &unit.packages))
+        }
+        graph::UnitKind::Batch(other) | graph::UnitKind::Package(other) => Err(anyhow::anyhow!(
+            "unknown backend '{other}' for unit '{}'",
+            unit.id
+        )),
+        graph::UnitKind::Toolchain => {
+            let key = unit.packages.first().map(String::as_str).unwrap_or("");
+            match key {
+                "rustup" => {
+                    let channel = m
+                        .install
+                        .toolchains
+                        .rustup
+                        .as_ref()
+                        .map(|r| r.channel.as_str())
+                        .unwrap_or("stable");
+                    toolchain::Toolchain::ensure_rustup(env, channel)
+                }
+                "node" => toolchain::Toolchain::ensure_node(env),
+                "python" => toolchain::Toolchain::ensure_python(env),
+                other => Err(anyhow::anyhow!("unknown toolchain '{other}'")),
+            }
+        }
+        graph::UnitKind::Bootstrap => {
+            let step = unit.packages.first().map(String::as_str).unwrap_or("");
+            bootstrap::run(step, env)
+        }
+    };
+    res.unwrap_or_else(|e| {
+        let mut out = BackendOutcome::empty(unit.backend);
+        out.fail_one(unit.id.clone(), e.to_string());
+        out
+    })
 }
 
 fn run_if_available(
@@ -276,5 +388,74 @@ install:
             .expect("skip outcome");
         assert!(install.ok());
         assert!(install.note.contains("not installed"));
+    }
+
+    #[test]
+    fn failed_taps_block_dependent_batches_but_not_siblings() {
+        let t = TestEnv::new();
+        t.stub(
+            "brew",
+            "case \"$1\" in tap) echo 'network down' 1>&2; exit 1 ;; esac; exit 0",
+        );
+        t.stub_ok("rustup", "");
+        let manifest = parse_manifest(
+            r#"
+install:
+  brew:
+    taps: ["hashicorp/tap"]
+    formulas: ["git"]
+  toolchains:
+    rustup: {}
+"#,
+        )
+        .unwrap();
+        let results = install_all(t.exec(), &manifest).unwrap();
+        // The taps unit failed …
+        let taps = results
+            .iter()
+            .find(|r| r.failed.iter().any(|f| f.name == "hashicorp/tap"))
+            .expect("taps failure");
+        assert!(!taps.ok());
+        // … so the formula batch (which requires the taps) was skipped …
+        let batch = results
+            .iter()
+            .find(|r| r.note.contains("blocked by 'brew-tap:hashicorp/tap'"))
+            .expect("blocked batch");
+        assert!(!batch.ok());
+        assert!(t.calls_of("brew").iter().all(|c| !c.starts_with("install")));
+        // … while the independent rustup toolchain still ran.
+        assert!(
+            results
+                .iter()
+                .any(|r| r.backend == "toolchain:rustup" && r.ok()),
+            "{:?}",
+            results.iter().map(|r| &r.backend).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn sequential_path_preserves_legacy_order() {
+        let t = TestEnv::new();
+        t.stub("brew", BREW_STUB);
+        let manifest =
+            parse_manifest("install:\n  brew:\n    formulas: [git]\n    casks: [iterm2]\n")
+                .unwrap();
+        let results = install_all_sequential(t.exec(), &manifest).unwrap();
+        assert!(results.iter().all(|r| r.ok()));
+        let brew_calls = t.calls_of("brew");
+        assert!(
+            brew_calls
+                .iter()
+                .any(|c| c.starts_with("install --formula git")),
+            "{:?}",
+            brew_calls
+        );
+        assert!(
+            brew_calls
+                .iter()
+                .any(|c| c.starts_with("install --cask iterm2")),
+            "{:?}",
+            brew_calls
+        );
     }
 }

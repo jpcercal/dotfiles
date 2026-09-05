@@ -10,6 +10,14 @@ pub struct InstallArgs {
     /// Packages as `backend:name` (bare name = brew formula). No args = install
     /// everything declared in the manifest.
     pub specs: Vec<String>,
+    /// Max parallel install units (default: manifest `install.execution.max_jobs`,
+    /// 0 = number of CPUs).
+    #[arg(long)]
+    pub jobs: Option<usize>,
+    /// Use the legacy sequential installer instead of the parallel
+    /// dependency-graph engine.
+    #[arg(long)]
+    pub sequential: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -63,7 +71,15 @@ pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             m.install.mas.apps.len(),
             m.install.bootstrap.len()
         );
-        orchestrate::install_all(&ctx.env, &m)?
+        if args.sequential {
+            orchestrate::install_all_sequential(&ctx.env, &m)?
+        } else {
+            let mut opts = orchestrate::sched_opts_from_manifest(&m);
+            if let Some(jobs) = args.jobs {
+                opts.max_jobs = jobs;
+            }
+            orchestrate::install_all_with_opts(&ctx.env, &m, &opts)?
+        }
     } else {
         let specs: Vec<Spec> = args
             .specs
