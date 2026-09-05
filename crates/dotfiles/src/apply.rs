@@ -108,34 +108,83 @@ fn create_dirs(ctx: &Ctx, m: &Manifest, check: bool) -> Result<()> {
 }
 
 fn create_links(ctx: &Ctx, m: &Manifest, check: bool) -> Result<()> {
-    for link in &m.config.symbolic_links {
-        let src = ctx.dotfiles_dir.join(&link.from.relative_path);
-        let dst = ctx.env.expand(&link.to.absolute_path);
-
-        // Already correct?
-        if std::fs::read_link(&dst).map(|t| t == src).unwrap_or(false) {
-            continue;
+    if check {
+        for link in &m.config.symbolic_links {
+            check_link(ctx, link)?;
         }
-        if check {
-            println!("DRIFT link: {} -> {}", dst.display(), src.display());
-            continue;
+        return Ok(());
+    }
+    // Parallel fan-out: each symlink is independent once the directories
+    // exist (`create_dirs` runs first as a barrier). Messages print in
+    // manifest order after the join so output stays deterministic.
+    let mut outcomes: Vec<(usize, Result<Vec<String>>)> = std::thread::scope(|s| {
+        let mut handles = vec![];
+        for (i, link) in m.config.symbolic_links.iter().enumerate() {
+            handles.push(s.spawn(move || (i, apply_link(ctx, link))));
         }
-        // Back up an existing *real file* before replacing (as the script did:
-        // `<dst>.YYYY.MM.DD.bkp`). Symlinks to elsewhere are simply replaced.
-        if dst.exists() && !dst.is_symlink() {
-            let stamp = chrono::Local::now().format("%Y.%m.%d");
-            let backup = PathBuf::from(format!("{}.{}.bkp", dst.display(), stamp));
-            println!("backup: {} -> {}", dst.display(), backup.display());
-            std::fs::rename(&dst, &backup).with_context(|| format!("backup {}", dst.display()))?;
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("link worker panicked"))
+            .collect()
+    });
+    outcomes.sort_by_key(|(i, _)| *i);
+    let mut first_err: Option<anyhow::Error> = None;
+    for (_, result) in outcomes {
+        match result {
+            Ok(msgs) => {
+                for msg in msgs {
+                    println!("{msg}");
+                }
+            }
+            Err(e) => {
+                if first_err.is_none() {
+                    first_err = Some(e);
+                }
+            }
         }
-        if let Some(parent) = dst.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let _ = std::fs::remove_file(&dst);
-        println!("link: {} -> {}", dst.display(), src.display());
-        make_symlink(&src, &dst).with_context(|| format!("symlink {}", dst.display()))?;
+    }
+    if let Some(e) = first_err {
+        return Err(e);
     }
     Ok(())
+}
+
+fn check_link(ctx: &Ctx, link: &dotfiles_manifest::SymLink) -> Result<()> {
+    let src = ctx.dotfiles_dir.join(&link.from.relative_path);
+    let dst = ctx.env.expand(&link.to.absolute_path);
+    if std::fs::read_link(&dst).map(|t| t == src).unwrap_or(false) {
+        return Ok(());
+    }
+    println!("DRIFT link: {} -> {}", dst.display(), src.display());
+    Ok(())
+}
+
+/// Apply one symlink; returns the log lines (printed by the caller in
+/// manifest order). Pure per-link work: no shared mutable state.
+fn apply_link(ctx: &Ctx, link: &dotfiles_manifest::SymLink) -> Result<Vec<String>> {
+    let mut msgs = vec![];
+    let src = ctx.dotfiles_dir.join(&link.from.relative_path);
+    let dst = ctx.env.expand(&link.to.absolute_path);
+
+    // Already correct?
+    if std::fs::read_link(&dst).map(|t| t == src).unwrap_or(false) {
+        return Ok(msgs);
+    }
+    // Back up an existing *real file* before replacing (as the script did:
+    // `<dst>.YYYY.MM.DD.bkp`). Symlinks to elsewhere are simply replaced.
+    if dst.exists() && !dst.is_symlink() {
+        let stamp = chrono::Local::now().format("%Y.%m.%d");
+        let backup = PathBuf::from(format!("{}.{}.bkp", dst.display(), stamp));
+        msgs.push(format!("backup: {} -> {}", dst.display(), backup.display()));
+        std::fs::rename(&dst, &backup).with_context(|| format!("backup {}", dst.display()))?;
+    }
+    if let Some(parent) = dst.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let _ = std::fs::remove_file(&dst);
+    msgs.push(format!("link: {} -> {}", dst.display(), src.display()));
+    make_symlink(&src, &dst).with_context(|| format!("symlink {}", dst.display()))?;
+    Ok(msgs)
 }
 
 #[cfg(unix)]
@@ -264,6 +313,43 @@ config:
         let m = manifest_with_links();
         create_links(&ctx, &m, true).unwrap();
         assert!(!t.home().join(".gitconfig").exists());
+    }
+
+    #[test]
+    fn multiple_links_fan_out_and_all_land() {
+        let t = TestEnv::new();
+        for name in [".a", ".b", ".c"] {
+            t.write(&format!("dotfiles/{name}"), "x\n");
+        }
+        let ctx = Ctx::sandbox(t.root(), false).unwrap();
+        let m = parse_manifest(
+            r#"
+config:
+  symbolic_links:
+    - from: { relative_path: ".a" }
+      to: { absolute_path: "~/.a" }
+    - from: { relative_path: ".b" }
+      to: { absolute_path: "~/.b" }
+    - from: { relative_path: ".c" }
+      to: { absolute_path: "~/.c" }
+"#,
+        )
+        .unwrap();
+        create_links(&ctx, &m, false).unwrap();
+        for name in [".a", ".b", ".c"] {
+            assert_eq!(
+                std::fs::read_link(t.home().join(name)).unwrap(),
+                t.root().join(format!("dotfiles/{name}"))
+            );
+        }
+        // second run converges with no backups
+        create_links(&ctx, &m, false).unwrap();
+        let backups: Vec<_> = std::fs::read_dir(t.home())
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".bkp"))
+            .collect();
+        assert!(backups.is_empty());
     }
 
     #[test]
