@@ -257,6 +257,7 @@ config:
     - ~/.config/nvim/
     - ~/.config/tmux/
     - ~/.config/opencode/
+    - ~/.config/opencode/skills/
     - ~/Library/Application Support/rtk/
   symbolic_links:  
     - from: 
@@ -323,6 +324,11 @@ config:
         relative_path: "opencode/opencode.jsonc"
       to: 
         absolute_path: "~/.config/opencode/opencode.jsonc"
+
+    - from: 
+        relative_path: "opencode/skills/builder"
+      to: 
+        absolute_path: "~/.config/opencode/skills/builder"
 
     - from: 
         relative_path: "rtk/config.toml"
