@@ -253,8 +253,11 @@ install:
         name: "Webcam Settings" 
 config:
   mkdir: 
+    - ~/.config/
     - ~/.config/nvim/
     - ~/.config/tmux/
+    - ~/.config/opencode/
+    - ~/Library/Application Support/rtk/
   symbolic_links:  
     - from: 
         relative_path: ".curlrc"
