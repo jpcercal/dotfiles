@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=../schema/apps.schema.json
+---
+# Reduced manifest for the real-machine CI E2E job (`e2e-machine`). Mirrors
+# the production structure (batches, implicit toolchain edges, bootstrap
+# steps, symlinks) at a fraction of the wall-clock cost. Selected via
+# DOTFILES_MANIFEST=e2e/apps.ci.yaml (with DOTFILES_DIR set to the repo root
+# so symlink sources resolve). No MAS apps: App Store sign-in is unavailable
+# on CI runners (covered by `dotfiles verify` instead).
+schema_version: 1
+install:
+  execution:
+    max_jobs: 0
+    locks:
+      go: 2
+  brew:
+    taps:
+      - "homebrew/services"
+    formulas:
+      - "jq"
+      - "fd"
+      - "fzf"
+      - "fnm"
+      - "uv"
+      - "go"
+      - "dockutil"
+    casks:
+      - "caffeine"
+  npm:
+    global:
+      packages:
+        - "prettier"
+  pip:
+    packages:
+      - "pynvim"
+  go:
+    packages:
+      - "github.com/oklog/ulid/v2/cmd/ulid@latest"
+  toolchains:
+    rustup:
+      channel: "stable"
+    node:
+      ensure: "lts"
+    python:
+      provider: "uv"
+  bootstrap:
+    - "fzf-keybindings"
+    - "python-links"
+config:
+  mkdir:
+    - ~/.config/nvim/
+    - ~/.config/tmux/
+  symbolic_links:
+    - from:
+        relative_path: ".editorconfig"
+      to:
+        absolute_path: "~/.editorconfig"
+    - from:
+        relative_path: "starship.toml"
+      to:
+        absolute_path: "~/.config/starship.toml"
+  dockutil:
+    _before:
+      reset: false
+      removeAll: false
+    add: []

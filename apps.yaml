@@ -2,6 +2,16 @@
 ---
 schema_version: 1
 install:
+  # Parallel execution tuning for the dependency-graph engine: worker count
+  # (0 = number of CPUs) + per lock-class concurrency. `brew` is capped at 1
+  # (concurrent `brew` invocations are unsupported by Homebrew); every other
+  # ecosystem installs in parallel with it.
+  execution:
+    max_jobs: 0
+    locks:
+      brew: 1
+      mas: 4
+      go: 4
   brew:
     taps:
       - "anomalyco/tap"
@@ -55,10 +65,15 @@ install:
       - "moreutils"
       - "neovim"
       - "openssh"
-      - "php-code-sniffer"
-      - "php-cs-fixer"
       - "php"
-      - "phpstan"
+      # Detailed entries declare dependency-graph edges: these tools run on
+      # the Homebrew php, so they install only after `brew-formula:php`.
+      - name: "php-code-sniffer"
+        requires: ["brew-formula:php"]
+      - name: "php-cs-fixer"
+        requires: ["brew-formula:php"]
+      - name: "phpstan"
+        requires: ["brew-formula:php"]
       - "rclone"
       - "ripgrep"
       - "rsync"

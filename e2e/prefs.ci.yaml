@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=../schema/prefs.schema.json
+---
+# Reduced prefs for the real-machine CI E2E job (`e2e-machine`). Writes live
+# under a scratch domain so the runner's real settings are untouched; `prefs
+# apply` followed by `prefs diff` must report in-sync. Selected via
+# DOTFILES_PREFS=e2e/prefs.ci.yaml.
+prefs:
+  - id: ci.bool-flag
+    kind: defaults
+    domain: com.dotfiles.ci-e2e
+    key: BoolFlag
+    type: bool
+    value: true
+  - id: ci.greeting
+    kind: defaults
+    domain: com.dotfiles.ci-e2e
+    key: Greeting
+    type: string
+    value: "hello e2e"
+  - id: ci.count
+    kind: defaults
+    domain: com.dotfiles.ci-e2e
+    key: Count
+    type: int
+    value: 42
