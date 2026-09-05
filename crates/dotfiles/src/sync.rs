@@ -141,7 +141,10 @@ pub fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
             ),
             "software-update" => crate::software_update::run(
                 ctx,
-                crate::software_update::SoftwareUpdateArgs { yes: false },
+                crate::software_update::SoftwareUpdateArgs {
+                    yes: false,
+                    list_only: false,
+                },
             ),
             other => anyhow::bail!("unknown job {}", other),
         };
