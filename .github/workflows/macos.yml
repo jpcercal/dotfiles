@@ -140,4 +140,9 @@ jobs:
         with:
           shared-key: macos-verify
       - run: cargo build --release --no-default-features
+      # The runner image has no `mas` CLI, which would downgrade every MAS
+      # reference to SKIP. Install it so the drift gate really probes them
+      # (`mas info` needs no App Store sign-in).
+      - name: install mas (App Store probe tool)
+        run: brew install mas
       - run: ./target/release/dotfiles verify
