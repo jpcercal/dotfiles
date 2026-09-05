@@ -190,3 +190,152 @@ fn schema_mentions_all_top_level_sections() {
         assert!(schema.contains(needle), "schema missing {}", needle);
     }
 }
+
+#[test]
+fn parses_mixed_simple_and_detailed_entries() {
+    let m = parse_manifest(
+        r#"
+install:
+  execution:
+    max_jobs: 8
+    locks: { mas: 4 }
+  brew:
+    formulas:
+      - "git"
+      - name: "phpstan"
+        requires: ["brew-formula:php"]
+      - "php"
+  mas:
+    apps:
+      - { id: "1", name: "A", requires: ["brew-formula:git"] }
+"#,
+    )
+    .expect("mixed entries parse");
+    assert_eq!(m.install.execution.max_jobs, 8);
+    assert_eq!(m.install.execution.locks.get("mas"), Some(&4));
+    assert_eq!(m.install.brew.formulas.len(), 3);
+    assert!(!m.install.brew.formulas[0].is_detailed());
+    assert_eq!(m.install.brew.formulas[0].name(), "git");
+    assert!(m.install.brew.formulas[0].requires().is_empty());
+    assert!(m.install.brew.formulas[1].is_detailed());
+    assert_eq!(
+        m.install.brew.formulas[1].requires(),
+        &["brew-formula:php".to_string()]
+    );
+    assert_eq!(m.install.mas.apps[0].requires, vec!["brew-formula:git"]);
+}
+
+#[test]
+fn rejects_unknown_requires_target() {
+    let err = parse_manifest(
+        "install:\n  brew:\n    formulas:\n      - \"git\"\n      - { name: \"phpstan\", requires: [\"brew-formula:php\"] }\n",
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("no such package declared"),
+        "{}",
+        err
+    );
+    let err = parse_manifest(
+        "install:\n  brew:\n    formulas:\n      - { name: \"a\", requires: [\"apt:vim\"] }\n      - \"vim\"\n",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("unknown unit prefix"), "{}", err);
+}
+
+#[test]
+fn rejects_dependency_cycles() {
+    let err = parse_manifest(
+        "install:\n  brew:\n    formulas:\n      - { name: \"a\", requires: [\"brew-formula:b\"] }\n      - { name: \"b\", requires: [\"brew-formula:a\"] }\n",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("dependency cycle"), "{}", err);
+    // self-loop
+    let err = parse_manifest(
+        "install:\n  brew:\n    formulas:\n      - { name: \"a\", requires: [\"brew-formula:a\"] }\n",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("dependency cycle"), "{}", err);
+}
+
+#[test]
+fn rejects_bad_lock_config() {
+    let err = parse_manifest("install:\n  execution:\n    locks: { brew: 4 }\n").unwrap_err();
+    assert!(err.to_string().contains("'brew' is capped at 1"), "{}", err);
+    let err = parse_manifest("install:\n  execution:\n    locks: { 'BAD NAME': 2 }\n").unwrap_err();
+    assert!(
+        err.to_string().contains("not a valid lock-class name"),
+        "{}",
+        err
+    );
+    let err = parse_manifest(
+        "install:\n  brew:\n    formulas:\n      - { name: \"a\", lock: \"BAD\" }\n",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("invalid lock name"), "{}", err);
+    let err = parse_manifest(
+        "install:\n  brew:\n    formulas:\n      - { name: \"a\", requires: [\"\"] }\n",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("empty requires entry"), "{}", err);
+}
+
+#[test]
+fn unit_namespace_helpers() {
+    assert_eq!(
+        split_unit_id("brew-formula:php"),
+        Some(("brew-formula", "php"))
+    );
+    assert_eq!(
+        split_unit_id("go:github.com/x/y@v1.0"),
+        Some(("go", "github.com/x/y@v1.0"))
+    );
+    assert_eq!(split_unit_id("apt:vim"), None);
+    assert_eq!(split_unit_id("brew-formula:"), None);
+    assert_eq!(split_unit_id("no-colon"), None);
+    assert_eq!(lock_class_for("brew-formula"), "brew");
+    assert_eq!(lock_class_for("brew-cask"), "brew");
+    assert_eq!(lock_class_for("brew-tap"), "brew");
+    assert_eq!(lock_class_for("mas"), "mas");
+    assert!(is_valid_lock_name("my-lock2"));
+    assert!(!is_valid_lock_name("BAD"));
+    assert!(!is_valid_lock_name(""));
+}
+
+#[test]
+fn implicit_edges_follow_declared_tools() {
+    let m = parse_manifest(
+        "install:\n  brew:\n    formulas: [fnm, uv, fzf, git, rtk]\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap: [fzf-keybindings, git-lfs, python-links, claude-mem, rtk-patch, opencode, nvim-plug]\n",
+    )
+    .unwrap();
+    let ids = unit_ids(&m);
+    assert!(!ids.contains("brew-tap:hashicorp/tap"));
+    assert!(ids.contains("toolchain:node"));
+    assert!(ids.contains("bootstrap:claude-mem"));
+    assert_eq!(
+        implicit_requires("toolchain:node", &m),
+        vec!["brew-formula:fnm"]
+    );
+    assert_eq!(
+        implicit_requires("toolchain:python", &m),
+        vec!["brew-formula:uv"]
+    );
+    assert_eq!(
+        implicit_requires("bootstrap:claude-mem", &m),
+        vec!["toolchain:node"]
+    );
+    assert_eq!(
+        implicit_requires("bootstrap:python-links", &m),
+        vec!["toolchain:python"]
+    );
+    assert_eq!(
+        implicit_requires("bootstrap:fzf-keybindings", &m),
+        vec!["brew-formula:fzf"]
+    );
+    assert!(implicit_requires("bootstrap:opencode", &m).is_empty());
+    assert!(implicit_requires("bootstrap:nvim-plug", &m).is_empty());
+    // undeclared tools produce no edges (runtime bail/skip preserved)
+    let bare = parse_manifest("install:\n  bootstrap: [claude-mem, rtk-patch]\n").unwrap();
+    assert!(implicit_requires("bootstrap:claude-mem", &bare).is_empty());
+    assert!(implicit_requires("bootstrap:rtk-patch", &bare).is_empty());
+}

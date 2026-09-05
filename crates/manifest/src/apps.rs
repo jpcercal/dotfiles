@@ -44,20 +44,92 @@ pub struct Install {
     /// Typed, idempotent setup steps (replacements for customCommands).
     #[schemars(with = "Vec<String>")]
     pub bootstrap: Vec<String>,
+    /// Parallel execution tuning for the install phase (the DAG engine).
+    pub execution: Execution,
+}
+
+/// Parallel execution tuning for the install phase. `apps.yaml` is the source
+/// of truth for the dependency graph; this section tunes the engine that
+/// executes it (worker count + per lock-class concurrency).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Execution {
+    /// Max parallel install units; 0 = number of available CPUs. Default 0.
+    #[serde(default)]
+    pub max_jobs: usize,
+    /// Per lock-class concurrency overrides, e.g. `{ mas: 4, go: 4 }`.
+    /// Keys are lock classes (`brew`, `mas`, `gem`, `npm`, `pip`, `cargo`,
+    /// `go`, `composer`, `toolchain`, `bootstrap`); `brew` is capped at 1
+    /// (concurrent `brew` invocations are unsupported by Homebrew).
+    #[serde(default)]
+    pub locks: std::collections::BTreeMap<String, usize>,
+}
+
+/// A package list entry: either a bare name (`- "git"`) or a detailed form
+/// (`- { name: "phpstan", requires: ["brew-formula:php"] }`) that declares
+/// dependency-graph edges for the parallel execution engine. The detailed
+/// form splits the package out of its backend's batched install into its own
+/// schedulable unit.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum PkgEntry {
+    Simple(String),
+    Detailed(PkgDetail),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PkgDetail {
+    pub name: String,
+    /// Unit IDs that must complete first, e.g. `["brew-formula:php"]`.
+    /// See `crate::units` for the canonical `<prefix>:<name>` namespace.
+    #[serde(default)]
+    pub requires: Vec<String>,
+    /// Resource-class override (default = the backend's own lock class).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(regex(pattern = "^[a-z][a-z0-9-]*$"))]
+    pub lock: Option<String>,
+}
+
+impl PkgEntry {
+    pub fn name(&self) -> &str {
+        match self {
+            PkgEntry::Simple(n) => n,
+            PkgEntry::Detailed(d) => &d.name,
+        }
+    }
+
+    pub fn requires(&self) -> &[String] {
+        match self {
+            PkgEntry::Simple(_) => &[],
+            PkgEntry::Detailed(d) => &d.requires,
+        }
+    }
+
+    pub fn lock(&self) -> Option<&str> {
+        match self {
+            PkgEntry::Simple(_) => None,
+            PkgEntry::Detailed(d) => d.lock.as_deref(),
+        }
+    }
+
+    pub fn is_detailed(&self) -> bool {
+        matches!(self, PkgEntry::Detailed(_))
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Pip {
     /// Packages installed into the uv-managed python.
-    pub packages: Vec<String>,
+    pub packages: Vec<PkgEntry>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct GoPackages {
     /// Module paths with version suffix, e.g. `github.com/oklog/ulid/v2/cmd/ulid@latest`.
-    pub packages: Vec<String>,
+    pub packages: Vec<PkgEntry>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
@@ -109,8 +181,8 @@ pub struct Brew {
     /// Third-party taps in `owner/repo` form. Trusted automatically unless `homebrew/*`.
     #[schemars(length(min = 0))]
     pub taps: Vec<String>,
-    pub formulas: Vec<String>,
-    pub casks: Vec<String>,
+    pub formulas: Vec<PkgEntry>,
+    pub casks: Vec<PkgEntry>,
     /// DEPRECATED: transitional escape hatch for shell one-liners. Entries are
     /// migrated to typed backend/toolchain entries over time.
     #[serde(rename = "customCommands")]
@@ -120,7 +192,7 @@ pub struct Brew {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Gem {
-    pub rubygems: Vec<String>,
+    pub rubygems: Vec<PkgEntry>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
@@ -132,7 +204,7 @@ pub struct Npm {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct NpmGlobal {
-    pub packages: Vec<String>,
+    pub packages: Vec<PkgEntry>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
@@ -147,6 +219,10 @@ pub struct MasApp {
     /// Numeric App Store product id (as string, mas takes strings).
     pub id: String,
     pub name: String,
+    /// Unit IDs that must complete first, e.g. `["brew-formula:git"]`.
+    /// See `crate::units` for the canonical `<prefix>:<name>` namespace.
+    #[serde(default)]
+    pub requires: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
