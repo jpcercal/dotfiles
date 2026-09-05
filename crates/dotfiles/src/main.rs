@@ -14,6 +14,7 @@ mod notify;
 mod pkg;
 mod prefs_cmd;
 mod schema;
+mod smoke;
 mod software_update;
 mod sync;
 #[cfg(feature = "gui")]
@@ -57,7 +58,7 @@ enum Commands {
     /// Bootstrap the machine itself (Homebrew, taps)
     Bootstrap(bootstrap::BootstrapArgs),
     /// Diagnose the environment (brew, shell, PATH, manifest)
-    Doctor,
+    Doctor(doctor::DoctorArgs),
     /// Apply configuration: dirs, symlinks, dock, shell, nvim plugins
     Apply(apply::ApplyArgs),
     /// Declarative macOS preferences (defaults/pmset/dock/login-items)
@@ -97,7 +98,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Update(args) => pkg::update(&ctx, args),
         Commands::Upgrade(args) => upgrade::run(args),
         Commands::Bootstrap(args) => bootstrap::run(&ctx, args),
-        Commands::Doctor => doctor::run(&ctx),
+        Commands::Doctor(args) => doctor::run(&ctx, args),
         Commands::Apply(args) => apply::run(&ctx, args),
         Commands::Prefs(args) => prefs_cmd::run(&ctx, args),
         Commands::History(args) => history::run(&ctx, args),

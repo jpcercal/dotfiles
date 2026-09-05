@@ -116,11 +116,10 @@ jobs:
         run: |
           DOTFILES_PREFS=e2e/prefs.ci.yaml ./target/release/dotfiles prefs apply
           DOTFILES_PREFS=e2e/prefs.ci.yaml ./target/release/dotfiles prefs diff
-      - name: assert fixture tools landed
+      - name: smoke-test installed tools
+        run: DOTFILES_MANIFEST=e2e/apps.ci.yaml ./target/release/dotfiles doctor --smoke
+      - name: assert fixture links landed
         run: |
-          test -x /opt/homebrew/bin/jq
-          test -x /opt/homebrew/bin/fd
-          test -x /opt/homebrew/bin/fzf
           test -L ~/.editorconfig
           test -L ~/.config/starship.toml
 

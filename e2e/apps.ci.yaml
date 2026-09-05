@@ -4,8 +4,13 @@
 # the production structure (batches, implicit toolchain edges, bootstrap
 # steps, symlinks) at a fraction of the wall-clock cost. Selected via
 # DOTFILES_MANIFEST=e2e/apps.ci.yaml (with DOTFILES_DIR set to the repo root
-# so symlink sources resolve). No MAS apps: App Store sign-in is unavailable
-# on CI runners (covered by `dotfiles verify` instead).
+# so symlink sources resolve).
+#
+# Coverage rule: at least one package of every installable backend type, so
+# `doctor --smoke` invokes each ecosystem end to end. No MAS apps: App Store
+# sign-in is unavailable on CI runners (the mas *type* is still covered via
+# the `mas` CLI formula + `mas --help` smoke; app references are covered by
+# `dotfiles verify` instead).
 schema_version: 1
 install:
   execution:
@@ -21,8 +26,16 @@ install:
       - "uv"
       - "go"
       - "dockutil"
+      - "mas"
+      - "ruby"
     casks:
       - "caffeine"
+  gem:
+    rubygems:
+      # Explicit edge: no implicit gem→ruby ordering exists, so pin the gem
+      # behind the ruby formula (same pattern as the php tools in apps.yaml).
+      - name: "neovim"
+        requires: ["brew-formula:ruby"]
   npm:
     global:
       packages:
