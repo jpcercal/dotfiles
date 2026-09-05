@@ -13,8 +13,6 @@ install:
     locks:
       go: 2
   brew:
-    taps:
-      - "homebrew/services"
     formulas:
       - "jq"
       - "fd"

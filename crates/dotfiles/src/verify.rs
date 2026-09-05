@@ -6,8 +6,8 @@
 //!   covered by `config.mkdir` (or exist), dock entries resolve to a declared
 //!   cask / MAS app or an allowlisted system path;
 //! - **probes**: every referenced formula / cask / tap / MAS id / gem / npm /
-//!   pip / go module exists upstream (`brew info`, `mas info`, `npm view`,
-//!   PyPI JSON, `go list -m`, …).
+//!   pip / go module exists upstream (`brew info`, tap list + GitHub upstream,
+//!   `mas info`, `npm view`, PyPI JSON, Go module proxy, …).
 //!
 //! Unit IDs use the canonical dependency-graph namespace
 //! (`brew-formula:git`, `brew-cask:iterm2`, …) so `requires:` entries,
@@ -310,7 +310,7 @@ fn run_probe(env: &ExecEnv, id: &str, probe: &ProbeKind) -> Check {
     match probe {
         ProbeKind::BrewFormula(name) => tool_probe(env, id, "brew", &["info", "--formula", name]),
         ProbeKind::BrewCask(name) => tool_probe(env, id, "brew", &["info", "--cask", name]),
-        ProbeKind::BrewTap(tap) => tool_probe(env, id, "brew", &["tap-info", tap]),
+        ProbeKind::BrewTap(tap) => probe_tap(env, id, tap),
         ProbeKind::Mas(app_id) => tool_probe(env, id, "mas", &["info", app_id]),
         ProbeKind::Gem(name) => {
             if !env.has_command("gem") {
@@ -327,11 +327,99 @@ fn run_probe(env: &ExecEnv, id: &str, probe: &ProbeKind) -> Check {
             let url = format!("https://pypi.org/pypi/{name}/json");
             tool_probe(env, id, "curl", &["-fsSL", "--max-time", "20", &url])
         }
-        ProbeKind::Go(module) => {
-            let at = format!("{module}@latest");
-            tool_probe(env, id, "go", &["list", "-m", &at])
+        ProbeKind::Go(spec) => probe_go(env, id, spec),
+    }
+}
+
+/// `brew tap-info` only knows locally installed taps, so an untapped-but-valid
+/// tap (e.g. `aws/tap` on a fresh runner) would be a false MISSING. Fast path:
+/// tapped locally → OK. Otherwise check the tap repo exists upstream on GitHub
+/// (read-only; never taps anything).
+fn probe_tap(env: &ExecEnv, id: &str, tap: &str) -> Check {
+    if env.has_command("brew") {
+        match env.output("brew", &["tap"]) {
+            Ok(res) if res.ok() && res.stdout.lines().map(str::trim).any(|l| l == tap) => {
+                return Check::ok(id);
+            }
+            _ => {}
         }
     }
+    if !env.has_command("curl") {
+        return Check::skipped(id, "curl not installed");
+    }
+    let Some(repo) = tap_github_repo(tap) else {
+        return Check::missing(id, "tap: expected 'owner/repo' form");
+    };
+    let url = format!("https://github.com/{repo}");
+    match env.output("curl", &["-fsSL", "--max-time", "20", &url]) {
+        Err(e) => Check::skipped(id, format!("curl failed to run: {e}")),
+        Ok(res) if res.ok() => Check::ok(id),
+        Ok(_) => Check::missing(id, "tap: no such tap upstream"),
+    }
+}
+
+/// `owner/repo` → GitHub `owner/homebrew-repo` (Homebrew tap convention),
+/// unless the repo already carries the `homebrew-` prefix.
+fn tap_github_repo(tap: &str) -> Option<String> {
+    let (owner, repo) = tap.split_once('/')?;
+    if owner.is_empty() || repo.is_empty() || tap.contains(' ') {
+        return None;
+    }
+    if repo.starts_with("homebrew-") {
+        Some(tap.to_string())
+    } else {
+        Some(format!("{owner}/homebrew-{repo}"))
+    }
+}
+
+/// Go packages are `go install` specs (`<pkg-path>@<version>`): `go list -m`
+/// rejects package paths (vs module roots) and the spec already carries its
+/// version, so neither naive probe works. Instead walk the path prefixes
+/// against the Go module proxy (read-only): the longest prefix that resolves
+/// is the owning module.
+fn probe_go(env: &ExecEnv, id: &str, spec: &str) -> Check {
+    if !env.has_command("curl") {
+        return Check::skipped(id, "curl not installed");
+    }
+    let (path, version) = match spec.rsplit_once('@') {
+        Some((p, v)) if !p.is_empty() && !v.is_empty() => (p, v),
+        _ => (spec, "latest"),
+    };
+    let mut candidate = path.to_string();
+    loop {
+        let escaped = escape_proxy_path(&candidate);
+        let url = if version == "latest" {
+            format!("https://proxy.golang.org/{escaped}/@latest")
+        } else {
+            format!("https://proxy.golang.org/{escaped}/@v/{version}.info")
+        };
+        match env.output("curl", &["-fsSL", "--max-time", "20", &url]) {
+            Err(e) => return Check::skipped(id, format!("curl failed to run: {e}")),
+            Ok(res) if res.ok() => return Check::ok(id),
+            Ok(_) => {}
+        }
+        match candidate.rfind('/') {
+            Some(i) if candidate[..i].contains('/') => candidate.truncate(i),
+            _ => {
+                return Check::missing(id, format!("go: no module found upstream for '{spec}'"));
+            }
+        }
+    }
+}
+
+/// Module-proxy path escaping: every uppercase ASCII letter becomes `!` +
+/// its lowercase form (https://golang.org/ref/mod#goproxy-protocol).
+fn escape_proxy_path(p: &str) -> String {
+    let mut out = String::with_capacity(p.len());
+    for c in p.chars() {
+        if c.is_ascii_uppercase() {
+            out.push('!');
+            out.push(c.to_ascii_lowercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -450,6 +538,106 @@ config:
         ));
         assert_eq!(status("mas:1"), CheckStatus::Ok);
         assert!(matches!(status("mas:2"), CheckStatus::Missing(_)));
+    }
+
+    #[test]
+    fn tap_probe_ok_when_tapped_locally() {
+        let t = TestEnv::new();
+        t.stub("brew", "echo 'aws/tap'; exit 0");
+        // No curl stub (and the isolated PATH hides the real one): reaching
+        // the upstream check would SKIP, so OK proves the local fast path.
+        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    taps: [aws/tap]\n");
+        let checks = collect(&ctx, false).unwrap();
+        assert_eq!(
+            checks
+                .iter()
+                .find(|c| c.id == "brew-tap:aws/tap")
+                .unwrap()
+                .status,
+            CheckStatus::Ok
+        );
+        assert!(t.calls_of("curl").is_empty());
+    }
+
+    #[test]
+    fn tap_probe_checks_upstream_when_untapped() {
+        let t = TestEnv::new();
+        t.stub("brew", "echo 'someone/else'; exit 0");
+        t.stub(
+            "curl",
+            "case \"$*\" in *github.com/aws/homebrew-tap*) exit 0 ;; *) exit 1 ;; esac",
+        );
+        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    taps: [aws/tap, nope/nothing]\n");
+        let checks = collect(&ctx, false).unwrap();
+        let status = |id: &str| {
+            checks
+                .iter()
+                .find(|c| c.id == id)
+                .unwrap_or_else(|| panic!("{id}"))
+                .status
+                .clone()
+        };
+        assert_eq!(status("brew-tap:aws/tap"), CheckStatus::Ok);
+        assert!(matches!(
+            status("brew-tap:nope/nothing"),
+            CheckStatus::Missing(_)
+        ));
+    }
+
+    #[test]
+    fn go_probe_resolves_package_via_owning_module() {
+        let t = TestEnv::new();
+        t.stub(
+            "curl",
+            "case \"$*\" in *proxy.golang.org/github.com/oklog/ulid/v2/@latest*) exit 0 ;; *) exit 1 ;; esac",
+        );
+        let ctx = ctx_with_manifest(
+            &t,
+            "install:\n  go:\n    packages: [\"github.com/oklog/ulid/v2/cmd/ulid@latest\", \"example.com/nope/tool@latest\"]\n",
+        );
+        let checks = collect(&ctx, false).unwrap();
+        let status = |id: &str| {
+            checks
+                .iter()
+                .find(|c| c.id == id)
+                .unwrap_or_else(|| panic!("{id}"))
+                .status
+                .clone()
+        };
+        // The package path itself 404s on the proxy; the `.../v2` module hits.
+        assert_eq!(
+            status("go:github.com/oklog/ulid/v2/cmd/ulid@latest"),
+            CheckStatus::Ok
+        );
+        assert!(matches!(
+            status("go:example.com/nope/tool@latest"),
+            CheckStatus::Missing(_)
+        ));
+    }
+
+    #[test]
+    fn tap_repo_mapping_and_proxy_escaping() {
+        assert_eq!(
+            tap_github_repo("aws/tap").as_deref(),
+            Some("aws/homebrew-tap")
+        );
+        assert_eq!(
+            tap_github_repo("homebrew/cask").as_deref(),
+            Some("homebrew/homebrew-cask")
+        );
+        assert_eq!(
+            tap_github_repo("user/homebrew-foo").as_deref(),
+            Some("user/homebrew-foo")
+        );
+        assert_eq!(tap_github_repo("nope"), None);
+        assert_eq!(
+            escape_proxy_path("github.com/Azure/go-ntlmssp"),
+            "github.com/!azure/go-ntlmssp"
+        );
+        assert_eq!(
+            escape_proxy_path("github.com/oklog/ulid/v2"),
+            "github.com/oklog/ulid/v2"
+        );
     }
 
     #[test]

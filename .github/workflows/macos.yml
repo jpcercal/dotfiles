@@ -88,6 +88,11 @@ jobs:
     name: e2e real-machine install (parallel engine)
     runs-on: macos-15
     timeout-minutes: 45
+    # Checkout lands in $GITHUB_WORKSPACE, not ~/dotfiles (the `Ctx::real`
+    # default): point the binary at the repo so the manifest loads and
+    # symlink sources resolve.
+    env:
+      DOTFILES_DIR: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -125,6 +130,9 @@ jobs:
     name: verify apps.yaml references
     runs-on: macos-15
     timeout-minutes: 20
+    # Same as e2e-machine: checkout is $GITHUB_WORKSPACE, not ~/dotfiles.
+    env:
+      DOTFILES_DIR: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
