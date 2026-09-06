@@ -1,16 +1,5 @@
-# yaml-language-server: $schema=../schema/apps.schema.json
+# yaml-language-server: $schema=./schema/apps.schema.json
 ---
-# Reduced manifest for the real-machine CI E2E job (`e2e-machine`). Mirrors
-# the production structure (batches, implicit toolchain edges, bootstrap
-# steps, symlinks) at a fraction of the wall-clock cost. Selected via
-# DOTFILES_MANIFEST=e2e/apps.ci.yaml (with DOTFILES_DIR set to the repo root
-# so symlink sources resolve).
-#
-# Coverage rule: at least one package of every installable backend type, so
-# `doctor --smoke` invokes each ecosystem end to end. No MAS apps: App Store
-# sign-in is unavailable on CI runners (the mas *type* is still covered via
-# the `mas` CLI formula + `mas --help` smoke; app references are covered by
-# `dotfiles verify` instead).
 schema_version: 2
 install:
   execution:
@@ -19,33 +8,48 @@ install:
       go: 2
   toolchains:
     rustup:
-      channel: stable
+      channel: "stable"
     node:
-      ensure: lts
+      ensure: "lts"
     python:
-      provider: uv
+      provider: "uv"
   bootstrap:
   - fzf-keybindings
   - python-links
   - nvim-plug
   require:
-  - "brew-formula:jq"
-  - "brew-formula:fd"
-  - "brew-formula:fzf"
-  - "brew-formula:fnm"
-  - "brew-formula:uv"
-  - "brew-formula:go"
-  - "brew-formula:dockutil"
-  - "brew-formula:mas"
-  - "brew-formula:neovim"
-  - "brew-formula:ruby"
-  - "brew-cask:caffeine"
-  - "pip:pynvim"
-  - "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
+  - id: "brew-formula:jq"
+    label: "jq"
+  - id: "brew-formula:fd"
+    label: "fd"
+  - id: "brew-formula:fzf"
+    label: "fzf"
+  - id: "brew-formula:fnm"
+    label: "fnm"
+  - id: "brew-formula:uv"
+    label: "uv"
+  - id: "brew-formula:go"
+    label: "go"
+  - id: "brew-formula:dockutil"
+    label: "dockutil"
+  - id: "brew-formula:mas"
+    label: "mas"
+  - id: "brew-formula:neovim"
+    label: "neovim"
+  - id: "brew-formula:ruby"
+    label: "ruby"
+  - id: "brew-cask:caffeine"
+    label: "caffeine"
+  - id: "pip:pynvim"
+    label: "pynvim"
+  - id: "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
+    label: "github.com/oklog/ulid/v2/cmd/ulid"
   - id: "gem:neovim"
+    label: "neovim"
     requires:
     - "brew-formula:ruby"
-  - "npm:prettier"
+  - id: "npm:prettier"
+    label: "prettier"
 config:
   mkdir:
   - ~/.config/nvim/

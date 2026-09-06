@@ -70,12 +70,12 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
                     bare_name
                 )),
             }
-        } else if entry.label().is_some() {
-            // label only meaningful for mas
-            errors.push(format!(
-                "install.require: '{}' has 'label' but only 'mas:' entries use it",
-                raw_id
-            ));
+        }
+        // Label if present must be non-empty (allowed on any entry)
+        if let Some(l) = entry.label() {
+            if l.trim().is_empty() {
+                errors.push(format!("install.require: '{}' has empty label", raw_id));
+            }
         }
 
         // brew-tap shape
