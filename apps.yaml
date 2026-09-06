@@ -180,7 +180,6 @@ install:
   - "brew-cask:whatsapp"
   - "brew-cask:zoom"
   - "pip:pynvim"
-  - "pip:neovim"
   - "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
   - "gem:neovim"
   - "npm:neovim"
