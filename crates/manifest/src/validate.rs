@@ -124,8 +124,8 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
                 errors.push(format!("install.require: '{}' has empty version", raw_id));
             }
         }
-        // Hooks only on package entries, not taps/toolchains/bootstrap
-        if entry.has_hooks() && matches!(prefix.as_str(), "brew-tap" | "toolchain" | "bootstrap") {
+        // Hooks only on package entries, not taps/toolchains
+        if entry.has_hooks() && matches!(prefix.as_str(), "brew-tap" | "toolchain") {
             errors.push(format!(
                 "install.require: '{}' has 'hooks' but '{}' entries do not support hooks",
                 raw_id, prefix
@@ -133,8 +133,9 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
         }
     }
 
-    for step in &m.install.bootstrap {
-        if !crate::apps::KNOWN_BOOTSTRAP_STEPS.contains(&step.as_str()) {
+    for entry in &m.install.bootstrap {
+        let step = entry.id();
+        if !crate::apps::KNOWN_BOOTSTRAP_STEPS.contains(&step) {
             errors.push(format!(
                 "install.bootstrap: unknown step '{}' (known: {})",
                 step,

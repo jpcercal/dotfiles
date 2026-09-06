@@ -69,14 +69,19 @@ pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             m.install.require.len(),
             m.install.bootstrap.len()
         );
+        // Hooks use $DOTFILES_DIR to resolve repo-relative symlink sources.
+        let env = ctx
+            .env
+            .clone()
+            .with_env("DOTFILES_DIR", &ctx.dotfiles_dir.to_string_lossy());
         if args.sequential {
-            orchestrate::install_all_sequential(&ctx.env, &m)?
+            orchestrate::install_all_sequential(&env, &m)?
         } else {
             let mut opts = orchestrate::sched_opts_from_manifest(&m);
             if let Some(jobs) = args.jobs {
                 opts.max_jobs = jobs;
             }
-            orchestrate::install_all_with_opts(&ctx.env, &m, &opts)?
+            orchestrate::install_all_with_opts(&env, &m, &opts)?
         }
     } else {
         let specs: Vec<Spec> = args

@@ -35,15 +35,56 @@ pub const KNOWN_BOOTSTRAP_STEPS: &[&str] = &[
 pub struct Install {
     /// Language toolchains to ensure (rustup/node/python).
     pub toolchains: Toolchains,
-    /// Typed, idempotent setup steps.
-    #[schemars(with = "Vec<String>")]
-    pub bootstrap: Vec<String>,
+    /// Typed, idempotent setup steps (may carry post-install hooks).
+    pub bootstrap: Vec<BootstrapEntry>,
     /// Parallel execution tuning for the install phase (the DAG engine).
     pub execution: Execution,
     /// Unified package list: every installable item as `driver:name` with
     /// optional version, label, requires, lock, and lifecycle hooks.
     #[serde(default)]
     pub require: Vec<RequireEntry>,
+}
+
+/// A bootstrap entry: either a bare step name (`"opencode"`) or a detailed
+/// form with hooks (`{ id: "opencode", hooks: { post-install: "..." } }`).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum BootstrapEntry {
+    Simple(String),
+    Detailed(BootstrapDetail),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct BootstrapDetail {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<Hooks>,
+}
+
+impl BootstrapEntry {
+    pub fn id(&self) -> &str {
+        match self {
+            BootstrapEntry::Simple(s) => s.as_str(),
+            BootstrapEntry::Detailed(d) => d.id.as_str(),
+        }
+    }
+    pub fn hooks(&self) -> Option<&Hooks> {
+        match self {
+            BootstrapEntry::Simple(_) => None,
+            BootstrapEntry::Detailed(d) => d.hooks.as_ref(),
+        }
+    }
+    pub fn has_hooks(&self) -> bool {
+        self.hooks().is_some_and(|h| {
+            h.pre_install.is_some()
+                || h.post_install.is_some()
+                || h.pre_update.is_some()
+                || h.post_update.is_some()
+                || h.pre_uninstall.is_some()
+                || h.post_uninstall.is_some()
+        })
+    }
 }
 
 /// Parallel execution tuning for the install phase. `apps.yaml` is the source

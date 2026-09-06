@@ -176,8 +176,8 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
     }
 
     // Typed bootstrap steps (manifest order)
-    for step in &m.install.bootstrap {
-        results.push(bootstrap::run(step, env)?);
+    for entry in &m.install.bootstrap {
+        results.push(bootstrap::run(entry.id(), env)?);
     }
 
     Ok(results)
@@ -209,7 +209,8 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
     // Pre-install hook (only for package units that have it)
     if let Some(hooks) = &unit.hooks {
         if let Some(snippet) = &hooks.pre_install {
-            match run_hook(env, snippet) {
+            let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &unit.id);
+            match run_hook(&hook_env, snippet) {
                 Ok(true) => {}
                 Ok(false) => {
                     let mut out = BackendOutcome::empty(unit.backend);
@@ -299,7 +300,8 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
     if let Some(hooks) = &unit.hooks {
         if let Some(snippet) = &hooks.post_install {
             if !outcome.changed.is_empty() && outcome.failed.is_empty() {
-                match run_hook(env, snippet) {
+                let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &unit.id);
+                match run_hook(&hook_env, snippet) {
                     Ok(true) => {}
                     Ok(false) => {
                         outcome.fail_one(

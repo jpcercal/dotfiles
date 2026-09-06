@@ -236,8 +236,8 @@ pub fn unit_ids(m: &Manifest) -> BTreeSet<String> {
     if m.install.toolchains.python.is_some() {
         ids.insert("toolchain:python".to_string());
     }
-    for step in &m.install.bootstrap {
-        ids.insert(format!("bootstrap:{step}"));
+    for entry in &m.install.bootstrap {
+        ids.insert(format!("bootstrap:{}", entry.id()));
     }
     ids
 }

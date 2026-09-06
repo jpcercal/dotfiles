@@ -313,17 +313,18 @@ pub fn build(m: &Manifest) -> Result<Graph> {
     }
 
     // Bootstrap steps (manifest order).
-    for step in &m.install.bootstrap {
+    for entry in &m.install.bootstrap {
+        let step = entry.id();
         let id = format!("bootstrap:{step}");
         graph.units.push(Unit {
             id: id.clone(),
             kind: UnitKind::Bootstrap,
             backend: "bootstrap",
-            packages: vec![step.clone()],
+            packages: vec![step.to_string()],
             requires: requires_for_id(&id, m),
             lock: "bootstrap".to_string(),
             version: None,
-            hooks: None,
+            hooks: entry.hooks().cloned(),
         });
     }
 
