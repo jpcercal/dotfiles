@@ -34,7 +34,7 @@ impl PackageBackend for Gem {
         Ok(out)
     }
 
-    fn remove(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
+    fn uninstall(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
         let installed = self.list_installed(env)?;
         let (todo, absent) = util::filter_absent(&installed, pkgs);
         let mut out = util::run_batch(env, "gem", "uninstall", &["-x", "-a", "-I"], &todo, "gem")?;

@@ -45,7 +45,7 @@ impl PackageBackend for Cargo {
         Ok(out)
     }
 
-    fn remove(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
+    fn uninstall(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
         let installed = self.list_installed(env)?;
         let (todo, absent) = util::filter_absent(&installed, pkgs);
         let mut out = util::run_batch(env, "cargo", "uninstall", &[], &todo, "cargo")?;
@@ -174,7 +174,7 @@ mod tests {
         );
         let env = t.exec().clone();
         let out = Cargo
-            .remove(&env, &["ripgrep".into(), "gone".into()])
+            .uninstall(&env, &["ripgrep".into(), "gone".into()])
             .unwrap();
         assert_eq!(out.changed, vec!["ripgrep"]);
         assert_eq!(out.unchanged, vec!["gone"]);

@@ -1,4 +1,4 @@
-//! apt/brew-style package verbs: install / remove / search / list / info / update.
+//! apt/brew-style package verbs: install / uninstall / search / list / info / update.
 
 use crate::ctx::Ctx;
 use anyhow::Result;
@@ -21,7 +21,7 @@ pub struct InstallArgs {
 }
 
 #[derive(Parser, Debug)]
-pub struct RemoveArgs {
+pub struct UninstallArgs {
     /// Packages as `backend:name` (bare name = brew formula).
     #[arg(required = true)]
     pub specs: Vec<String>,
@@ -103,7 +103,7 @@ pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     Ok(())
 }
 
-pub fn remove(ctx: &Ctx, args: RemoveArgs) -> Result<()> {
+pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
     let mut grouped: Vec<(String, Vec<String>)> = vec![];
     for s in &args.specs {
         let spec = Spec::parse(s)?;
@@ -114,10 +114,10 @@ pub fn remove(ctx: &Ctx, args: RemoveArgs) -> Result<()> {
     }
     for (backend, pkgs) in grouped {
         let b = dotfiles_backends::by_name(&backend).expect("Spec::parse validates backend");
-        let out = b.remove(&ctx.env, &pkgs)?;
+        let out = b.uninstall(&ctx.env, &pkgs)?;
         print_outcome(&out);
         if !out.ok() {
-            anyhow::bail!("remove failed");
+            anyhow::bail!("uninstall failed");
         }
     }
     Ok(())

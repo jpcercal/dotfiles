@@ -39,7 +39,7 @@ impl PackageBackend for Composer {
         Ok(out)
     }
 
-    fn remove(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
+    fn uninstall(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
         let installed = self.list_installed(env)?;
         let (todo, absent) = util::filter_absent(&installed, pkgs);
         let mut out = util::run_batch(
@@ -138,7 +138,7 @@ mod tests {
         );
         let env = t.exec().clone();
         let out = Composer
-            .remove(&env, &["a/b".into(), "c/d".into()])
+            .uninstall(&env, &["a/b".into(), "c/d".into()])
             .unwrap();
         assert_eq!(out.changed, vec!["a/b"]);
         assert_eq!(out.unchanged, vec!["c/d"]);

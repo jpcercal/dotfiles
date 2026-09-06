@@ -43,8 +43,8 @@ struct Cli {
 enum Commands {
     /// Install packages (no args = everything in the manifest)
     Install(pkg::InstallArgs),
-    /// Remove packages
-    Remove(pkg::RemoveArgs),
+    /// Uninstall packages
+    Uninstall(pkg::UninstallArgs),
     /// Search packages across all backends
     Search(pkg::SearchArgs),
     /// List installed/outdated packages
@@ -91,7 +91,7 @@ fn main() -> anyhow::Result<()> {
     let ctx = ctx::Ctx::real(cli.dry_run);
     match cli.command {
         Commands::Install(args) => pkg::install(&ctx, args),
-        Commands::Remove(args) => pkg::remove(&ctx, args),
+        Commands::Uninstall(args) => pkg::uninstall(&ctx, args),
         Commands::Search(args) => pkg::search(&ctx, args),
         Commands::List(args) => pkg::list(&ctx, args),
         Commands::Info(args) => pkg::info(&ctx, args),

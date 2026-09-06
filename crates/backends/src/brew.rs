@@ -66,7 +66,7 @@ impl BrewKind {
         Ok(out)
     }
 
-    fn remove(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
+    fn uninstall(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
         let installed = self.list_installed(env)?;
         let (todo, absent) = util::filter_absent(&installed, pkgs);
         let mut out = util::run_batch(env, "brew", "uninstall", self.flags, &todo, self.backend)?;
@@ -105,8 +105,8 @@ macro_rules! brew_backend {
             fn install(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
                 $kind.install(env, pkgs)
             }
-            fn remove(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
-                $kind.remove(env, pkgs)
+            fn uninstall(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
+                $kind.uninstall(env, pkgs)
             }
             fn upgrade(&self, env: &ExecEnv) -> Result<BackendOutcome> {
                 $kind.upgrade(env)
@@ -208,7 +208,9 @@ mod tests {
         let t = TestEnv::new();
         t.stub("brew", &brew_listing("git\n", ""));
         let env = t.exec().clone();
-        let out = Brew.remove(&env, &["git".into(), "node".into()]).unwrap();
+        let out = Brew
+            .uninstall(&env, &["git".into(), "node".into()])
+            .unwrap();
         assert_eq!(out.changed, vec!["git"]);
         assert_eq!(out.unchanged, vec!["node"]);
         assert!(t

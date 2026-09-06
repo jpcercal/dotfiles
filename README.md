@@ -22,7 +22,7 @@ dotfiles info brew:ripgrep         # package info (brew:/cask:/mas:/gem:/npm:/pi
 dotfiles list --installed          # per backend; or --outdated
 dotfiles install                   # everything declared in apps.yaml (parallel DAG engine; --jobs N/--sequential)
 dotfiles install cask:iterm2 mas:1352778147
-dotfiles remove brew:git
+dotfiles uninstall brew:git
 dotfiles update                    # refresh indexes (brew update, …)
 dotfiles upgrade                   # upgrade all backends (has --gate/--headless/--dry-run/GUI)
 ```

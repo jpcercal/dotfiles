@@ -23,7 +23,7 @@ use dotfiles_exec::ExecEnv;
 /// One package ecosystem (apt/brew/mas/composer/cargo/npm/maven-style backend).
 ///
 /// Contract: all mutating operations MUST be idempotent — `install` of an
-/// already-installed package is a no-op recorded in `unchanged`, `remove` of an
+/// already-installed package is a no-op recorded in `unchanged`, `uninstall` of an
 /// absent package likewise. This makes `dotfiles sync` safely re-runnable.
 pub trait PackageBackend: Send + Sync {
     /// Backend key used in specs (`brew`, `cask`, `mas`, ...).
@@ -37,7 +37,7 @@ pub trait PackageBackend: Send + Sync {
     }
 
     fn install(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome>;
-    fn remove(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome>;
+    fn uninstall(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome>;
     fn upgrade(&self, env: &ExecEnv) -> Result<BackendOutcome>;
     fn list_installed(&self, env: &ExecEnv) -> Result<Vec<String>>;
     fn outdated(&self, env: &ExecEnv) -> Result<Vec<String>>;
@@ -82,7 +82,7 @@ pub(crate) mod util {
     use anyhow::Result;
     use dotfiles_exec::ExecEnv;
 
-    /// Generic idempotent line-based install/remove for tools whose
+    /// Generic idempotent line-based install/uninstall for tools whose
     /// "installed" output is one package name per line.
     pub fn filter_new(installed: &[String], wanted: &[String]) -> (Vec<String>, Vec<String>) {
         let installed: std::collections::BTreeSet<&String> = installed.iter().collect();

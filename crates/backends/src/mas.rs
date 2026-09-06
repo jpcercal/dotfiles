@@ -42,12 +42,12 @@ impl PackageBackend for Mas {
         Ok(out)
     }
 
-    fn remove(&self, _env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
+    fn uninstall(&self, _env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
         let mut out = BackendOutcome::empty("mas");
         for p in pkgs {
             out.fail_one(
                 p.clone(),
-                "mas cannot uninstall App Store apps — remove them manually",
+                "mas cannot uninstall App Store apps — uninstall them manually",
             );
         }
         Ok(out)
@@ -158,7 +158,7 @@ mod tests {
         let t = dotfiles_testkit::TestEnv::new();
         t.stub_ok("mas", "");
         let env = t.exec().clone();
-        let out = Mas.remove(&env, &["1".into()]).unwrap();
+        let out = Mas.uninstall(&env, &["1".into()]).unwrap();
         assert!(!out.ok());
         assert!(t.calls_of("mas").is_empty());
     }

@@ -58,7 +58,7 @@ impl PackageBackend for Go {
         Ok(out)
     }
 
-    fn remove(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
+    fn uninstall(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
         let mut out = BackendOutcome::empty("go");
         let bin_dir = Self::bin_dir(env);
         for p in pkgs {
@@ -143,7 +143,7 @@ mod tests {
         std::fs::write(&bin, b"").unwrap();
         let env = t.exec().clone();
         let out = Go
-            .remove(
+            .uninstall(
                 &env,
                 &[
                     "example.com/x/tool@latest".into(),

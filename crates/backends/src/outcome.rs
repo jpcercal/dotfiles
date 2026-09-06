@@ -13,7 +13,7 @@ impl fmt::Display for FailedPkg {
     }
 }
 
-/// Uniform result of a backend operation (install/remove/upgrade/...).
+/// Uniform result of a backend operation (install/uninstall/upgrade/...).
 ///
 /// - `changed`:   packages that were actually modified
 /// - `unchanged`: packages already in the desired state (idempotency no-ops)

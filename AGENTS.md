@@ -121,7 +121,7 @@ and cycles. `install.execution` tunes the engine (`max_jobs`, per lock-class
 
 - `dotfiles sync [--only <job>] [--skip <jobs>] [--sandbox] [--jobs <N>] [--sequential]` — full pipeline:
   bootstrap → install → apply → prefs → history
-- `dotfiles install [pkg...] [--jobs <N>] [--sequential]`, `remove`, `search`, `info`, `list`, `update`,
+- `dotfiles install [pkg...] [--jobs <N>] [--sequential]`, `uninstall`, `search`, `info`, `list`, `update`,
   `upgrade` (apt-like package ops; `--gate/--headless/--dry-run` on upgrade)
 - `dotfiles bootstrap|apply|history|software-update|doctor`
 - `dotfiles verify [--local-only]` — parallel read-only reference check: every
