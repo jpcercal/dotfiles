@@ -181,8 +181,6 @@ install:
   - "brew-cask:zoom"
   - "pip:pynvim"
   - "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
-  - "gem:neovim"
-  - "npm:neovim"
   - "npm:prettier"
   - id: "mas:1018301773"
     label: "AdBlock Pro"
