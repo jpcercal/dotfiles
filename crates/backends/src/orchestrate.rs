@@ -715,34 +715,175 @@ install:
     }
 
     #[test]
-    fn post_hook_fires_when_package_already_installed() {
-        // Config hooks must converge on re-runs: even when the package is
-        // already installed (outcome.unchanged, nothing changed), the
-        // post-install hook still runs so filesystem config is re-applied.
-        let t = TestEnv::new();
-        t.stub(
-            "brew",
-            "case \"$*\" in \"list -1 --formula\") echo git ;; esac\nexit 0",
-        );
-        t.stub("sh", "exit 0");
-        let manifest = parse_manifest(
-            r#"
-install:
-  require:
-    - id: "brew-formula:git"
-      hooks:
-        post-install: "echo post"
-"#,
-        )
-        .unwrap();
-        let results = install_all(t.exec(), &manifest).unwrap();
-        assert!(results.iter().all(|r| r.ok()));
-        let sh_calls = t.calls_of("sh");
+    fn every_manifest_hook_executes_when_changed_and_when_present() {
+        // Every hook declared in the real manifests must actually execute:
+        // on a fresh install (package changed) AND on a re-run where the
+        // package is already installed (outcome.unchanged — the convergence
+        // case that broke the e2e-machine CI job).
+        use dotfiles_manifest::{BootstrapEntry, Install, Manifest, RequireEntry};
+
+        /// One hook snippet declared in a real manifest, with its entry for
+        /// building a minimal single-entry install manifest.
+        struct HookCase {
+            file: &'static str,
+            require: Option<RequireEntry>,
+            bootstrap: Option<BootstrapEntry>,
+            id: String,
+            snippet: String,
+        }
+
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut cases: Vec<HookCase> = vec![];
+        let mut non_install_hooks: Vec<String> = vec![];
+        for file in ["apps.yaml", "e2e/apps.ci.yaml"] {
+            let text = std::fs::read_to_string(root.join(file)).unwrap();
+            let m = parse_manifest(&text).unwrap();
+            for e in &m.install.require {
+                if let Some(h) = e.hooks() {
+                    for (kind, snippet) in [
+                        ("pre-install", &h.pre_install),
+                        ("post-install", &h.post_install),
+                    ] {
+                        if let Some(s) = snippet {
+                            cases.push(HookCase {
+                                file,
+                                require: Some(e.clone()),
+                                bootstrap: None,
+                                id: e.id().into(),
+                                snippet: s.clone(),
+                            });
+                            let _ = kind;
+                        }
+                    }
+                    for (kind, opt) in [
+                        ("pre-update", &h.pre_update),
+                        ("post-update", &h.post_update),
+                        ("pre-uninstall", &h.pre_uninstall),
+                        ("post-uninstall", &h.post_uninstall),
+                    ] {
+                        if opt.is_some() {
+                            non_install_hooks.push(format!("{file} {} {kind}", e.id()));
+                        }
+                    }
+                }
+            }
+            for b in &m.install.bootstrap {
+                if let Some(h) = b.hooks() {
+                    for (kind, snippet) in [
+                        ("pre-install", &h.pre_install),
+                        ("post-install", &h.post_install),
+                    ] {
+                        if let Some(s) = snippet {
+                            cases.push(HookCase {
+                                file,
+                                require: None,
+                                bootstrap: Some(b.clone()),
+                                id: format!("bootstrap:{}", b.id()),
+                                snippet: s.clone(),
+                            });
+                            let _ = kind;
+                        }
+                    }
+                    for (kind, opt) in [
+                        ("pre-update", &h.pre_update),
+                        ("post-update", &h.post_update),
+                        ("pre-uninstall", &h.pre_uninstall),
+                        ("post-uninstall", &h.post_uninstall),
+                    ] {
+                        if opt.is_some() {
+                            non_install_hooks.push(format!("{file} bootstrap:{} {kind}", b.id()));
+                        }
+                    }
+                }
+            }
+        }
+        // The install engine only executes install-phase hooks; any other
+        // hook kind in the manifests would silently never run.
         assert!(
-            sh_calls.iter().any(|c| c.contains("echo post")),
-            "{:?}",
-            sh_calls
+            non_install_hooks.is_empty(),
+            "hooks the install engine never executes: {:?}",
+            non_install_hooks
         );
+        assert!(!cases.is_empty(), "no hooks found in manifests");
+
+        for case in &cases {
+            for present in [false, true] {
+                let t = TestEnv::new();
+                t.stub("sh", "exit 0");
+                t.stub("sudo", "exit 0"); // preflight_sudo; TestEnv PATH sees real /usr/bin/sudo
+                if case.bootstrap.is_some() {
+                    if present {
+                        t.stub_ok("opencode", "1.0");
+                    } else {
+                        t.stub("curl", "exit 0");
+                    }
+                } else if let Some((prefix, name)) =
+                    dotfiles_manifest::units::split_unit_id(&case.id)
+                        .map(|(p, n)| (p.to_string(), n))
+                {
+                    match prefix.as_str() {
+                        "brew-formula" | "brew-cask" => {
+                            let flag = if prefix == "brew-formula" {
+                                "--formula"
+                            } else {
+                                "--cask"
+                            };
+                            let list = if present {
+                                format!("echo '{name}'")
+                            } else {
+                                "printf ''".to_string()
+                            };
+                            t.stub(
+                                "brew",
+                                &format!(
+                                    "case \"$*\" in \"list -1 {flag}\") {list} ;; esac\nexit 0"
+                                ),
+                            );
+                        }
+                        "mas" => {
+                            let list = if present {
+                                format!("echo '{name} Label (1.0)'")
+                            } else {
+                                "printf ''".to_string()
+                            };
+                            t.stub(
+                                "mas",
+                                &format!("case \"$*\" in \"list\") {list} ;; esac\nexit 0"),
+                            );
+                        }
+                        other => panic!("hook test: no stubs for backend '{other}' ({})", case.id),
+                    }
+                }
+                let m = Manifest {
+                    schema_version: 2,
+                    install: Install {
+                        require: case.require.clone().into_iter().collect(),
+                        bootstrap: case.bootstrap.clone().into_iter().collect(),
+                        ..Default::default()
+                    },
+                };
+                let results = install_all(t.exec(), &m).unwrap();
+                assert!(
+                    results.iter().all(|r| r.ok()),
+                    "{} {} (present={present}): install failed: {:?}",
+                    case.file,
+                    case.id,
+                    results
+                        .iter()
+                        .flat_map(|r| r.failed.clone())
+                        .collect::<Vec<_>>()
+                );
+                // Raw log: multi-line snippets span lines, so match the file,
+                // not the line-split helper.
+                let log = std::fs::read_to_string(t.root().join("calls.log")).unwrap();
+                assert!(
+                    log.contains(case.snippet.as_str()),
+                    "{} {} (present={present}): hook never executed.\nlog:\n{log}",
+                    case.file,
+                    case.id
+                );
+            }
+        }
     }
 
     #[test]

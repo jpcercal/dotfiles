@@ -43,6 +43,39 @@ fn sync_sandbox_completes_all_jobs() {
         "jobs out of order: {}",
         stdout
     );
+    // Every post-install hook in apps.yaml must have executed (recorded as
+    // `sh -c <snippet>` in the sandbox calls log) — full-manifest wiring
+    // proof through the real binary: no hook silently dropped by the graph.
+    let root = stdout
+        .lines()
+        .find_map(|l| l.strip_prefix("sandbox root: "))
+        .expect("sandbox root in output");
+    let log =
+        std::fs::read_to_string(std::path::Path::new(root).join("calls.log")).expect("calls.log");
+    let apps = std::fs::read_to_string(repo_root().join("apps.yaml")).expect("read apps.yaml");
+    let manifest = dotfiles_manifest::parse_manifest(&apps).expect("parse apps.yaml");
+    let mut hooks = vec![];
+    for e in &manifest.install.require {
+        if let Some(h) = e.hooks() {
+            if let Some(s) = &h.post_install {
+                hooks.push((e.id().to_string(), s.clone()));
+            }
+        }
+    }
+    for b in &manifest.install.bootstrap {
+        if let Some(h) = b.hooks() {
+            if let Some(s) = &h.post_install {
+                hooks.push((format!("bootstrap:{}", b.id()), s.clone()));
+            }
+        }
+    }
+    assert!(!hooks.is_empty(), "no hooks found in apps.yaml");
+    for (id, snippet) in &hooks {
+        assert!(
+            log.contains(snippet.as_str()),
+            "hook for {id} never executed in sandbox sync"
+        );
+    }
 }
 
 #[test]

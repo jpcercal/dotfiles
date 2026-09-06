@@ -140,8 +140,10 @@ pub struct RequireDetail {
 }
 
 /// Lifecycle hook snippets run via `sh -c` through the exec seam.
-/// Each field is a shell snippet (may be multi-line). Hooks fire only when
-/// their associated action actually occurs (idempotency-preserving).
+/// Each field is a shell snippet (may be multi-line). `post-install` fires
+/// whenever the unit ends up present (newly installed or already installed,
+/// no failures) so config converges; pre hooks fire ahead of their action.
+/// Snippets must be idempotency-preserving.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Hooks {
