@@ -29,23 +29,23 @@ install:
   - python-links
   - nvim-plug
   require:
-  - brew-formula:jq
-  - brew-formula:fd
-  - brew-formula:fzf
-  - brew-formula:fnm
-  - brew-formula:uv
-  - brew-formula:go
-  - brew-formula:dockutil
-  - brew-formula:mas
-  - brew-formula:neovim
-  - brew-formula:ruby
-  - brew-cask:caffeine
-  - pip:pynvim
-  - go:github.com/oklog/ulid/v2/cmd/ulid@latest
-  - id: gem:neovim
+  - "brew-formula:jq"
+  - "brew-formula:fd"
+  - "brew-formula:fzf"
+  - "brew-formula:fnm"
+  - "brew-formula:uv"
+  - "brew-formula:go"
+  - "brew-formula:dockutil"
+  - "brew-formula:mas"
+  - "brew-formula:neovim"
+  - "brew-formula:ruby"
+  - "brew-cask:caffeine"
+  - "pip:pynvim"
+  - "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
+  - id: "gem:neovim"
     requires:
-    - brew-formula:ruby
-  - npm:prettier
+    - "brew-formula:ruby"
+  - "npm:prettier"
 config:
   mkdir:
   - ~/.config/nvim/

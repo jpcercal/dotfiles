@@ -24,216 +24,216 @@ install:
   - rtk-patch
   - claude-mem
   require:
-  - brew-tap:anomalyco/tap
-  - brew-tap:aws/tap
-  - brew-tap:hashicorp/tap
-  - brew-formula:act
-  - brew-formula:aircrack-ng
-  - brew-formula:asciinema
-  - brew-formula:atuin
-  - brew-formula:automake
-  - brew-formula:awscli
-  - brew-formula:bash-completion
-  - brew-formula:bash
-  - brew-formula:bat
-  - brew-formula:composer
-  - brew-formula:coreutils
-  - brew-formula:dockutil
-  - brew-formula:doctl
-  - brew-formula:eza
-  - brew-formula:fd
-  - brew-formula:fdupes
-  - brew-formula:ffmpeg
-  - brew-formula:findutils
-  - brew-formula:fnm
-  - brew-formula:fswatch
-  - brew-formula:fzf
-  - brew-formula:gdrive
-  - brew-formula:gh
-  - brew-formula:git-delta
-  - brew-formula:git-lfs
-  - brew-formula:git
-  - brew-formula:gmp
-  - brew-formula:gnu-sed
-  - brew-formula:golangci-lint
-  - brew-formula:httpie
-  - brew-formula:exiftool
-  - brew-formula:go
-  - brew-formula:nmap
-  - brew-formula:terraform
-  - brew-formula:howdoi
-  - brew-formula:hr
-  - brew-formula:htmlq
-  - brew-formula:htop
-  - brew-formula:imagemagick
-  - brew-formula:jq
-  - brew-formula:kubectx
-  - brew-formula:links
-  - brew-formula:lynx
-  - brew-formula:mas
-  - brew-formula:moreutils
-  - brew-formula:neovim
-  - brew-formula:openssh
-  - brew-formula:php
-  - id: brew-formula:php-code-sniffer
+  - "brew-tap:anomalyco/tap"
+  - "brew-tap:aws/tap"
+  - "brew-tap:hashicorp/tap"
+  - "brew-formula:act"
+  - "brew-formula:aircrack-ng"
+  - "brew-formula:asciinema"
+  - "brew-formula:atuin"
+  - "brew-formula:automake"
+  - "brew-formula:awscli"
+  - "brew-formula:bash-completion"
+  - "brew-formula:bash"
+  - "brew-formula:bat"
+  - "brew-formula:composer"
+  - "brew-formula:coreutils"
+  - "brew-formula:dockutil"
+  - "brew-formula:doctl"
+  - "brew-formula:eza"
+  - "brew-formula:fd"
+  - "brew-formula:fdupes"
+  - "brew-formula:ffmpeg"
+  - "brew-formula:findutils"
+  - "brew-formula:fnm"
+  - "brew-formula:fswatch"
+  - "brew-formula:fzf"
+  - "brew-formula:gdrive"
+  - "brew-formula:gh"
+  - "brew-formula:git-delta"
+  - "brew-formula:git-lfs"
+  - "brew-formula:git"
+  - "brew-formula:gmp"
+  - "brew-formula:gnu-sed"
+  - "brew-formula:golangci-lint"
+  - "brew-formula:httpie"
+  - "brew-formula:exiftool"
+  - "brew-formula:go"
+  - "brew-formula:nmap"
+  - "brew-formula:terraform"
+  - "brew-formula:howdoi"
+  - "brew-formula:hr"
+  - "brew-formula:htmlq"
+  - "brew-formula:htop"
+  - "brew-formula:imagemagick"
+  - "brew-formula:jq"
+  - "brew-formula:kubectx"
+  - "brew-formula:links"
+  - "brew-formula:lynx"
+  - "brew-formula:mas"
+  - "brew-formula:moreutils"
+  - "brew-formula:neovim"
+  - "brew-formula:openssh"
+  - "brew-formula:php"
+  - id: "brew-formula:php-code-sniffer"
     requires:
-    - brew-formula:php
-  - id: brew-formula:php-cs-fixer
+    - "brew-formula:php"
+  - id: "brew-formula:php-cs-fixer"
     requires:
-    - brew-formula:php
-  - id: brew-formula:phpstan
+    - "brew-formula:php"
+  - id: "brew-formula:phpstan"
     requires:
-    - brew-formula:php
-  - brew-formula:rclone
-  - brew-formula:ripgrep
-  - brew-formula:rsync
-  - brew-formula:rtk
-  - brew-formula:screen
-  - brew-formula:sops
-  - brew-formula:starship
-  - brew-formula:taskwarrior-tui
-  - brew-formula:terminal-notifier
-  - brew-formula:tealdeer
-  - brew-formula:tmux
-  - brew-formula:tpm
-  - brew-formula:tree
-  - brew-formula:trivy
-  - brew-formula:unison
-  - brew-formula:universal-ctags
-  - brew-formula:uv
-  - brew-formula:vim
-  - brew-formula:watch
-  - brew-formula:watchexec
-  - brew-formula:watchman
-  - brew-formula:wget
-  - brew-formula:yarn
-  - brew-formula:you-get
-  - brew-formula:yq
-  - brew-formula:zsh-autosuggestions
-  - brew-formula:zsh-completions
-  - brew-formula:zsh-syntax-highlighting
-  - brew-formula:zsh
-  - brew-cask:alfred
-  - brew-cask:appcleaner
-  - brew-cask:brave-browser
-  - brew-cask:caffeine
-  - brew-cask:discord
-  - brew-cask:displaylink
-  - brew-cask:docker-desktop
-  - brew-cask:firefox
-  - brew-cask:font-3270-nerd-font
-  - brew-cask:font-agave-nerd-font
-  - brew-cask:font-anonymice-nerd-font
-  - brew-cask:font-arimo-nerd-font
-  - brew-cask:font-aurulent-sans-mono-nerd-font
-  - brew-cask:font-bigblue-terminal-nerd-font
-  - brew-cask:font-bitstream-vera-sans-mono-nerd-font
-  - brew-cask:font-blex-mono-nerd-font
-  - brew-cask:font-caskaydia-cove-nerd-font
-  - brew-cask:font-code-new-roman-nerd-font
-  - brew-cask:font-cousine-nerd-font
-  - brew-cask:font-daddy-time-mono-nerd-font
-  - brew-cask:font-dejavu-sans-mono-nerd-font
-  - brew-cask:font-droid-sans-mono-nerd-font
-  - brew-cask:font-fantasque-sans-mono-nerd-font
-  - brew-cask:font-fira-code-nerd-font
-  - brew-cask:font-fira-mono-nerd-font
-  - brew-cask:font-go-mono-nerd-font
-  - brew-cask:font-gohufont-nerd-font
-  - brew-cask:font-hack-nerd-font
-  - brew-cask:font-hasklug-nerd-font
-  - brew-cask:font-heavy-data-nerd-font
-  - brew-cask:font-hurmit-nerd-font
-  - brew-cask:font-im-writing-nerd-font
-  - brew-cask:font-inconsolata-go-nerd-font
-  - brew-cask:font-inconsolata-lgc-nerd-font
-  - brew-cask:font-inconsolata-nerd-font
-  - brew-cask:font-iosevka-nerd-font
-  - brew-cask:font-jetbrains-mono-nerd-font
-  - brew-cask:font-lekton-nerd-font
-  - brew-cask:font-liberation-nerd-font
-  - brew-cask:font-meslo-lg-nerd-font
-  - brew-cask:font-monofur-nerd-font
-  - brew-cask:font-monoid-nerd-font
-  - brew-cask:font-mononoki-nerd-font
-  - brew-cask:font-noto-nerd-font
-  - brew-cask:font-opendyslexic-nerd-font
-  - brew-cask:font-overpass-nerd-font
-  - brew-cask:font-profont-nerd-font
-  - brew-cask:font-proggy-clean-tt-nerd-font
-  - brew-cask:font-roboto-mono-nerd-font
-  - brew-cask:font-sauce-code-pro-nerd-font
-  - brew-cask:font-shure-tech-mono-nerd-font
-  - brew-cask:font-space-mono-nerd-font
-  - brew-cask:font-terminess-ttf-nerd-font
-  - brew-cask:font-tinos-nerd-font
-  - brew-cask:font-ubuntu-mono-nerd-font
-  - brew-cask:font-ubuntu-nerd-font
-  - brew-cask:font-victor-mono-nerd-font
-  - brew-cask:google-chrome
-  - brew-cask:hoppscotch
-  - brew-cask:iterm2
-  - brew-cask:jetbrains-toolbox
-  - brew-cask:microsoft-teams
-  - brew-cask:mysqlworkbench
-  - brew-cask:nordvpn
-  - brew-cask:oracle-jdk
-  - brew-cask:pocket-casts
-  - brew-cask:shottr
-  - brew-cask:slack
-  - brew-cask:steam
-  - brew-cask:sublime-text
-  - brew-cask:teamviewer
-  - brew-cask:visual-studio-code
-  - brew-cask:vlc
-  - brew-cask:whatsapp
-  - brew-cask:zoom
-  - pip:pynvim
-  - pip:neovim
-  - go:github.com/oklog/ulid/v2/cmd/ulid@latest
-  - gem:neovim
-  - npm:neovim
-  - npm:prettier
-  - id: mas:1018301773
-    label: AdBlock Pro
-  - id: mas:918858936
-    label: Airmail
-  - id: mas:1352778147
-    label: Bitwarden
-  - id: mas:935235287
-    label: Encrypto
-  - id: mas:975937182
-    label: Fantastical 2
-  - id: mas:682658836
-    label: GarageBand
-  - id: mas:668208984
-    label: Giphy Capture
-  - id: mas:775737590
-    label: iA Writer
-  - id: mas:408981434
-    label: iMovie
-  - id: mas:361285480
-    label: Keynote
-  - id: mas:302584613
-    label: Kindle
-  - id: mas:441258766
-    label: Magnet
-  - id: mas:1575588022
-    label: MenubarX
-  - id: mas:1295203466
-    label: Microsoft Remote Desktop
-  - id: mas:361304891
-    label: Numbers
-  - id: mas:361309726
-    label: Pages
-  - id: mas:1153157709
-    label: Speedtest
-  - id: mas:1278508951
-    label: Trello
-  - id: mas:1607635845
-    label: Velja
-  - id: mas:533696630
-    label: Webcam Settings
+    - "brew-formula:php"
+  - "brew-formula:rclone"
+  - "brew-formula:ripgrep"
+  - "brew-formula:rsync"
+  - "brew-formula:rtk"
+  - "brew-formula:screen"
+  - "brew-formula:sops"
+  - "brew-formula:starship"
+  - "brew-formula:taskwarrior-tui"
+  - "brew-formula:terminal-notifier"
+  - "brew-formula:tealdeer"
+  - "brew-formula:tmux"
+  - "brew-formula:tpm"
+  - "brew-formula:tree"
+  - "brew-formula:trivy"
+  - "brew-formula:unison"
+  - "brew-formula:universal-ctags"
+  - "brew-formula:uv"
+  - "brew-formula:vim"
+  - "brew-formula:watch"
+  - "brew-formula:watchexec"
+  - "brew-formula:watchman"
+  - "brew-formula:wget"
+  - "brew-formula:yarn"
+  - "brew-formula:you-get"
+  - "brew-formula:yq"
+  - "brew-formula:zsh-autosuggestions"
+  - "brew-formula:zsh-completions"
+  - "brew-formula:zsh-syntax-highlighting"
+  - "brew-formula:zsh"
+  - "brew-cask:alfred"
+  - "brew-cask:appcleaner"
+  - "brew-cask:brave-browser"
+  - "brew-cask:caffeine"
+  - "brew-cask:discord"
+  - "brew-cask:displaylink"
+  - "brew-cask:docker-desktop"
+  - "brew-cask:firefox"
+  - "brew-cask:font-3270-nerd-font"
+  - "brew-cask:font-agave-nerd-font"
+  - "brew-cask:font-anonymice-nerd-font"
+  - "brew-cask:font-arimo-nerd-font"
+  - "brew-cask:font-aurulent-sans-mono-nerd-font"
+  - "brew-cask:font-bigblue-terminal-nerd-font"
+  - "brew-cask:font-bitstream-vera-sans-mono-nerd-font"
+  - "brew-cask:font-blex-mono-nerd-font"
+  - "brew-cask:font-caskaydia-cove-nerd-font"
+  - "brew-cask:font-code-new-roman-nerd-font"
+  - "brew-cask:font-cousine-nerd-font"
+  - "brew-cask:font-daddy-time-mono-nerd-font"
+  - "brew-cask:font-dejavu-sans-mono-nerd-font"
+  - "brew-cask:font-droid-sans-mono-nerd-font"
+  - "brew-cask:font-fantasque-sans-mono-nerd-font"
+  - "brew-cask:font-fira-code-nerd-font"
+  - "brew-cask:font-fira-mono-nerd-font"
+  - "brew-cask:font-go-mono-nerd-font"
+  - "brew-cask:font-gohufont-nerd-font"
+  - "brew-cask:font-hack-nerd-font"
+  - "brew-cask:font-hasklug-nerd-font"
+  - "brew-cask:font-heavy-data-nerd-font"
+  - "brew-cask:font-hurmit-nerd-font"
+  - "brew-cask:font-im-writing-nerd-font"
+  - "brew-cask:font-inconsolata-go-nerd-font"
+  - "brew-cask:font-inconsolata-lgc-nerd-font"
+  - "brew-cask:font-inconsolata-nerd-font"
+  - "brew-cask:font-iosevka-nerd-font"
+  - "brew-cask:font-jetbrains-mono-nerd-font"
+  - "brew-cask:font-lekton-nerd-font"
+  - "brew-cask:font-liberation-nerd-font"
+  - "brew-cask:font-meslo-lg-nerd-font"
+  - "brew-cask:font-monofur-nerd-font"
+  - "brew-cask:font-monoid-nerd-font"
+  - "brew-cask:font-mononoki-nerd-font"
+  - "brew-cask:font-noto-nerd-font"
+  - "brew-cask:font-opendyslexic-nerd-font"
+  - "brew-cask:font-overpass-nerd-font"
+  - "brew-cask:font-profont-nerd-font"
+  - "brew-cask:font-proggy-clean-tt-nerd-font"
+  - "brew-cask:font-roboto-mono-nerd-font"
+  - "brew-cask:font-sauce-code-pro-nerd-font"
+  - "brew-cask:font-shure-tech-mono-nerd-font"
+  - "brew-cask:font-space-mono-nerd-font"
+  - "brew-cask:font-terminess-ttf-nerd-font"
+  - "brew-cask:font-tinos-nerd-font"
+  - "brew-cask:font-ubuntu-mono-nerd-font"
+  - "brew-cask:font-ubuntu-nerd-font"
+  - "brew-cask:font-victor-mono-nerd-font"
+  - "brew-cask:google-chrome"
+  - "brew-cask:hoppscotch"
+  - "brew-cask:iterm2"
+  - "brew-cask:jetbrains-toolbox"
+  - "brew-cask:microsoft-teams"
+  - "brew-cask:mysqlworkbench"
+  - "brew-cask:nordvpn"
+  - "brew-cask:oracle-jdk"
+  - "brew-cask:pocket-casts"
+  - "brew-cask:shottr"
+  - "brew-cask:slack"
+  - "brew-cask:steam"
+  - "brew-cask:sublime-text"
+  - "brew-cask:teamviewer"
+  - "brew-cask:visual-studio-code"
+  - "brew-cask:vlc"
+  - "brew-cask:whatsapp"
+  - "brew-cask:zoom"
+  - "pip:pynvim"
+  - "pip:neovim"
+  - "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
+  - "gem:neovim"
+  - "npm:neovim"
+  - "npm:prettier"
+  - id: "mas:1018301773"
+    label: "AdBlock Pro"
+  - id: "mas:918858936"
+    label: "Airmail"
+  - id: "mas:1352778147"
+    label: "Bitwarden"
+  - id: "mas:935235287"
+    label: "Encrypto"
+  - id: "mas:975937182"
+    label: "Fantastical 2"
+  - id: "mas:682658836"
+    label: "GarageBand"
+  - id: "mas:668208984"
+    label: "Giphy Capture"
+  - id: "mas:775737590"
+    label: "iA Writer"
+  - id: "mas:408981434"
+    label: "iMovie"
+  - id: "mas:361285480"
+    label: "Keynote"
+  - id: "mas:302584613"
+    label: "Kindle"
+  - id: "mas:441258766"
+    label: "Magnet"
+  - id: "mas:1575588022"
+    label: "MenubarX"
+  - id: "mas:1295203466"
+    label: "Microsoft Remote Desktop"
+  - id: "mas:361304891"
+    label: "Numbers"
+  - id: "mas:361309726"
+    label: "Pages"
+  - id: "mas:1153157709"
+    label: "Speedtest"
+  - id: "mas:1278508951"
+    label: "Trello"
+  - id: "mas:1607635845"
+    label: "Velja"
+  - id: "mas:533696630"
+    label: "Webcam Settings"
 config:
   mkdir:
   - ~/.config/
