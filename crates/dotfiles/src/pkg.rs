@@ -65,10 +65,8 @@ pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     let results = if args.specs.is_empty() {
         let m = ctx.manifest()?;
         println!(
-            "installing manifest ({} formulas, {} casks, {} mas, {} bootstrap steps)",
-            m.install.brew.formulas.len(),
-            m.install.brew.casks.len(),
-            m.install.mas.apps.len(),
+            "installing manifest ({} packages, {} bootstrap steps)",
+            m.install.require.len(),
             m.install.bootstrap.len()
         );
         if args.sequential {
@@ -260,7 +258,7 @@ mod tests {
             "brew",
             "case \"$1\" in list) echo '' ;; install) echo boom 1>&2; exit 1 ;; esac; exit 0",
         );
-        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    formulas: [git]\n");
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"brew-formula:git\"\n");
         let err = install_all(&ctx).unwrap_err();
         assert!(err.to_string().contains("install failed"), "{err}");
         assert!(err.to_string().contains("git"), "{err}");
@@ -274,7 +272,7 @@ mod tests {
         // (mid-bootstrap machines), only real failures fail the command.
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  brew:\n    formulas: [git]\n  gem:\n    rubygems: [neovim]\n",
+            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"gem:neovim\"\n",
         );
         install_all(&ctx).unwrap();
     }

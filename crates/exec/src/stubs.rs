@@ -42,6 +42,7 @@ const STANDARD_STUBS: &[(&str, &str)] = &[
     ("systemsetup", "exit 0"),
     ("touch", "exit 0"),
     ("open", "exit 0"),
+    ("sh", "exit 0"),
 ];
 
 /// Write the standard stubs into `bin_dir`, recording every call to `log_file`.

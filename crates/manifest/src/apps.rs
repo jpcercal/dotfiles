@@ -14,7 +14,7 @@ pub struct Manifest {
 }
 
 fn default_schema_version() -> u32 {
-    1
+    2
 }
 
 /// Canonical names of typed bootstrap steps (implementations live in
@@ -33,19 +33,17 @@ pub const KNOWN_BOOTSTRAP_STEPS: &[&str] = &[
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Install {
-    pub brew: Brew,
-    pub gem: Gem,
-    pub npm: Npm,
-    pub pip: Pip,
-    pub go: GoPackages,
-    pub mas: Mas,
     /// Language toolchains to ensure (rustup/node/python).
     pub toolchains: Toolchains,
-    /// Typed, idempotent setup steps (replacements for customCommands).
+    /// Typed, idempotent setup steps.
     #[schemars(with = "Vec<String>")]
     pub bootstrap: Vec<String>,
     /// Parallel execution tuning for the install phase (the DAG engine).
     pub execution: Execution,
+    /// Unified package list: every installable item as `driver:name` with
+    /// optional version, label, requires, lock, and lifecycle hooks.
+    #[serde(default)]
+    pub require: Vec<RequireEntry>,
 }
 
 /// Parallel execution tuning for the install phase. `apps.yaml` is the source
@@ -65,22 +63,25 @@ pub struct Execution {
     pub locks: std::collections::BTreeMap<String, usize>,
 }
 
-/// A package list entry: either a bare name (`- "git"`) or a detailed form
-/// (`- { name: "phpstan", requires: ["brew-formula:php"] }`) that declares
-/// dependency-graph edges for the parallel execution engine. The detailed
-/// form splits the package out of its backend's batched install into its own
-/// schedulable unit.
+/// A single entry in `install.require`: either a bare unit ID string
+/// (`"brew-formula:git"`) or a detailed map with version / hooks / edges.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
-pub enum PkgEntry {
+#[allow(clippy::large_enum_variant)]
+pub enum RequireEntry {
     Simple(String),
-    Detailed(PkgDetail),
+    Detailed(RequireDetail),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct PkgDetail {
-    pub name: String,
+pub struct RequireDetail {
+    /// Canonical unit ID, e.g. `brew-formula:git`, `mas:1352778147`,
+    /// `npm:prettier@3` (version suffix is sugar for the `version` field).
+    pub id: String,
+    /// Human label, required for `mas:` entries (App Store display name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     /// Unit IDs that must complete first, e.g. `["brew-formula:php"]`.
     /// See `crate::units` for the canonical `<prefix>:<name>` namespace.
     #[serde(default)]
@@ -89,48 +90,130 @@ pub struct PkgDetail {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(regex(pattern = "^[a-z][a-z0-9-]*$"))]
     pub lock: Option<String>,
+    /// Explicit version pin (e.g. `"3"` for npm, `"1.9.0"` for gem).
+    /// For `npm:`/`pip:`/`go:` the same pin can be written as `id: "npm:prettier@3"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// Lifecycle hook snippets executed via `sh -c` through the exec seam.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hooks: Option<Hooks>,
 }
 
-impl PkgEntry {
-    pub fn name(&self) -> &str {
+/// Lifecycle hook snippets run via `sh -c` through the exec seam.
+/// Each field is a shell snippet (may be multi-line). Hooks fire only when
+/// their associated action actually occurs (idempotency-preserving).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Hooks {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "pre-install", alias = "pre_install")]
+    pub pre_install: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "post-install", alias = "post_install")]
+    pub post_install: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "pre-update", alias = "pre_update")]
+    pub pre_update: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "post-update", alias = "post_update")]
+    pub post_update: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "pre-uninstall", alias = "pre_uninstall")]
+    pub pre_uninstall: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "post-uninstall", alias = "post_uninstall")]
+    pub post_uninstall: Option<String>,
+}
+
+impl RequireEntry {
+    pub fn id(&self) -> &str {
         match self {
-            PkgEntry::Simple(n) => n,
-            PkgEntry::Detailed(d) => &d.name,
+            RequireEntry::Simple(s) => s.as_str(),
+            RequireEntry::Detailed(d) => d.id.as_str(),
+        }
+    }
+
+    pub fn label(&self) -> Option<&str> {
+        match self {
+            RequireEntry::Simple(_) => None,
+            RequireEntry::Detailed(d) => d.label.as_deref(),
         }
     }
 
     pub fn requires(&self) -> &[String] {
         match self {
-            PkgEntry::Simple(_) => &[],
-            PkgEntry::Detailed(d) => &d.requires,
+            RequireEntry::Simple(_) => &[],
+            RequireEntry::Detailed(d) => &d.requires,
         }
     }
 
     pub fn lock(&self) -> Option<&str> {
         match self {
-            PkgEntry::Simple(_) => None,
-            PkgEntry::Detailed(d) => d.lock.as_deref(),
+            RequireEntry::Simple(_) => None,
+            RequireEntry::Detailed(d) => d.lock.as_deref(),
+        }
+    }
+
+    pub fn version(&self) -> Option<&str> {
+        match self {
+            RequireEntry::Simple(_) => None,
+            RequireEntry::Detailed(d) => d.version.as_deref(),
+        }
+    }
+
+    pub fn hooks(&self) -> Option<&Hooks> {
+        match self {
+            RequireEntry::Simple(_) => None,
+            RequireEntry::Detailed(d) => d.hooks.as_ref(),
         }
     }
 
     pub fn is_detailed(&self) -> bool {
-        matches!(self, PkgEntry::Detailed(_))
+        matches!(self, RequireEntry::Detailed(_))
+    }
+
+    /// Effective version considering both `version` field and `@version` suffix
+    /// in the id (for pin-capable drivers). Returns `None` if no pin.
+    pub fn effective_version(&self) -> Option<String> {
+        if let Some(v) = self.version() {
+            if !v.trim().is_empty() {
+                return Some(v.to_string());
+            }
+        }
+        // Sugar: `id: "npm:prettier@3"` or `"go:module@latest"`
+        let id = self.id();
+        crate::units::extract_version_from_id(id)
+    }
+
+    /// Whether this entry carries any lifecycle hooks.
+    pub fn has_hooks(&self) -> bool {
+        self.hooks().is_some_and(|h| {
+            h.pre_install.is_some()
+                || h.post_install.is_some()
+                || h.pre_update.is_some()
+                || h.post_update.is_some()
+                || h.pre_uninstall.is_some()
+                || h.post_uninstall.is_some()
+        })
+    }
+
+    /// Whether this entry is version-pinned (explicit field or @ suffix).
+    pub fn is_pinned(&self) -> bool {
+        self.effective_version().is_some()
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct Pip {
-    /// Packages installed into the uv-managed python.
-    pub packages: Vec<PkgEntry>,
-}
+// ---------------------------------------------------------------------------
+// Backwards-compat aliases: old per-backend module structs are no longer used
+// in `Install`, but we keep these type aliases so external `use` statements
+// that imported `PkgEntry`/`PkgDetail` don't break during the migration. They
+// map to the unified types.
+// ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct GoPackages {
-    /// Module paths with version suffix, e.g. `github.com/oklog/ulid/v2/cmd/ulid@latest`.
-    pub packages: Vec<PkgEntry>,
-}
+/// Deprecated alias — use `RequireEntry`.
+pub type PkgEntry = RequireEntry;
+/// Deprecated alias — use `RequireDetail`.
+pub type PkgDetail = RequireDetail;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
@@ -173,56 +256,6 @@ pub struct PythonToolchain {
 
 fn default_python_provider() -> String {
     "uv".to_string()
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct Brew {
-    /// Third-party taps in `owner/repo` form. Trusted automatically unless `homebrew/*`.
-    #[schemars(length(min = 0))]
-    pub taps: Vec<String>,
-    pub formulas: Vec<PkgEntry>,
-    pub casks: Vec<PkgEntry>,
-    /// DEPRECATED: transitional escape hatch for shell one-liners. Entries are
-    /// migrated to typed backend/toolchain entries over time.
-    #[serde(rename = "customCommands")]
-    pub custom_commands: Vec<String>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct Gem {
-    pub rubygems: Vec<PkgEntry>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct Npm {
-    pub global: NpmGlobal,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct NpmGlobal {
-    pub packages: Vec<PkgEntry>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct Mas {
-    pub apps: Vec<MasApp>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct MasApp {
-    /// Numeric App Store product id (as string, mas takes strings).
-    pub id: String,
-    pub name: String,
-    /// Unit IDs that must complete first, e.g. `["brew-formula:git"]`.
-    /// See `crate::units` for the canonical `<prefix>:<name>` namespace.
-    #[serde(default)]
-    pub requires: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]

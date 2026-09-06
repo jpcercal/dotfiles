@@ -79,26 +79,43 @@ fn collect(ctx: &Ctx) -> Vec<SmokeCheck> {
     };
     let env = &ctx.env;
     let mut checks = vec![];
-    for f in &m.install.brew.formulas {
-        checks.push(smoke_formula(env, f.name()));
-    }
-    for c in &m.install.brew.casks {
-        checks.push(smoke_cask(env, c.name()));
-    }
-    for a in &m.install.mas.apps {
-        checks.push(smoke_mas(env, &a.id));
-    }
-    for g in &m.install.gem.rubygems {
-        checks.push(smoke_gem(env, g.name()));
-    }
-    for p in &m.install.npm.global.packages {
-        checks.push(smoke_npm(env, p.name()));
-    }
-    for p in &m.install.pip.packages {
-        checks.push(smoke_pip(env, p.name()));
-    }
-    for p in &m.install.go.packages {
-        checks.push(smoke_go(env, p.name()));
+    for e in &m.install.require {
+        let (prefix, bare) = match dotfiles_manifest::units::split_unit_id(e.id()) {
+            Some((p, n)) => (p, n),
+            None => continue,
+        };
+        match prefix.as_str() {
+            "brew-formula" => checks.push(smoke_formula(env, &bare)),
+            "brew-cask" => checks.push(smoke_cask(env, &bare)),
+            "mas" => checks.push(smoke_mas(env, &bare)),
+            "gem" => checks.push(smoke_gem(env, &bare)),
+            "npm" => checks.push(smoke_npm(env, &bare)),
+            "pip" => checks.push(smoke_pip(env, &bare)),
+            "go" => {
+                // reconstruct spec with version for go smoke
+                let spec = if let Some(v) = e.effective_version() {
+                    format!("{bare}@{v}")
+                } else {
+                    // bare already stripped @latest, reconstruct with @latest for smoke id consistency
+                    format!("{bare}@latest")
+                };
+                // smoke_go expects full spec
+                checks.push(smoke_go(env, &spec));
+            }
+            "cargo" => checks.push(smoke_tool(
+                env,
+                &format!("cargo:{bare}"),
+                "cargo",
+                &["--help"],
+            )),
+            "composer" => checks.push(smoke_tool(
+                env,
+                &format!("composer:{bare}"),
+                "composer",
+                &["--help"],
+            )),
+            _ => {}
+        }
     }
     if m.install.toolchains.rustup.is_some() {
         checks.push(smoke_tool(env, "toolchain:rustup", "rustc", &["--help"]));
@@ -429,7 +446,7 @@ mod tests {
         let t = TestEnv::new();
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  brew:\n    formulas: [jq]\n    casks: [caffeine]\n  gem:\n    rubygems: [neovim]\n  npm:\n    global:\n      packages: [prettier]\n  pip:\n    packages: [pynvim]\n  go:\n    packages: [\"example.com/x/tool@latest\"]\n  mas:\n    apps:\n      - { id: \"1\", name: A }\n  toolchains:\n    rustup: {}\n    node: {}\n    python: {}\n",
+            "install:\n  require:\n    - \"brew-formula:jq\"\n    - \"brew-cask:caffeine\"\n    - \"gem:neovim\"\n    - \"npm:prettier\"\n    - \"pip:pynvim\"\n    - \"go:example.com/x/tool@latest\"\n    - id: \"mas:1\"\n      label: \"A\"\n  toolchains:\n    rustup: {}\n    node: {}\n    python: {}\n",
         );
         let checks = collect(&ctx);
         assert!(!checks.is_empty());
@@ -451,7 +468,7 @@ mod tests {
                 t.root().join("pfx").display()
             ),
         );
-        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    formulas: [jq]\n");
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"brew-formula:jq\"\n");
         let checks = collect(&ctx);
         assert!(is_ok(&checks, "brew-formula:jq"));
         assert_eq!(
@@ -474,7 +491,7 @@ mod tests {
                 t.root().join("pfx").display()
             ),
         );
-        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    formulas: [go]\n");
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"brew-formula:go\"\n");
         let checks = collect(&ctx);
         assert!(is_ok(&checks, "brew-formula:go"));
         // Fallback binary still probed with go's `version` flags.
@@ -490,7 +507,7 @@ mod tests {
         t.stub("brew", "if [ \"$1\" = --prefix ]; then exit 1; fi; exit 1");
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  brew:\n    formulas: [ghost]\n    casks: [ghost-cask]\n",
+            "install:\n  require:\n    - \"brew-formula:ghost\"\n    - \"brew-cask:ghost-cask\"\n",
         );
         let checks = collect(&ctx);
         assert!(matches!(
@@ -520,7 +537,7 @@ mod tests {
                 app.display()
             ),
         );
-        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    casks: [caffeine]\n");
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"brew-cask:caffeine\"\n");
         let checks = collect(&ctx);
         assert!(is_ok(&checks, "brew-cask:caffeine"));
     }
@@ -533,7 +550,10 @@ mod tests {
             "ruby",
             "case \"$*\" in *neovim*) exit 0 ;; *) echo 'first-line-error' 1>&2; echo 'traceback-tail' 1>&2; exit 1 ;; esac",
         );
-        let ctx = ctx_with_manifest(&t, "install:\n  gem:\n    rubygems: [neovim, ghost]\n");
+        let ctx = ctx_with_manifest(
+            &t,
+            "install:\n  require:\n    - \"gem:neovim\"\n    - \"gem:ghost\"\n",
+        );
         let checks = collect(&ctx);
         assert!(is_ok(&checks, "gem:neovim"));
         // Ruby backtraces: the failure detail is the first stderr line.
@@ -559,10 +579,7 @@ mod tests {
                 t.root().join("nprefix").display()
             ),
         );
-        let ctx = ctx_with_manifest(
-            &t,
-            "install:\n  npm:\n    global:\n      packages: [prettier]\n",
-        );
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"npm:prettier\"\n");
         let checks = collect(&ctx);
         assert!(is_ok(&checks, "npm:prettier"));
         assert_eq!(std::fs::read_to_string(&log).unwrap().trim(), "--help");
@@ -573,7 +590,7 @@ mod tests {
         let t = TestEnv::new();
         let py = fake_bin(&t, "upy/bin/python3", "/dev/null", 0);
         t.stub("uv", &format!("echo '{}'; exit 0", py.display()));
-        let ctx = ctx_with_manifest(&t, "install:\n  pip:\n    packages: [pynvim]\n");
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"pip:pynvim\"\n");
         let checks = collect(&ctx);
         assert!(is_ok(&checks, "pip:pynvim"));
         let calls = t.calls_of("uv");
@@ -594,7 +611,7 @@ mod tests {
         );
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  go:\n    packages: [\"github.com/oklog/ulid/v2/cmd/ulid@latest\"]\n",
+            "install:\n  require:\n    - \"go:github.com/oklog/ulid/v2/cmd/ulid@latest\"\n",
         );
         let checks = collect(&ctx);
         assert!(is_ok(
@@ -631,7 +648,7 @@ mod tests {
     fn report_bails_on_failure() {
         let t = TestEnv::new();
         t.stub("brew", "exit 1");
-        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    formulas: [ghost]\n");
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"brew-formula:ghost\"\n");
         let checks = collect(&ctx);
         assert!(print_report(&checks).is_err());
         let ok_checks = vec![SmokeCheck::ok("brew-formula:jq")];

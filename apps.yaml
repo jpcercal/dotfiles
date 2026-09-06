@@ -1,391 +1,346 @@
 # yaml-language-server: $schema=./schema/apps.schema.json
 ---
-schema_version: 1
+schema_version: 2
 install:
-  # Parallel execution tuning for the dependency-graph engine: worker count
-  # (0 = number of CPUs) + per lock-class concurrency. `brew` is capped at 1
-  # (concurrent `brew` invocations are unsupported by Homebrew); every other
-  # ecosystem installs in parallel with it.
   execution:
     max_jobs: 0
     locks:
       brew: 1
       mas: 4
       go: 4
-  brew:
-    taps:
-      - "anomalyco/tap"
-      - "aws/tap"
-      - "hashicorp/tap"
-    formulas:
-      - "act"
-      - "aircrack-ng"
-      - "asciinema"
-      - "atuin"
-      - "automake"
-      - "awscli"
-      - "bash-completion"
-      - "bash"
-      - "bat"
-      - "composer"
-      - "coreutils"
-      - "dockutil"
-      - "doctl"
-      - "eza"
-      - "fd"
-      - "fdupes"
-      - "ffmpeg"
-      - "findutils"
-      - "fnm"
-      - "fswatch"
-      - "fzf"
-      - "gdrive"
-      - "gh"
-      - "git-delta"
-      - "git-lfs"
-      - "git"
-      - "gmp"
-      - "gnu-sed"
-      - "golangci-lint"
-      - "httpie"
-      - "exiftool"
-      - "go"
-      - "nmap"
-      - "terraform"
-      - "howdoi"
-      - "hr"
-      - "htmlq"
-      - "htop"
-      - "imagemagick"
-      - "jq"
-      - "kubectx"
-      - "links"
-      - "lynx"
-      - "mas"
-      - "moreutils"
-      - "neovim"
-      - "openssh"
-      - "php"
-      # Detailed entries declare dependency-graph edges: these tools run on
-      # the Homebrew php, so they install only after `brew-formula:php`.
-      - name: "php-code-sniffer"
-        requires: ["brew-formula:php"]
-      - name: "php-cs-fixer"
-        requires: ["brew-formula:php"]
-      - name: "phpstan"
-        requires: ["brew-formula:php"]
-      - "rclone"
-      - "ripgrep"
-      - "rsync"
-      - "rtk"
-      - "screen"
-      - "sops"
-      - "starship"
-      - "taskwarrior-tui"
-      - "terminal-notifier"
-      - "tealdeer"
-      - "tmux"
-      - "tpm"
-      - "tree"
-      - "trivy"
-      - "unison"
-      - "universal-ctags"
-      - "uv"
-      - "vim"
-      - "watch"
-      - "watchexec"
-      - "watchman"
-      - "wget"
-      - "yarn"
-      - "you-get"
-      - "yq"
-      - "zsh-autosuggestions"
-      - "zsh-completions"
-      - "zsh-syntax-highlighting"
-      - "zsh"
-    casks: 
-      - "alfred"
-      - "appcleaner"
-      - "brave-browser"
-      - "caffeine"
-      - "discord"
-      - "displaylink"
-      - "docker-desktop"
-      - "firefox"
-      - "font-3270-nerd-font"
-      - "font-agave-nerd-font"
-      - "font-anonymice-nerd-font"
-      - "font-arimo-nerd-font"
-      - "font-aurulent-sans-mono-nerd-font"
-      - "font-bigblue-terminal-nerd-font"
-      - "font-bitstream-vera-sans-mono-nerd-font"
-      - "font-blex-mono-nerd-font"
-      - "font-caskaydia-cove-nerd-font"
-      - "font-code-new-roman-nerd-font"
-      - "font-cousine-nerd-font"
-      - "font-daddy-time-mono-nerd-font"
-      - "font-dejavu-sans-mono-nerd-font"
-      - "font-droid-sans-mono-nerd-font"
-      - "font-fantasque-sans-mono-nerd-font"
-      - "font-fira-code-nerd-font"
-      - "font-fira-mono-nerd-font"
-      - "font-go-mono-nerd-font"
-      - "font-gohufont-nerd-font"
-      - "font-hack-nerd-font"
-      - "font-hasklug-nerd-font"
-      - "font-heavy-data-nerd-font"
-      - "font-hurmit-nerd-font"
-      - "font-im-writing-nerd-font"
-      - "font-inconsolata-go-nerd-font"
-      - "font-inconsolata-lgc-nerd-font"
-      - "font-inconsolata-nerd-font"
-      - "font-iosevka-nerd-font"
-      - "font-jetbrains-mono-nerd-font"
-      - "font-lekton-nerd-font"
-      - "font-liberation-nerd-font"
-      - "font-meslo-lg-nerd-font"
-      - "font-monofur-nerd-font"
-      - "font-monoid-nerd-font"
-      - "font-mononoki-nerd-font"
-      - "font-noto-nerd-font"
-      - "font-opendyslexic-nerd-font"
-      - "font-overpass-nerd-font"
-      - "font-profont-nerd-font"
-      - "font-proggy-clean-tt-nerd-font"
-      - "font-roboto-mono-nerd-font"
-      - "font-sauce-code-pro-nerd-font"
-      - "font-shure-tech-mono-nerd-font"
-      - "font-space-mono-nerd-font"
-      - "font-terminess-ttf-nerd-font"
-      - "font-tinos-nerd-font"
-      - "font-ubuntu-mono-nerd-font"
-      - "font-ubuntu-nerd-font"
-      - "font-victor-mono-nerd-font"
-      - "google-chrome"
-      - "hoppscotch"
-      - "iterm2"
-      - "jetbrains-toolbox"
-      - "microsoft-teams"
-      - "mysqlworkbench"
-      - "nordvpn"
-      - "oracle-jdk"
-      - "pocket-casts"
-      - "shottr"
-      - "slack"
-      - "steam"
-      - "sublime-text"
-      - "teamviewer"
-      - "visual-studio-code"
-      - "vlc"
-      - "whatsapp"
-      - "zoom"
-  pip:
-    packages:
-      - "pynvim"
-      - "neovim"
-  go:
-    packages:
-      - "github.com/oklog/ulid/v2/cmd/ulid@latest"
   toolchains:
     rustup:
-      channel: "stable"
+      channel: stable
     node:
-      ensure: "lts"
+      ensure: lts
     python:
-      provider: "uv"
+      provider: uv
   bootstrap:
-    - "fzf-keybindings"
-    - "git-lfs"
-    - "python-links"
-    - "nvim-plug"
-    - "opencode"
-    - "rtk-patch"
-    - "claude-mem"
-  gem:
-    rubygems:
-      - "neovim"
-  npm:
-    global:
-      packages:
-        - "neovim"
-        - "prettier"
-  mas:
-    apps:    
-      - id: "1018301773"
-        name: "AdBlock Pro" 
-      - id: "918858936" 
-        name: "Airmail" 
-      - id: "1352778147"
-        name: "Bitwarden" 
-      - id: "935235287" 
-        name: "Encrypto" 
-      - id: "975937182" 
-        name: "Fantastical 2" 
-      - id: "682658836" 
-        name: "GarageBand" 
-      - id: "668208984" 
-        name: "Giphy Capture" 
-      - id: "775737590" 
-        name: "iA Writer" 
-      - id: "408981434" 
-        name: "iMovie" 
-      - id: "361285480" 
-        name: "Keynote" 
-      - id: "302584613"
-        name: "Kindle"
-      - id: "441258766" 
-        name: "Magnet" 
-      - id: "1575588022"
-        name: "MenubarX" 
-      - id: "1295203466"
-        name: "Microsoft Remote Desktop" 
-      - id: "361304891" 
-        name: "Numbers" 
-      - id: "361309726" 
-        name: "Pages" 
-      - id: "1153157709"
-        name: "Speedtest" 
-      - id: "1278508951"
-        name: "Trello" 
-      - id: "1607635845"
-        name: "Velja"
-      - id: "533696630" 
-        name: "Webcam Settings" 
+  - fzf-keybindings
+  - git-lfs
+  - python-links
+  - nvim-plug
+  - opencode
+  - rtk-patch
+  - claude-mem
+  require:
+  - brew-tap:anomalyco/tap
+  - brew-tap:aws/tap
+  - brew-tap:hashicorp/tap
+  - brew-formula:act
+  - brew-formula:aircrack-ng
+  - brew-formula:asciinema
+  - brew-formula:atuin
+  - brew-formula:automake
+  - brew-formula:awscli
+  - brew-formula:bash-completion
+  - brew-formula:bash
+  - brew-formula:bat
+  - brew-formula:composer
+  - brew-formula:coreutils
+  - brew-formula:dockutil
+  - brew-formula:doctl
+  - brew-formula:eza
+  - brew-formula:fd
+  - brew-formula:fdupes
+  - brew-formula:ffmpeg
+  - brew-formula:findutils
+  - brew-formula:fnm
+  - brew-formula:fswatch
+  - brew-formula:fzf
+  - brew-formula:gdrive
+  - brew-formula:gh
+  - brew-formula:git-delta
+  - brew-formula:git-lfs
+  - brew-formula:git
+  - brew-formula:gmp
+  - brew-formula:gnu-sed
+  - brew-formula:golangci-lint
+  - brew-formula:httpie
+  - brew-formula:exiftool
+  - brew-formula:go
+  - brew-formula:nmap
+  - brew-formula:terraform
+  - brew-formula:howdoi
+  - brew-formula:hr
+  - brew-formula:htmlq
+  - brew-formula:htop
+  - brew-formula:imagemagick
+  - brew-formula:jq
+  - brew-formula:kubectx
+  - brew-formula:links
+  - brew-formula:lynx
+  - brew-formula:mas
+  - brew-formula:moreutils
+  - brew-formula:neovim
+  - brew-formula:openssh
+  - brew-formula:php
+  - id: brew-formula:php-code-sniffer
+    requires:
+    - brew-formula:php
+  - id: brew-formula:php-cs-fixer
+    requires:
+    - brew-formula:php
+  - id: brew-formula:phpstan
+    requires:
+    - brew-formula:php
+  - brew-formula:rclone
+  - brew-formula:ripgrep
+  - brew-formula:rsync
+  - brew-formula:rtk
+  - brew-formula:screen
+  - brew-formula:sops
+  - brew-formula:starship
+  - brew-formula:taskwarrior-tui
+  - brew-formula:terminal-notifier
+  - brew-formula:tealdeer
+  - brew-formula:tmux
+  - brew-formula:tpm
+  - brew-formula:tree
+  - brew-formula:trivy
+  - brew-formula:unison
+  - brew-formula:universal-ctags
+  - brew-formula:uv
+  - brew-formula:vim
+  - brew-formula:watch
+  - brew-formula:watchexec
+  - brew-formula:watchman
+  - brew-formula:wget
+  - brew-formula:yarn
+  - brew-formula:you-get
+  - brew-formula:yq
+  - brew-formula:zsh-autosuggestions
+  - brew-formula:zsh-completions
+  - brew-formula:zsh-syntax-highlighting
+  - brew-formula:zsh
+  - brew-cask:alfred
+  - brew-cask:appcleaner
+  - brew-cask:brave-browser
+  - brew-cask:caffeine
+  - brew-cask:discord
+  - brew-cask:displaylink
+  - brew-cask:docker-desktop
+  - brew-cask:firefox
+  - brew-cask:font-3270-nerd-font
+  - brew-cask:font-agave-nerd-font
+  - brew-cask:font-anonymice-nerd-font
+  - brew-cask:font-arimo-nerd-font
+  - brew-cask:font-aurulent-sans-mono-nerd-font
+  - brew-cask:font-bigblue-terminal-nerd-font
+  - brew-cask:font-bitstream-vera-sans-mono-nerd-font
+  - brew-cask:font-blex-mono-nerd-font
+  - brew-cask:font-caskaydia-cove-nerd-font
+  - brew-cask:font-code-new-roman-nerd-font
+  - brew-cask:font-cousine-nerd-font
+  - brew-cask:font-daddy-time-mono-nerd-font
+  - brew-cask:font-dejavu-sans-mono-nerd-font
+  - brew-cask:font-droid-sans-mono-nerd-font
+  - brew-cask:font-fantasque-sans-mono-nerd-font
+  - brew-cask:font-fira-code-nerd-font
+  - brew-cask:font-fira-mono-nerd-font
+  - brew-cask:font-go-mono-nerd-font
+  - brew-cask:font-gohufont-nerd-font
+  - brew-cask:font-hack-nerd-font
+  - brew-cask:font-hasklug-nerd-font
+  - brew-cask:font-heavy-data-nerd-font
+  - brew-cask:font-hurmit-nerd-font
+  - brew-cask:font-im-writing-nerd-font
+  - brew-cask:font-inconsolata-go-nerd-font
+  - brew-cask:font-inconsolata-lgc-nerd-font
+  - brew-cask:font-inconsolata-nerd-font
+  - brew-cask:font-iosevka-nerd-font
+  - brew-cask:font-jetbrains-mono-nerd-font
+  - brew-cask:font-lekton-nerd-font
+  - brew-cask:font-liberation-nerd-font
+  - brew-cask:font-meslo-lg-nerd-font
+  - brew-cask:font-monofur-nerd-font
+  - brew-cask:font-monoid-nerd-font
+  - brew-cask:font-mononoki-nerd-font
+  - brew-cask:font-noto-nerd-font
+  - brew-cask:font-opendyslexic-nerd-font
+  - brew-cask:font-overpass-nerd-font
+  - brew-cask:font-profont-nerd-font
+  - brew-cask:font-proggy-clean-tt-nerd-font
+  - brew-cask:font-roboto-mono-nerd-font
+  - brew-cask:font-sauce-code-pro-nerd-font
+  - brew-cask:font-shure-tech-mono-nerd-font
+  - brew-cask:font-space-mono-nerd-font
+  - brew-cask:font-terminess-ttf-nerd-font
+  - brew-cask:font-tinos-nerd-font
+  - brew-cask:font-ubuntu-mono-nerd-font
+  - brew-cask:font-ubuntu-nerd-font
+  - brew-cask:font-victor-mono-nerd-font
+  - brew-cask:google-chrome
+  - brew-cask:hoppscotch
+  - brew-cask:iterm2
+  - brew-cask:jetbrains-toolbox
+  - brew-cask:microsoft-teams
+  - brew-cask:mysqlworkbench
+  - brew-cask:nordvpn
+  - brew-cask:oracle-jdk
+  - brew-cask:pocket-casts
+  - brew-cask:shottr
+  - brew-cask:slack
+  - brew-cask:steam
+  - brew-cask:sublime-text
+  - brew-cask:teamviewer
+  - brew-cask:visual-studio-code
+  - brew-cask:vlc
+  - brew-cask:whatsapp
+  - brew-cask:zoom
+  - pip:pynvim
+  - pip:neovim
+  - go:github.com/oklog/ulid/v2/cmd/ulid@latest
+  - gem:neovim
+  - npm:neovim
+  - npm:prettier
+  - id: mas:1018301773
+    label: AdBlock Pro
+  - id: mas:918858936
+    label: Airmail
+  - id: mas:1352778147
+    label: Bitwarden
+  - id: mas:935235287
+    label: Encrypto
+  - id: mas:975937182
+    label: Fantastical 2
+  - id: mas:682658836
+    label: GarageBand
+  - id: mas:668208984
+    label: Giphy Capture
+  - id: mas:775737590
+    label: iA Writer
+  - id: mas:408981434
+    label: iMovie
+  - id: mas:361285480
+    label: Keynote
+  - id: mas:302584613
+    label: Kindle
+  - id: mas:441258766
+    label: Magnet
+  - id: mas:1575588022
+    label: MenubarX
+  - id: mas:1295203466
+    label: Microsoft Remote Desktop
+  - id: mas:361304891
+    label: Numbers
+  - id: mas:361309726
+    label: Pages
+  - id: mas:1153157709
+    label: Speedtest
+  - id: mas:1278508951
+    label: Trello
+  - id: mas:1607635845
+    label: Velja
+  - id: mas:533696630
+    label: Webcam Settings
 config:
-  mkdir: 
-    - ~/.config/
-    - ~/.config/nvim/
-    - ~/.config/tmux/
-    - ~/.config/opencode/
-    - ~/.config/opencode/skills/
-    - ~/Library/Application Support/rtk/
-  symbolic_links:  
-    - from: 
-        relative_path: ".curlrc"
-      to: 
-        absolute_path: "~/.curlrc"
-
-    - from: 
-        relative_path: ".editorconfig"
-      to: 
-        absolute_path: "~/.editorconfig"
-
-    - from: 
-        relative_path: ".gitconfig"
-      to: 
-        absolute_path: "~/.gitconfig"
-
-    - from: 
-        relative_path: ".gitignore_global"
-      to: 
-        absolute_path: "~/.gitignore_global"
-
-    - from: 
-        relative_path: ".netrc"
-      to: 
-        absolute_path: "~/.netrc"
-
-    - from: 
-        relative_path: ".vimrc"
-      to: 
-        absolute_path: "~/.config/nvim/init.vim"
-
-    - from: 
-        relative_path: ".vimrc"
-      to: 
-        absolute_path: "~/.vimrc"
-
-    - from: 
-        relative_path: ".zshrc"
-      to: 
-        absolute_path: "~/.zshrc"
-
-    - from: 
-        relative_path: ".zprofile"
-      to: 
-        absolute_path: "~/.zprofile"
-
-    - from: 
-        relative_path: ".zshenv"
-      to: 
-        absolute_path: "~/.zshenv"
-
-    - from: 
-        relative_path: "opencode/AGENTS.md"
-      to: 
-        absolute_path: "~/.config/opencode/AGENTS.md"
-
-    - from: 
-        relative_path: "opencode/opencode.json"
-      to: 
-        absolute_path: "~/.config/opencode/opencode.json"
-
-    - from: 
-        relative_path: "opencode/opencode.jsonc"
-      to: 
-        absolute_path: "~/.config/opencode/opencode.jsonc"
-
-    - from: 
-        relative_path: "opencode/skills/builder"
-      to: 
-        absolute_path: "~/.config/opencode/skills/builder"
-
-    - from: 
-        relative_path: "rtk/config.toml"
-      to: 
-        absolute_path: "~/Library/Application Support/rtk/config.toml"
-
-    - from: 
-        relative_path: "rtk/filters.toml"
-      to: 
-        absolute_path: "~/Library/Application Support/rtk/filters.toml"
-
-    - from: 
-        relative_path: "starship.toml"
-      to: 
-        absolute_path: "~/.config/starship.toml"
-
-    - from: 
-        relative_path: "tmux.conf"
-      to: 
-        absolute_path: "~/.config/tmux/tmux.conf"
+  mkdir:
+  - ~/.config/
+  - ~/.config/nvim/
+  - ~/.config/tmux/
+  - ~/.config/opencode/
+  - ~/.config/opencode/skills/
+  - ~/Library/Application Support/rtk/
+  symbolic_links:
+  - from:
+      relative_path: .curlrc
+    to:
+      absolute_path: ~/.curlrc
+  - from:
+      relative_path: .editorconfig
+    to:
+      absolute_path: ~/.editorconfig
+  - from:
+      relative_path: .gitconfig
+    to:
+      absolute_path: ~/.gitconfig
+  - from:
+      relative_path: .gitignore_global
+    to:
+      absolute_path: ~/.gitignore_global
+  - from:
+      relative_path: .netrc
+    to:
+      absolute_path: ~/.netrc
+  - from:
+      relative_path: .vimrc
+    to:
+      absolute_path: ~/.config/nvim/init.vim
+  - from:
+      relative_path: .vimrc
+    to:
+      absolute_path: ~/.vimrc
+  - from:
+      relative_path: .zshrc
+    to:
+      absolute_path: ~/.zshrc
+  - from:
+      relative_path: .zprofile
+    to:
+      absolute_path: ~/.zprofile
+  - from:
+      relative_path: .zshenv
+    to:
+      absolute_path: ~/.zshenv
+  - from:
+      relative_path: opencode/AGENTS.md
+    to:
+      absolute_path: ~/.config/opencode/AGENTS.md
+  - from:
+      relative_path: opencode/opencode.json
+    to:
+      absolute_path: ~/.config/opencode/opencode.json
+  - from:
+      relative_path: opencode/opencode.jsonc
+    to:
+      absolute_path: ~/.config/opencode/opencode.jsonc
+  - from:
+      relative_path: opencode/skills/builder
+    to:
+      absolute_path: ~/.config/opencode/skills/builder
+  - from:
+      relative_path: rtk/config.toml
+    to:
+      absolute_path: ~/Library/Application Support/rtk/config.toml
+  - from:
+      relative_path: rtk/filters.toml
+    to:
+      absolute_path: ~/Library/Application Support/rtk/filters.toml
+  - from:
+      relative_path: starship.toml
+    to:
+      absolute_path: ~/.config/starship.toml
+  - from:
+      relative_path: tmux.conf
+    to:
+      absolute_path: ~/.config/tmux/tmux.conf
   dockutil:
     _before:
       reset: true
       removeAll: true
     add:
-      - app: "/System/Applications/Launchpad.app"   
-        after: "Finder"
-
-      - app: "/Applications/Brave Browser.app"      
-        after: "Finder"
-
-      - app: "/Applications/Airmail.app"      
-        after: "Finder"
-
-      - app: "/System/Applications/Reminders.app"   
-        after: "Finder"
-
-      - app: "/System/Applications/Music.app"       
-        after: "Finder"
-
-      - app: "/Applications/iTerm.app"              
-        after: "Finder"
-
-      - app: "/Applications/Visual Studio Code.app" 
-        after: "Finder"
-
-      - app: "/Applications/iA Writer.app"          
-        after: "Finder"
-
-      - app: "/Applications/Trello.app"             
-        after: "Finder"
-
-      - app: "/Applications/Fantastical.app"        
-        after: "Finder"
-
-      - app: "/Applications/Slack.app"              
-        after: "Finder"
-
-      - app: "/Applications/WhatsApp.app"           
-        after: "Finder"
+    - app: /System/Applications/Launchpad.app
+      after: Finder
+    - app: /Applications/Brave Browser.app
+      after: Finder
+    - app: /Applications/Airmail.app
+      after: Finder
+    - app: /System/Applications/Reminders.app
+      after: Finder
+    - app: /System/Applications/Music.app
+      after: Finder
+    - app: /Applications/iTerm.app
+      after: Finder
+    - app: /Applications/Visual Studio Code.app
+      after: Finder
+    - app: /Applications/iA Writer.app
+      after: Finder
+    - app: /Applications/Trello.app
+      after: Finder
+    - app: /Applications/Fantastical.app
+      after: Finder
+    - app: /Applications/Slack.app
+      after: Finder
+    - app: /Applications/WhatsApp.app
+      after: Finder

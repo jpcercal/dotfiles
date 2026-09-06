@@ -25,33 +25,11 @@
     "install": {
       "default": {
         "bootstrap": [],
-        "brew": {
-          "casks": [],
-          "customCommands": [],
-          "formulas": [],
-          "taps": []
-        },
         "execution": {
           "locks": {},
           "max_jobs": 0
         },
-        "gem": {
-          "rubygems": []
-        },
-        "go": {
-          "packages": []
-        },
-        "mas": {
-          "apps": []
-        },
-        "npm": {
-          "global": {
-            "packages": []
-          }
-        },
-        "pip": {
-          "packages": []
-        },
+        "require": [],
         "toolchains": {
           "node": null,
           "python": null,
@@ -66,7 +44,7 @@
     },
     "schema_version": {
       "description": "Manifest format version; bump + migrate on breaking changes.",
-      "default": 1,
+      "default": 2,
       "type": "integer",
       "format": "uint32",
       "minimum": 1.0
@@ -74,43 +52,6 @@
   },
   "additionalProperties": false,
   "definitions": {
-    "Brew": {
-      "type": "object",
-      "properties": {
-        "casks": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        },
-        "customCommands": {
-          "description": "DEPRECATED: transitional escape hatch for shell one-liners. Entries are migrated to typed backend/toolchain entries over time.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "formulas": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        },
-        "taps": {
-          "description": "Third-party taps in `owner/repo` form. Trusted automatically unless `homebrew/*`.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "minItems": 0
-        }
-      },
-      "additionalProperties": false
-    },
     "Config": {
       "type": "object",
       "properties": {
@@ -231,29 +172,45 @@
       },
       "additionalProperties": false
     },
-    "Gem": {
+    "Hooks": {
+      "description": "Lifecycle hook snippets run via `sh -c` through the exec seam. Each field is a shell snippet (may be multi-line). Hooks fire only when their associated action actually occurs (idempotency-preserving).",
       "type": "object",
       "properties": {
-        "rubygems": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "GoPackages": {
-      "type": "object",
-      "properties": {
-        "packages": {
-          "description": "Module paths with version suffix, e.g. `github.com/oklog/ulid/v2/cmd/ulid@latest`.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
+        "post-install": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "post-uninstall": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "post-update": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre-install": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre-uninstall": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre-update": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -262,25 +219,12 @@
       "type": "object",
       "properties": {
         "bootstrap": {
-          "description": "Typed, idempotent setup steps (replacements for customCommands).",
+          "description": "Typed, idempotent setup steps.",
           "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
-        },
-        "brew": {
-          "default": {
-            "casks": [],
-            "customCommands": [],
-            "formulas": [],
-            "taps": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Brew"
-            }
-          ]
         },
         "execution": {
           "description": "Parallel execution tuning for the install phase (the DAG engine).",
@@ -294,57 +238,13 @@
             }
           ]
         },
-        "gem": {
-          "default": {
-            "rubygems": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Gem"
-            }
-          ]
-        },
-        "go": {
-          "default": {
-            "packages": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/GoPackages"
-            }
-          ]
-        },
-        "mas": {
-          "default": {
-            "apps": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Mas"
-            }
-          ]
-        },
-        "npm": {
-          "default": {
-            "global": {
-              "packages": []
-            }
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Npm"
-            }
-          ]
-        },
-        "pip": {
-          "default": {
-            "packages": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Pip"
-            }
-          ]
+        "require": {
+          "description": "Unified package list: every installable item as `driver:name` with optional version, label, requires, lock, and lifecycle hooks.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RequireEntry"
+          }
         },
         "toolchains": {
           "description": "Language toolchains to ensure (rustup/node/python).",
@@ -388,44 +288,6 @@
       },
       "additionalProperties": false
     },
-    "Mas": {
-      "type": "object",
-      "properties": {
-        "apps": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/MasApp"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "MasApp": {
-      "type": "object",
-      "required": [
-        "id",
-        "name"
-      ],
-      "properties": {
-        "id": {
-          "description": "Numeric App Store product id (as string, mas takes strings).",
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "requires": {
-          "description": "Unit IDs that must complete first, e.g. `[\"brew-formula:git\"]`. See `crate::units` for the canonical `<prefix>:<name>` namespace.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
     "NodeToolchain": {
       "type": "object",
       "properties": {
@@ -437,88 +299,6 @@
       },
       "additionalProperties": false
     },
-    "Npm": {
-      "type": "object",
-      "properties": {
-        "global": {
-          "default": {
-            "packages": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/NpmGlobal"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "NpmGlobal": {
-      "type": "object",
-      "properties": {
-        "packages": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "Pip": {
-      "type": "object",
-      "properties": {
-        "packages": {
-          "description": "Packages installed into the uv-managed python.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "PkgDetail": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "lock": {
-          "description": "Resource-class override (default = the backend's own lock class).",
-          "type": [
-            "string",
-            "null"
-          ],
-          "pattern": "^[a-z][a-z0-9-]*$"
-        },
-        "name": {
-          "type": "string"
-        },
-        "requires": {
-          "description": "Unit IDs that must complete first, e.g. `[\"brew-formula:php\"]`. See `crate::units` for the canonical `<prefix>:<name>` namespace.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "PkgEntry": {
-      "description": "A package list entry: either a bare name (`- \"git\"`) or a detailed form (`- { name: \"phpstan\", requires: [\"brew-formula:php\"] }`) that declares dependency-graph edges for the parallel execution engine. The detailed form splits the package out of its backend's batched install into its own schedulable unit.",
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "$ref": "#/definitions/PkgDetail"
-        }
-      ]
-    },
     "PythonToolchain": {
       "type": "object",
       "properties": {
@@ -529,6 +309,71 @@
         }
       },
       "additionalProperties": false
+    },
+    "RequireDetail": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "hooks": {
+          "description": "Lifecycle hook snippets executed via `sh -c` through the exec seam.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "description": "Canonical unit ID, e.g. `brew-formula:git`, `mas:1352778147`, `npm:prettier@3` (version suffix is sugar for the `version` field).",
+          "type": "string"
+        },
+        "label": {
+          "description": "Human label, required for `mas:` entries (App Store display name).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lock": {
+          "description": "Resource-class override (default = the backend's own lock class).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "requires": {
+          "description": "Unit IDs that must complete first, e.g. `[\"brew-formula:php\"]`. See `crate::units` for the canonical `<prefix>:<name>` namespace.",
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "description": "Explicit version pin (e.g. `\"3\"` for npm, `\"1.9.0\"` for gem). For `npm:`/`pip:`/`go:` the same pin can be written as `id: \"npm:prettier@3\"`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RequireEntry": {
+      "description": "A single entry in `install.require`: either a bare unit ID string (`\"brew-formula:git\"`) or a detailed map with version / hooks / edges.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/RequireDetail"
+        }
+      ]
     },
     "RustupToolchain": {
       "type": "object",

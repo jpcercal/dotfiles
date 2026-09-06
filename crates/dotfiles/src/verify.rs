@@ -151,12 +151,30 @@ fn local_checks(ctx: &Ctx, m: &dotfiles_manifest::Manifest) -> Vec<Check> {
     // Declared install names for dock resolution.
     let casks: Vec<String> = m
         .install
-        .brew
-        .casks
+        .require
         .iter()
-        .map(|c| c.name().to_string())
+        .filter_map(|e| {
+            let (p, n) = dotfiles_manifest::units::split_unit_id(e.id())?;
+            if p == "brew-cask" {
+                Some(n)
+            } else {
+                None
+            }
+        })
         .collect();
-    let mas_names: Vec<String> = m.install.mas.apps.iter().map(|a| a.name.clone()).collect();
+    let mas_names: Vec<String> = m
+        .install
+        .require
+        .iter()
+        .filter_map(|e| {
+            let (p, _) = dotfiles_manifest::units::split_unit_id(e.id())?;
+            if p == "mas" {
+                e.label().map(|s| s.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
     for entry in &m.config.dockutil.add {
         let id = format!("dock:{}", entry.app);
         if dock_resolves(&entry.app, &casks, &mas_names) {
@@ -211,47 +229,33 @@ fn names_match(bundle: &str, declared: &str) -> bool {
 /// thread pool (16 shards). Each probe is read-only.
 fn probe_checks(env: &ExecEnv, m: &dotfiles_manifest::Manifest) -> Vec<Check> {
     let mut tasks: Vec<(String, ProbeKind)> = vec![];
-    for f in &m.install.brew.formulas {
-        tasks.push((
-            format!("brew-formula:{}", f.name()),
-            ProbeKind::BrewFormula(f.name().to_string()),
-        ));
-    }
-    for c in &m.install.brew.casks {
-        tasks.push((
-            format!("brew-cask:{}", c.name()),
-            ProbeKind::BrewCask(c.name().to_string()),
-        ));
-    }
-    for t in &m.install.brew.taps {
-        tasks.push((format!("brew-tap:{t}"), ProbeKind::BrewTap(t.clone())));
-    }
-    for a in &m.install.mas.apps {
-        tasks.push((format!("mas:{}", a.id), ProbeKind::Mas(a.id.clone())));
-    }
-    for g in &m.install.gem.rubygems {
-        tasks.push((
-            format!("gem:{}", g.name()),
-            ProbeKind::Gem(g.name().to_string()),
-        ));
-    }
-    for p in &m.install.npm.global.packages {
-        tasks.push((
-            format!("npm:{}", p.name()),
-            ProbeKind::Npm(p.name().to_string()),
-        ));
-    }
-    for p in &m.install.pip.packages {
-        tasks.push((
-            format!("pip:{}", p.name()),
-            ProbeKind::Pip(p.name().to_string()),
-        ));
-    }
-    for p in &m.install.go.packages {
-        tasks.push((
-            format!("go:{}", p.name()),
-            ProbeKind::Go(p.name().to_string()),
-        ));
+    for e in &m.install.require {
+        let (prefix, bare) = match dotfiles_manifest::units::split_unit_id(e.id()) {
+            Some((p, n)) => (p, n),
+            None => continue,
+        };
+        let norm_id = format!("{prefix}:{bare}");
+        let probe = match prefix.as_str() {
+            "brew-formula" => ProbeKind::BrewFormula(bare.clone()),
+            "brew-cask" => ProbeKind::BrewCask(bare.clone()),
+            "brew-tap" => ProbeKind::BrewTap(bare.clone()),
+            "mas" => ProbeKind::Mas(bare.clone()),
+            "gem" => ProbeKind::Gem(bare.clone()),
+            "npm" => ProbeKind::Npm(bare.clone()),
+            "pip" => ProbeKind::Pip(bare.clone()),
+            "go" => {
+                // For go, reconstruct spec with version if pinned
+                let spec = if let Some(v) = e.effective_version() {
+                    format!("{bare}@{v}")
+                } else {
+                    // include original @latest if present in bare? bare stripped latest, so add @latest
+                    format!("{bare}@latest")
+                };
+                ProbeKind::Go(spec)
+            }
+            _ => continue,
+        };
+        tasks.push((norm_id, probe));
     }
 
     if tasks.is_empty() {
@@ -447,11 +451,10 @@ mod tests {
             &t,
             r#"
 install:
-  brew:
-    casks: [iterm2]
-  mas:
-    apps:
-      - { id: "1", name: "Trello" }
+  require:
+    - "brew-cask:iterm2"
+    - id: "mas:1"
+      label: "Trello"
 config:
   mkdir: ["~/.config/nvim/"]
   symbolic_links:
@@ -497,7 +500,7 @@ config:
         // No tools stubbed: everything skips, nothing is missing.
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  brew:\n    formulas: [git]\n    taps: [a/b]\n  mas:\n    apps:\n      - { id: \"1\", name: A }\n",
+            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"brew-tap:a/b\"\n    - id: \"mas:1\"\n      label: \"A\"\n",
         );
         let checks = collect(&ctx, false).unwrap();
         assert!(!checks.is_empty());
@@ -520,7 +523,7 @@ config:
         );
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  brew:\n    formulas: [git, ghost-pkg]\n  mas:\n    apps:\n      - { id: \"1\", name: A }\n      - { id: \"2\", name: B }\n",
+            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"brew-formula:ghost-pkg\"\n    - id: \"mas:1\"\n      label: \"A\"\n    - id: \"mas:2\"\n      label: \"B\"\n",
         );
         let checks = collect(&ctx, false).unwrap();
         let status = |id: &str| {
@@ -546,7 +549,7 @@ config:
         t.stub("brew", "echo 'aws/tap'; exit 0");
         // No curl stub (and the isolated PATH hides the real one): reaching
         // the upstream check would SKIP, so OK proves the local fast path.
-        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    taps: [aws/tap]\n");
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"brew-tap:aws/tap\"\n");
         let checks = collect(&ctx, false).unwrap();
         assert_eq!(
             checks
@@ -567,7 +570,10 @@ config:
             "curl",
             "case \"$*\" in *github.com/aws/homebrew-tap*) exit 0 ;; *) exit 1 ;; esac",
         );
-        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    taps: [aws/tap, nope/nothing]\n");
+        let ctx = ctx_with_manifest(
+            &t,
+            "install:\n  require:\n    - \"brew-tap:aws/tap\"\n    - \"brew-tap:nope/nothing\"\n",
+        );
         let checks = collect(&ctx, false).unwrap();
         let status = |id: &str| {
             checks
@@ -593,7 +599,7 @@ config:
         );
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  go:\n    packages: [\"github.com/oklog/ulid/v2/cmd/ulid@latest\", \"example.com/nope/tool@latest\"]\n",
+            "install:\n  require:\n    - \"go:github.com/oklog/ulid/v2/cmd/ulid@latest\"\n    - \"go:example.com/nope/tool@latest\"\n",
         );
         let checks = collect(&ctx, false).unwrap();
         let status = |id: &str| {
@@ -606,11 +612,11 @@ config:
         };
         // The package path itself 404s on the proxy; the `.../v2` module hits.
         assert_eq!(
-            status("go:github.com/oklog/ulid/v2/cmd/ulid@latest"),
+            status("go:github.com/oklog/ulid/v2/cmd/ulid"),
             CheckStatus::Ok
         );
         assert!(matches!(
-            status("go:example.com/nope/tool@latest"),
+            status("go:example.com/nope/tool"),
             CheckStatus::Missing(_)
         ));
     }
@@ -643,7 +649,7 @@ config:
     #[test]
     fn invalid_manifest_is_fatal_not_missing() {
         let t = TestEnv::new();
-        let ctx = ctx_with_manifest(&t, "install:\n  brew:\n    formulas: [\"\"]\n");
+        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"\"\n");
         assert!(collect(&ctx, true).is_err());
     }
 

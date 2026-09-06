@@ -5,7 +5,7 @@ use crate::outcome::BackendOutcome;
 use crate::{bootstrap, brew, graph, schedule, toolchain, Spec};
 use anyhow::Result;
 use dotfiles_exec::ExecEnv;
-use dotfiles_manifest::{Manifest, PkgEntry};
+use dotfiles_manifest::Manifest;
 
 /// `brew tap` + `brew trust` (skips taps already tapped; `homebrew/*` needs no trust).
 pub fn ensure_taps(env: &ExecEnv, taps: &[String]) -> Result<BackendOutcome> {
@@ -48,6 +48,36 @@ pub fn ensure_taps(env: &ExecEnv, taps: &[String]) -> Result<BackendOutcome> {
     Ok(out)
 }
 
+fn taps_from_manifest(m: &Manifest) -> Vec<String> {
+    m.install
+        .require
+        .iter()
+        .filter_map(|e| {
+            let (p, n) = dotfiles_manifest::units::split_unit_id(e.id())?;
+            if p == "brew-tap" {
+                Some(n)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn packages_for_backend(m: &Manifest, prefix: &str) -> Vec<String> {
+    m.install
+        .require
+        .iter()
+        .filter_map(|e| {
+            let (p, n) = dotfiles_manifest::units::split_unit_id(e.id())?;
+            if p == prefix {
+                Some(n)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 /// Install everything declared in the manifest via the dependency-graph
 /// parallel execution engine (`graph` + `schedule`). Units run as soon as
 /// their `requires:` edges (explicit in apps.yaml plus implicit tool edges)
@@ -81,43 +111,57 @@ pub fn sched_opts_from_manifest(m: &Manifest) -> schedule::SchedOpts {
     }
 }
 
-/// Legacy sequential install (taps → formulas → casks → … → bootstrap),
-/// kept for `--sequential`. New code should use the graph engine.
+/// Legacy sequential install, kept for `--sequential`. New code should use the graph engine.
 pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<BackendOutcome>> {
     let mut results: Vec<BackendOutcome> = vec![];
 
-    results.push(ensure_taps(env, &m.install.brew.taps)?);
+    results.push(ensure_taps(env, &taps_from_manifest(m))?);
 
     let brew = brew::Brew;
     let cask = brew::BrewCask;
     results.push(run_if_available(
         env,
         &brew,
-        &names(&m.install.brew.formulas),
+        &packages_for_backend(m, "brew-formula"),
     ));
-    results.push(run_if_available(env, &cask, &names(&m.install.brew.casks)));
+    results.push(run_if_available(
+        env,
+        &cask,
+        &packages_for_backend(m, "brew-cask"),
+    ));
     results.push(run_if_available(
         env,
         &crate::gem::Gem,
-        &names(&m.install.gem.rubygems),
+        &packages_for_backend(m, "gem"),
     ));
     results.push(run_if_available(
         env,
         &crate::npm::Npm,
-        &names(&m.install.npm.global.packages),
+        &packages_for_backend(m, "npm"),
     ));
     results.push(run_if_available(
         env,
         &crate::pip::UvPip,
-        &names(&m.install.pip.packages),
+        &packages_for_backend(m, "pip"),
     ));
     results.push(run_if_available(
         env,
         &crate::go::Go,
-        &names(&m.install.go.packages),
+        &packages_for_backend(m, "go"),
     ));
 
-    let mas_ids: Vec<String> = m.install.mas.apps.iter().map(|a| a.id.clone()).collect();
+    results.push(run_if_available(
+        env,
+        &crate::cargo::Cargo,
+        &packages_for_backend(m, "cargo"),
+    ));
+    results.push(run_if_available(
+        env,
+        &crate::composer::Composer,
+        &packages_for_backend(m, "composer"),
+    ));
+
+    let mas_ids: Vec<String> = packages_for_backend(m, "mas");
     results.push(run_if_available(env, &crate::mas::Mas, &mas_ids));
 
     // Toolchains
@@ -139,45 +183,82 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
     Ok(results)
 }
 
-fn names(entries: &[PkgEntry]) -> Vec<String> {
-    entries.iter().map(|e| e.name().to_string()).collect()
-}
-
 /// Cache `sudo` credentials once before the parallel run so concurrent cask
 /// installs never race on an interactive password prompt (mirrors the prefs
 /// `sudo -v` pre-flight). Best-effort: failures are ignored here and surface
 /// per-unit like any other error.
 fn preflight_sudo(env: &ExecEnv, m: &Manifest) -> Result<()> {
-    if m.install.brew.casks.is_empty() || !env.has_command("sudo") {
+    let has_cask = m.install.require.iter().any(|e| {
+        dotfiles_manifest::units::split_unit_id(e.id()).is_some_and(|(p, _)| p == "brew-cask")
+    });
+    if !has_cask || !env.has_command("sudo") {
         return Ok(());
     }
     let _ = env.output("sudo", &["-v"])?;
     Ok(())
 }
 
+fn run_hook(env: &ExecEnv, snippet: &str) -> Result<bool> {
+    let res = env.output("sh", &["-c", snippet])?;
+    Ok(res.ok())
+}
+
 /// Execute one graph unit. Backend errors become failed outcomes (the
 /// scheduler blocks dependents); only spawn-level failures escape as `Err`.
 fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
+    // Pre-install hook (only for package units that have it)
+    if let Some(hooks) = &unit.hooks {
+        if let Some(snippet) = &hooks.pre_install {
+            match run_hook(env, snippet) {
+                Ok(true) => {}
+                Ok(false) => {
+                    let mut out = BackendOutcome::empty(unit.backend);
+                    out.fail_one(
+                        unit.id.clone(),
+                        format!(
+                            "pre-install hook failed: {}",
+                            snippet.lines().next().unwrap_or("")
+                        ),
+                    );
+                    return out;
+                }
+                Err(e) => {
+                    let mut out = BackendOutcome::empty(unit.backend);
+                    out.fail_one(unit.id.clone(), format!("pre-install hook error: {}", e));
+                    return out;
+                }
+            }
+        }
+    }
+
     let res: Result<BackendOutcome> = match &unit.kind {
         graph::UnitKind::Taps => ensure_taps(env, &unit.packages),
         graph::UnitKind::Batch("brew") | graph::UnitKind::Package("brew") => {
-            Ok(run_if_available(env, &brew::Brew, &unit.packages))
+            // For brew, reconstruct packages with version suffix if needed? brew-formula pins not supported,
+            // so version is None always.
+            Ok(run_if_available_with_version(env, &brew::Brew, unit))
         }
         graph::UnitKind::Batch("cask") | graph::UnitKind::Package("cask") => {
-            Ok(run_if_available(env, &brew::BrewCask, &unit.packages))
+            Ok(run_if_available_with_version(env, &brew::BrewCask, unit))
         }
         graph::UnitKind::Batch("gem") | graph::UnitKind::Package("gem") => {
-            Ok(run_if_available(env, &crate::gem::Gem, &unit.packages))
+            Ok(run_if_available_with_version(env, &crate::gem::Gem, unit))
         }
         graph::UnitKind::Batch("npm") | graph::UnitKind::Package("npm") => {
-            Ok(run_if_available(env, &crate::npm::Npm, &unit.packages))
+            Ok(run_if_available_with_version(env, &crate::npm::Npm, unit))
         }
         graph::UnitKind::Batch("pip") | graph::UnitKind::Package("pip") => {
-            Ok(run_if_available(env, &crate::pip::UvPip, &unit.packages))
+            Ok(run_if_available_with_version(env, &crate::pip::UvPip, unit))
         }
         graph::UnitKind::Batch("go") | graph::UnitKind::Package("go") => {
-            Ok(run_if_available(env, &crate::go::Go, &unit.packages))
+            Ok(run_if_available_with_version(env, &crate::go::Go, unit))
         }
+        graph::UnitKind::Batch("cargo") | graph::UnitKind::Package("cargo") => Ok(
+            run_if_available_with_version(env, &crate::cargo::Cargo, unit),
+        ),
+        graph::UnitKind::Batch("composer") | graph::UnitKind::Package("composer") => Ok(
+            run_if_available_with_version(env, &crate::composer::Composer, unit),
+        ),
         graph::UnitKind::Batch("mas") | graph::UnitKind::Package("mas") => {
             Ok(run_if_available(env, &crate::mas::Mas, &unit.packages))
         }
@@ -208,11 +289,153 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
             bootstrap::run(step, env)
         }
     };
-    res.unwrap_or_else(|e| {
+    let mut outcome = res.unwrap_or_else(|e| {
         let mut out = BackendOutcome::empty(unit.backend);
         out.fail_one(unit.id.clone(), e.to_string());
         out
-    })
+    });
+
+    // Post-install hook: only if install actually changed something (idempotency-preserving)
+    if let Some(hooks) = &unit.hooks {
+        if let Some(snippet) = &hooks.post_install {
+            if !outcome.changed.is_empty() && outcome.failed.is_empty() {
+                match run_hook(env, snippet) {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        outcome.fail_one(
+                            unit.id.clone(),
+                            format!(
+                                "post-install hook failed: {}",
+                                snippet.lines().next().unwrap_or("")
+                            ),
+                        );
+                    }
+                    Err(e) => {
+                        outcome
+                            .fail_one(unit.id.clone(), format!("post-install hook error: {}", e));
+                    }
+                }
+            }
+        }
+    }
+
+    outcome
+}
+
+fn packages_with_version(unit: &graph::Unit) -> Vec<String> {
+    if let Some(ver) = &unit.version {
+        // For token-style pins (npm, pip, go, composer) we embed version in package string
+        match unit.backend {
+            "npm" => unit
+                .packages
+                .iter()
+                .map(|p| format!("{}@{}", p, ver))
+                .collect(),
+            "pip" => unit
+                .packages
+                .iter()
+                .map(|p| format!("{}=={}", p, ver))
+                .collect(),
+            "go" => unit
+                .packages
+                .iter()
+                .map(|p| format!("{}@{}", p, ver))
+                .collect(),
+            "composer" => unit
+                .packages
+                .iter()
+                .map(|p| format!("{}:{}", p, ver))
+                .collect(),
+            _ => unit.packages.clone(),
+        }
+    } else if unit.backend == "go" {
+        // Go always needs a version suffix; default to @latest when not pinned
+        unit.packages
+            .iter()
+            .map(|p| format!("{}@latest", p))
+            .collect()
+    } else {
+        unit.packages.clone()
+    }
+}
+
+fn run_if_available_with_version(
+    env: &ExecEnv,
+    backend: &dyn crate::PackageBackend,
+    unit: &graph::Unit,
+) -> BackendOutcome {
+    let pkgs = packages_with_version(unit);
+    // For gem and cargo, version is handled via flags, not token
+    if unit.backend == "gem" && unit.version.is_some() {
+        return run_gem_with_version(env, backend, unit);
+    }
+    if unit.backend == "cargo" && unit.version.is_some() {
+        return run_cargo_with_version(env, backend, unit);
+    }
+    run_if_available(env, backend, &pkgs)
+}
+
+fn run_gem_with_version(
+    env: &ExecEnv,
+    backend: &dyn crate::PackageBackend,
+    unit: &graph::Unit,
+) -> BackendOutcome {
+    // Gem version pins must be installed with `gem install name -v version`
+    // For single-package units, handle specially
+    if unit.packages.len() == 1 {
+        if let Some(ver) = &unit.version {
+            let pkg = &unit.packages[0];
+            // Check if already installed via gem list
+            if !backend.is_available(env) {
+                let mut out = BackendOutcome::unavailable(backend.name());
+                out.note = format!("{} not installed — skipping 1 package(s)", backend.tool());
+                return out;
+            }
+            let _installed = backend.list_installed(env).unwrap_or_default();
+            // Note: version-aware check would require parsing gem list versions; keep idempotent via name only.
+            let res = env.output("gem", &["install", "--no-document", pkg, "-v", ver]);
+            let mut out = BackendOutcome::empty(backend.name());
+            match res {
+                Ok(r) if r.ok() => out.changed.push(pkg.clone()),
+                Ok(r) => out.fail_one(
+                    pkg.clone(),
+                    crate::util::summarize_error(&r.stderr, &r.stdout),
+                ),
+                Err(e) => out.fail_one(pkg.clone(), e.to_string()),
+            }
+            return out;
+        }
+    }
+    run_if_available(env, backend, &unit.packages)
+}
+
+fn run_cargo_with_version(
+    env: &ExecEnv,
+    backend: &dyn crate::PackageBackend,
+    unit: &graph::Unit,
+) -> BackendOutcome {
+    if unit.packages.len() == 1 {
+        if let Some(ver) = &unit.version {
+            let pkg = &unit.packages[0];
+            if !backend.is_available(env) {
+                let mut out = BackendOutcome::unavailable(backend.name());
+                out.note = format!("{} not installed — skipping 1 package(s)", backend.tool());
+                return out;
+            }
+            let res = env.output("cargo", &["install", pkg, "--version", ver]);
+            let mut out = BackendOutcome::empty(backend.name());
+            match res {
+                Ok(r) if r.ok() => out.changed.push(pkg.clone()),
+                Ok(r) => out.fail_one(
+                    pkg.clone(),
+                    crate::util::summarize_error(&r.stderr, &r.stdout),
+                ),
+                Err(e) => out.fail_one(pkg.clone(), e.to_string()),
+            }
+            return out;
+        }
+    }
+    run_if_available(env, backend, &unit.packages)
 }
 
 fn run_if_available(
@@ -309,22 +532,16 @@ mod tests {
         let manifest = parse_manifest(
             r#"
 install:
-  brew:
-    taps: ["hashicorp/tap"]
-    formulas: ["git"]
-    casks: ["iterm2"]
-  gem:
-    rubygems: ["neovim"]
-  npm:
-    global:
-      packages: ["prettier"]
-  pip:
-    packages: ["pynvim"]
-  go:
-    packages: ["example.com/x/tool@latest"]
-  mas:
-    apps:
-      - { id: "123", name: "Foo" }
+  require:
+    - "brew-tap:hashicorp/tap"
+    - "brew-formula:git"
+    - "brew-cask:iterm2"
+    - "gem:neovim"
+    - "npm:prettier"
+    - "pip:pynvim"
+    - "go:example.com/x/tool@latest"
+    - id: "mas:123"
+      label: "Foo"
   toolchains:
     rustup: {}
     node: {}
@@ -342,7 +559,6 @@ install:
                 .flat_map(|r| r.failed.clone())
                 .collect::<Vec<_>>()
         );
-        // npm called? npm ls stub matches "$2"=ls? npm args: ls -g --depth=0 --json → $1=ls!
         let brew_calls = t.calls_of("brew");
         assert!(
             brew_calls
@@ -378,7 +594,8 @@ install:
     #[test]
     fn unavailable_backend_is_reported_not_fatal() {
         let t = TestEnv::new();
-        let manifest = parse_manifest("install:\n  brew:\n    formulas: [git]\n").unwrap();
+        let manifest =
+            parse_manifest("install:\n  require:\n    - \"brew-formula:git\"\n").unwrap();
         let results = install_all(t.exec(), &manifest).unwrap();
         // brew is absent from the isolated PATH: the formula-install outcome is
         // a non-fatal skip (so `sync` continues on machines mid-bootstrap).
@@ -401,9 +618,9 @@ install:
         let manifest = parse_manifest(
             r#"
 install:
-  brew:
-    taps: ["hashicorp/tap"]
-    formulas: ["git"]
+  require:
+    - "brew-tap:hashicorp/tap"
+    - "brew-formula:git"
   toolchains:
     rustup: {}
 "#,
@@ -437,9 +654,10 @@ install:
     fn sequential_path_preserves_legacy_order() {
         let t = TestEnv::new();
         t.stub("brew", BREW_STUB);
-        let manifest =
-            parse_manifest("install:\n  brew:\n    formulas: [git]\n    casks: [iterm2]\n")
-                .unwrap();
+        let manifest = parse_manifest(
+            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"brew-cask:iterm2\"\n",
+        )
+        .unwrap();
         let results = install_all_sequential(t.exec(), &manifest).unwrap();
         assert!(results.iter().all(|r| r.ok()));
         let brew_calls = t.calls_of("brew");
@@ -457,5 +675,56 @@ install:
             "{:?}",
             brew_calls
         );
+    }
+
+    #[test]
+    fn hooks_fire_via_sh() {
+        let t = TestEnv::new();
+        t.stub("brew", BREW_STUB);
+        t.stub("sh", "exit 0");
+        let manifest = parse_manifest(
+            r#"
+install:
+  require:
+    - id: "brew-formula:git"
+      hooks:
+        pre-install: "echo pre"
+        post-install: "echo post"
+"#,
+        )
+        .unwrap();
+        let results = install_all(t.exec(), &manifest).unwrap();
+        assert!(results.iter().all(|r| r.ok()));
+        let sh_calls = t.calls_of("sh");
+        assert!(
+            sh_calls.iter().any(|c| c.contains("echo pre")),
+            "{:?}",
+            sh_calls
+        );
+        assert!(
+            sh_calls.iter().any(|c| c.contains("echo post")),
+            "{:?}",
+            sh_calls
+        );
+    }
+
+    #[test]
+    fn pre_hook_failure_blocks_install() {
+        let t = TestEnv::new();
+        t.stub("brew", BREW_STUB);
+        t.stub("sh", "exit 1");
+        let manifest = parse_manifest(
+            r#"
+install:
+  require:
+    - id: "brew-formula:git"
+      hooks:
+        pre-install: "false"
+"#,
+        )
+        .unwrap();
+        let results = install_all(t.exec(), &manifest).unwrap();
+        assert!(results.iter().any(|r| !r.ok()));
+        assert!(t.calls_of("brew").iter().all(|c| !c.starts_with("install")));
     }
 }

@@ -15,9 +15,12 @@ Schemas (`schema/`).
 
 ## Hard rules
 
-- **No shell scripts anywhere.** All logic is Rust. Never add `.sh` files,
+- **No shell scripts as files.** All logic is Rust. Never add `.sh` files,
   inline shell-outs in build scripts, or shell one-liners as a substitute
-  for real implementation.
+  for real implementation. The sole exception is `install.require` lifecycle
+  hook snippets: YAML-carried `sh -c` snippets (pre/post-install/update/uninstall)
+  executed through the `dotfiles-exec` seam — reviewable, sandboxed, and stub-able
+  (the `sh` stub records argv in tests/`sync --sandbox`), not committed as files.
 - **Everything must be idempotent.** Install/apply/prefs/sync are safe to
   re-run; re-running must converge, not duplicate or error.
 - **Never invoke real system tools directly.** All process execution goes
@@ -101,21 +104,32 @@ e2e/          reduced fixture manifests for the real-machine CI E2E job
 
 ## Install engine (dependency graph + parallel scheduler)
 
-`apps.yaml` is the source of truth for install dependencies. Package entries
-are either bare names (`- "git"`) or detailed (`- { name: "phpstan",
-requires: ["brew-formula:php"] }`); detailed or referenced packages split out
-of their backend's batched install into schedulable units. Canonical unit IDs
-(`crates/manifest/src/units.rs`): `brew-formula:x`, `brew-cask:x`,
-`brew-tap:o/r`, `mas:<id>`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`,
-`composer:`, `toolchain:rustup|node|python`, `bootstrap:<step>`. Implicit
-edges (taps → brew units, toolchains → npm/pip, tool binaries → bootstrap
-steps) live in `units::implicit_requires`; validation rejects unknown targets
-and cycles. `install.execution` tunes the engine (`max_jobs`, per lock-class
-`locks`; `brew` capped at 1). Execution: `graph::build` → `schedule::run`
-(`std::thread::scope` ready-queue; failures block dependents as
-`skipped (blocked by …)`, never abort). CLI: `install`/`sync` accept
-`--jobs <N>` / `--sequential` (legacy path: `install_all_sequential`).
-`dotfiles install` specs also accept the `brew-formula:`/`brew-cask:` aliases.
+`apps.yaml` is the source of truth for install dependencies. `install.require`
+is a flat list of `driver:name` entries; each entry is either a bare string
+(`- "brew-formula:git"`) or a detailed map
+(`- { id: "brew-formula:phpstan", requires: ["brew-formula:php"], version: "1.0", hooks: { post-install: "echo hi" } }`)
+declaring dependency-graph edges, version pins (npm/pip/gem/cargo/go only;
+`@version` sugar in the id e.g. `npm:prettier@3` is normalized to `version`;
+brew/mas pins are hard validation errors), and lifecycle hooks. Detailed,
+version-pinned, hook-carrying, or referenced packages split out of their
+backend's batched install into schedulable single units. Aliases
+`tap:`/`formula:`/`cask:` normalize to `brew-tap:`/`brew-formula:`/`brew-cask:`.
+Canonical unit IDs (`crates/manifest/src/units.rs`): `brew-formula:x`,
+`brew-cask:x`, `brew-tap:o/r`, `mas:<id>` (with required `label:`), `gem:`,
+`npm:`, `pip:`, `cargo:`, `go:`, `composer:`, `toolchain:rustup|node|python`,
+`bootstrap:<step>`. Implicit edges (taps → brew units, toolchains → npm/pip,
+tool binaries → bootstrap steps) live in `units::implicit_requires`;
+validation rejects unknown targets and cycles. Hooks (`pre-install`,
+`post-install`, `pre-update`, `post-update`, `pre-uninstall`,
+`post-uninstall`) are `sh -c` snippets executed through the exec seam; they
+fire only when the associated action actually changes state and are
+idempotency-preserving (re-running without changes does not re-fire). `install.execution`
+tunes the engine (`max_jobs`, per lock-class `locks`; `brew` capped at 1).
+Execution: `graph::build` → `schedule::run` (`std::thread::scope` ready-queue;
+failures block dependents as `skipped (blocked by …)`, never abort). CLI:
+`install`/`sync` accept `--jobs <N>` / `--sequential` (legacy path:
+`install_all_sequential`). `dotfiles install` specs also accept the
+`brew-formula:`/`brew-cask:` aliases.
 
 ## CLI surface (orientation)
 

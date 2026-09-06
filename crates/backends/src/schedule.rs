@@ -209,6 +209,8 @@ mod tests {
             packages: vec![id.into()],
             requires: requires.iter().map(|s| s.to_string()).collect(),
             lock: lock.into(),
+            version: None,
+            hooks: None,
         }
     }
 

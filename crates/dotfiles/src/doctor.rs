@@ -65,13 +65,14 @@ fn run_diagnosis(ctx: &Ctx) -> Result<()> {
         critical: true,
         status: if manifest.is_ok() { "ok" } else { "fail" },
         detail: match &manifest {
-            Ok(m) => format!(
-                "{} formulas, {} casks, {} mas apps, {} links",
-                m.install.brew.formulas.len(),
-                m.install.brew.casks.len(),
-                m.install.mas.apps.len(),
-                m.config.symbolic_links.len()
-            ),
+            Ok(m) => {
+                let total = m.install.require.len();
+                format!(
+                    "{} packages, {} links",
+                    total,
+                    m.config.symbolic_links.len()
+                )
+            }
             Err(e) => e.to_string(),
         },
     });

@@ -1,11 +1,12 @@
 # dotfiles
 
 A universal **macOS** package & configuration manager — one Rust binary that
-plays the role of `apt`, `brew`, `mas`, `composer`, `cargo`, `npm`, `pip`,
-`go install`, Ansible-style configuration, and macOS preference management in
-a single, idempotent, testable tool. No shell scripts anywhere: everything is
-Rust, driven by two declarative manifests (`apps.yaml`, `prefs.yaml`) validated
-against generated JSON Schemas (`schema/`).
+ plays the role of `apt`, `brew`, `mas`, `composer`, `cargo`, `npm`, `pip`,
+ `go install`, Ansible-style configuration, and macOS preference management in
+ a single, idempotent, testable tool. No shell scripts as files: everything is
+ Rust, driven by two declarative manifests (`apps.yaml`, `prefs.yaml`) validated
+ against generated JSON Schemas (`schema/`). Lifecycle hook snippets are `sh -c`
+ through the exec seam.
 
 ## Install the binary
 
@@ -67,12 +68,13 @@ listed, never auto-installed.
 
 ## Manifests
 
-- **`apps.yaml`** — packages (brew taps/formulas/casks, gem, npm, pip/uv, go,
-  mas), toolchains (rustup/node/python), typed bootstrap steps, plus config
-  (`mkdir`, `symbolic_links`, `dockutil`). Package entries may declare
-  `requires:` dependency edges (`brew-formula:php` style unit IDs) executed by
-  the parallel install engine (`install.execution` tunes workers/locks).
-  Validated with [# yaml-language-server](schema/apps.schema.json).
+- **`apps.yaml`** — packages via `install.require` (`brew-formula:`, `brew-cask:`,
+  `brew-tap:`, `mas:` with `label:`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`),
+  toolchains (rustup/node/python), typed bootstrap steps, plus config
+  (`mkdir`, `symbolic_links`, `dockutil`). Each entry may carry `requires:`
+  edges, `version:` pins (npm/pip/gem/cargo/go), and `hooks:` lifecycle
+  snippets (`pre-install`, `post-install`, etc.) executed via `sh -c`. Validated
+  with [# yaml-language-server](schema/apps.schema.json).
 - **`prefs.yaml`** — ~190 declarative macOS preferences: typed `defaults`
   entries (bool/int/float/string/array/dict, `current_host`, `sudo`,
   `-dict-add` merge mode), whitelisted `exec` steps (pmset/nvram/PlistBuddy/…),

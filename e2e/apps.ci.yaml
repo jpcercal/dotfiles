@@ -11,70 +11,58 @@
 # sign-in is unavailable on CI runners (the mas *type* is still covered via
 # the `mas` CLI formula + `mas --help` smoke; app references are covered by
 # `dotfiles verify` instead).
-schema_version: 1
+schema_version: 2
 install:
   execution:
     max_jobs: 0
     locks:
       go: 2
-  brew:
-    formulas:
-      - "jq"
-      - "fd"
-      - "fzf"
-      - "fnm"
-      - "uv"
-      - "go"
-      - "dockutil"
-      - "mas"
-      - "neovim"
-      - "ruby"
-    casks:
-      - "caffeine"
-  gem:
-    rubygems:
-      # Explicit edge: no implicit gem→ruby ordering exists, so pin the gem
-      # behind the ruby formula (same pattern as the php tools in apps.yaml).
-      - name: "neovim"
-        requires: ["brew-formula:ruby"]
-  npm:
-    global:
-      packages:
-        - "prettier"
-  pip:
-    packages:
-      - "pynvim"
-  go:
-    packages:
-      - "github.com/oklog/ulid/v2/cmd/ulid@latest"
   toolchains:
     rustup:
-      channel: "stable"
+      channel: stable
     node:
-      ensure: "lts"
+      ensure: lts
     python:
-      provider: "uv"
+      provider: uv
   bootstrap:
-    - "fzf-keybindings"
-    - "python-links"
-    - "nvim-plug"
+  - fzf-keybindings
+  - python-links
+  - nvim-plug
+  require:
+  - brew-formula:jq
+  - brew-formula:fd
+  - brew-formula:fzf
+  - brew-formula:fnm
+  - brew-formula:uv
+  - brew-formula:go
+  - brew-formula:dockutil
+  - brew-formula:mas
+  - brew-formula:neovim
+  - brew-formula:ruby
+  - brew-cask:caffeine
+  - pip:pynvim
+  - go:github.com/oklog/ulid/v2/cmd/ulid@latest
+  - id: gem:neovim
+    requires:
+    - brew-formula:ruby
+  - npm:prettier
 config:
   mkdir:
-    - ~/.config/nvim/
-    - ~/.config/tmux/
+  - ~/.config/nvim/
+  - ~/.config/tmux/
   symbolic_links:
-    - from:
-        relative_path: "e2e/vimrc.ci"
-      to:
-        absolute_path: "~/.config/nvim/init.vim"
-    - from:
-        relative_path: ".editorconfig"
-      to:
-        absolute_path: "~/.editorconfig"
-    - from:
-        relative_path: "starship.toml"
-      to:
-        absolute_path: "~/.config/starship.toml"
+  - from:
+      relative_path: e2e/vimrc.ci
+    to:
+      absolute_path: ~/.config/nvim/init.vim
+  - from:
+      relative_path: .editorconfig
+    to:
+      absolute_path: ~/.editorconfig
+  - from:
+      relative_path: starship.toml
+    to:
+      absolute_path: ~/.config/starship.toml
   dockutil:
     _before:
       reset: false

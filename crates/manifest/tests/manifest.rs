@@ -9,10 +9,8 @@ fn repo_root() -> PathBuf {
 fn parses_real_apps_yaml() {
     let m = load_manifest(&repo_root().join("apps.yaml"))
         .expect("real apps.yaml must parse and validate");
-    assert_eq!(m.schema_version, 1);
-    assert!(!m.install.brew.formulas.is_empty());
-    assert!(!m.install.brew.casks.is_empty());
-    assert!(!m.install.mas.apps.is_empty());
+    assert_eq!(m.schema_version, 2);
+    assert!(!m.install.require.is_empty());
     assert!(!m.config.symbolic_links.is_empty());
     assert!(m.config.dockutil.before.reset);
     assert!(m.config.dockutil.before.remove_all);
@@ -43,19 +41,20 @@ fn parses_real_commands_yaml() {
 fn rejects_duplicate_formulas() {
     let yaml = r#"
 install:
-  brew:
-    formulas: ["git", "git"]
+  require:
+    - "brew-formula:git"
+    - "brew-formula:git"
 "#;
     let err = parse_manifest(yaml).unwrap_err();
-    assert!(err.to_string().contains("duplicate entry 'git'"), "{}", err);
+    assert!(err.to_string().contains("duplicate entry"), "{}", err);
 }
 
 #[test]
 fn rejects_malformed_tap() {
     let yaml = r#"
 install:
-  brew:
-    taps: ["NotATap"]
+  require:
+    - "brew-tap:NotATap"
 "#;
     let err = parse_manifest(yaml).unwrap_err();
     assert!(err.to_string().contains("owner/repo"), "{}", err);
@@ -65,9 +64,9 @@ install:
 fn rejects_non_numeric_mas_id() {
     let yaml = r#"
 install:
-  mas:
-    apps:
-      - { id: "abc", name: "Foo" }
+  require:
+    - id: "mas:abc"
+      label: "Foo"
 "#;
     let err = parse_manifest(yaml).unwrap_err();
     assert!(err.to_string().contains("numeric App Store id"), "{}", err);
@@ -87,16 +86,17 @@ config:
 
 #[test]
 fn rejects_unknown_fields() {
-    let yaml = "install:\n  brew:\n    formuls: [git]\n";
-    let err = parse_manifest(yaml).unwrap_err();
+    // Actually top-level unknown field: manifest has deny_unknown_fields, so this fails_yaml
+    let yaml2 = "install:\n  require:\n    - \"brew-formula:git\"\n  brew:\n    formulas: [git]\n";
+    let err = parse_manifest(yaml2).unwrap_err();
     assert!(matches!(err, ManifestError::Yaml { .. }), "{}", err);
 }
 
 #[test]
 fn empty_document_is_valid_manifest() {
     let m = parse_manifest("---\n").expect("empty doc parses");
-    assert_eq!(m.schema_version, 1);
-    assert!(m.install.brew.formulas.is_empty());
+    assert_eq!(m.schema_version, 2);
+    assert!(m.install.require.is_empty());
 }
 
 #[test]
@@ -109,26 +109,26 @@ fn missing_files_report_io_errors() {
 
 #[test]
 fn invalid_yaml_rejected() {
-    let err = parse_manifest("install:\n  brew:\n   - [\n").unwrap_err();
+    let err = parse_manifest("install:\n  require:\n   - [\n").unwrap_err();
     assert!(matches!(err, ManifestError::Yaml { .. }), "{}", err);
 }
 
 #[test]
-fn rejects_empty_custom_command() {
-    let err = parse_manifest("install:\n  brew:\n    customCommands: [\"\"]\n").unwrap_err();
-    assert!(err.to_string().contains("empty command"), "{}", err);
+fn rejects_empty_require_id() {
+    let err = parse_manifest("install:\n  require:\n    - \"\"\n").unwrap_err();
+    assert!(err.to_string().contains("empty"), "{}", err);
 }
 
 #[test]
 fn rejects_duplicate_mas_id_and_empty_name() {
     let err = parse_manifest(
-        "install:\n  mas:\n    apps:\n      - { id: \"1\", name: \"A\" }\n      - { id: \"1\", name: \"B\" }\n",
+        "install:\n  require:\n    - id: \"mas:1\"\n      label: \"A\"\n    - id: \"mas:1\"\n      label: \"B\"\n",
     )
     .unwrap_err();
-    assert!(err.to_string().contains("duplicate id 1"), "{}", err);
-    let err = parse_manifest("install:\n  mas:\n    apps:\n      - { id: \"2\", name: \"\" }\n")
+    assert!(err.to_string().contains("duplicate"), "{}", err);
+    let err = parse_manifest("install:\n  require:\n    - id: \"mas:2\"\n      label: \"\"\n")
         .unwrap_err();
-    assert!(err.to_string().contains("empty name"), "{}", err);
+    assert!(err.to_string().contains("label"), "{}", err);
 }
 
 #[test]
@@ -172,8 +172,8 @@ fn rejects_invalid_dock_and_link_entries() {
         "{}",
         err
     );
-    let err = parse_manifest("install:\n  brew:\n    formulas: [\"\"]\n").unwrap_err();
-    assert!(err.to_string().contains("empty entry"), "{}", err);
+    let err = parse_manifest("install:\n  require:\n    - \"\"\n").unwrap_err();
+    assert!(err.to_string().contains("empty"), "{}", err);
 }
 
 #[test]
@@ -184,8 +184,7 @@ fn schema_mentions_all_top_level_sections() {
         "\"config\"",
         "\"symbolic_links\"",
         "\"dockutil\"",
-        "\"mas\"",
-        "customCommands",
+        "\"require\"",
     ] {
         assert!(schema.contains(needle), "schema missing {}", needle);
     }
@@ -199,36 +198,35 @@ install:
   execution:
     max_jobs: 8
     locks: { mas: 4 }
-  brew:
-    formulas:
-      - "git"
-      - name: "phpstan"
-        requires: ["brew-formula:php"]
-      - "php"
-  mas:
-    apps:
-      - { id: "1", name: "A", requires: ["brew-formula:git"] }
+  require:
+    - "brew-formula:git"
+    - id: "brew-formula:phpstan"
+      requires: ["brew-formula:php"]
+    - "brew-formula:php"
+    - id: "mas:1"
+      label: "A"
+      requires: ["brew-formula:git"]
 "#,
     )
     .expect("mixed entries parse");
     assert_eq!(m.install.execution.max_jobs, 8);
     assert_eq!(m.install.execution.locks.get("mas"), Some(&4));
-    assert_eq!(m.install.brew.formulas.len(), 3);
-    assert!(!m.install.brew.formulas[0].is_detailed());
-    assert_eq!(m.install.brew.formulas[0].name(), "git");
-    assert!(m.install.brew.formulas[0].requires().is_empty());
-    assert!(m.install.brew.formulas[1].is_detailed());
+    assert_eq!(m.install.require.len(), 4);
+    assert!(!m.install.require[0].is_detailed());
+    assert_eq!(m.install.require[0].id(), "brew-formula:git");
+    assert!(m.install.require[0].requires().is_empty());
+    assert!(m.install.require[1].is_detailed());
     assert_eq!(
-        m.install.brew.formulas[1].requires(),
+        m.install.require[1].requires(),
         &["brew-formula:php".to_string()]
     );
-    assert_eq!(m.install.mas.apps[0].requires, vec!["brew-formula:git"]);
+    assert_eq!(m.install.require[3].label(), Some("A"));
 }
 
 #[test]
 fn rejects_unknown_requires_target() {
     let err = parse_manifest(
-        "install:\n  brew:\n    formulas:\n      - \"git\"\n      - { name: \"phpstan\", requires: [\"brew-formula:php\"] }\n",
+        "install:\n  require:\n    - \"brew-formula:git\"\n    - id: \"brew-formula:phpstan\"\n      requires: [\"brew-formula:php\"]\n",
     )
     .unwrap_err();
     assert!(
@@ -237,7 +235,7 @@ fn rejects_unknown_requires_target() {
         err
     );
     let err = parse_manifest(
-        "install:\n  brew:\n    formulas:\n      - { name: \"a\", requires: [\"apt:vim\"] }\n      - \"vim\"\n",
+        "install:\n  require:\n    - id: \"brew-formula:a\"\n      requires: [\"apt:vim\"]\n    - \"brew-formula:vim\"\n",
     )
     .unwrap_err();
     assert!(err.to_string().contains("unknown unit prefix"), "{}", err);
@@ -246,13 +244,13 @@ fn rejects_unknown_requires_target() {
 #[test]
 fn rejects_dependency_cycles() {
     let err = parse_manifest(
-        "install:\n  brew:\n    formulas:\n      - { name: \"a\", requires: [\"brew-formula:b\"] }\n      - { name: \"b\", requires: [\"brew-formula:a\"] }\n",
+        "install:\n  require:\n    - id: \"brew-formula:a\"\n      requires: [\"brew-formula:b\"]\n    - id: \"brew-formula:b\"\n      requires: [\"brew-formula:a\"]\n",
     )
     .unwrap_err();
     assert!(err.to_string().contains("dependency cycle"), "{}", err);
     // self-loop
     let err = parse_manifest(
-        "install:\n  brew:\n    formulas:\n      - { name: \"a\", requires: [\"brew-formula:a\"] }\n",
+        "install:\n  require:\n    - id: \"brew-formula:a\"\n      requires: [\"brew-formula:a\"]\n",
     )
     .unwrap_err();
     assert!(err.to_string().contains("dependency cycle"), "{}", err);
@@ -268,27 +266,49 @@ fn rejects_bad_lock_config() {
         "{}",
         err
     );
-    let err = parse_manifest(
-        "install:\n  brew:\n    formulas:\n      - { name: \"a\", lock: \"BAD\" }\n",
-    )
-    .unwrap_err();
+    let err =
+        parse_manifest("install:\n  require:\n    - id: \"brew-formula:a\"\n      lock: \"BAD\"\n")
+            .unwrap_err();
     assert!(err.to_string().contains("invalid lock name"), "{}", err);
     let err = parse_manifest(
-        "install:\n  brew:\n    formulas:\n      - { name: \"a\", requires: [\"\"] }\n",
+        "install:\n  require:\n    - id: \"brew-formula:a\"\n      requires: [\"\"]\n",
     )
     .unwrap_err();
     assert!(err.to_string().contains("empty requires entry"), "{}", err);
 }
 
 #[test]
+fn rejects_version_on_unsupported_drivers() {
+    let err = parse_manifest(
+        "install:\n  require:\n    - id: \"brew-formula:git\"\n      version: \"1.0\"\n",
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("does not support version"),
+        "{}",
+        err
+    );
+    let err = parse_manifest(
+        "install:\n  require:\n    - id: \"mas:123\"\n      label: \"Foo\"\n      version: \"1.0\"\n",
+    )
+    .unwrap_err();
+    assert!(
+        err.to_string().contains("does not support version"),
+        "{}",
+        err
+    );
+}
+
+#[test]
 fn unit_namespace_helpers() {
     assert_eq!(
         split_unit_id("brew-formula:php"),
-        Some(("brew-formula", "php"))
+        Some(("brew-formula".to_string(), "php".to_string()))
     );
+    // go with version sugar stripped: bare name without @v1.0
     assert_eq!(
         split_unit_id("go:github.com/x/y@v1.0"),
-        Some(("go", "github.com/x/y@v1.0"))
+        Some(("go".to_string(), "github.com/x/y".to_string()))
     );
     assert_eq!(split_unit_id("apt:vim"), None);
     assert_eq!(split_unit_id("brew-formula:"), None);
@@ -305,7 +325,7 @@ fn unit_namespace_helpers() {
 #[test]
 fn implicit_edges_follow_declared_tools() {
     let m = parse_manifest(
-        "install:\n  brew:\n    formulas: [fnm, uv, fzf, git, rtk]\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap: [fzf-keybindings, git-lfs, python-links, claude-mem, rtk-patch, opencode, nvim-plug]\n",
+        "install:\n  require:\n    - \"brew-formula:fnm\"\n    - \"brew-formula:uv\"\n    - \"brew-formula:fzf\"\n    - \"brew-formula:git\"\n    - \"brew-formula:rtk\"\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap: [fzf-keybindings, git-lfs, python-links, claude-mem, rtk-patch, opencode, nvim-plug]\n",
     )
     .unwrap();
     let ids = unit_ids(&m);
@@ -338,4 +358,41 @@ fn implicit_edges_follow_declared_tools() {
     let bare = parse_manifest("install:\n  bootstrap: [claude-mem, rtk-patch]\n").unwrap();
     assert!(implicit_requires("bootstrap:claude-mem", &bare).is_empty());
     assert!(implicit_requires("bootstrap:rtk-patch", &bare).is_empty());
+}
+
+#[test]
+fn aliases_normalize() {
+    let m = parse_manifest(
+        "install:\n  require:\n    - \"tap:owner/repo\"\n    - \"formula:git\"\n    - \"cask:iterm2\"\n",
+    )
+    .unwrap();
+    let ids = unit_ids(&m);
+    assert!(ids.contains("brew-tap:owner/repo"));
+    assert!(ids.contains("brew-formula:git"));
+    assert!(ids.contains("brew-cask:iterm2"));
+}
+
+#[test]
+fn version_sugar_and_hooks() {
+    let m = parse_manifest(
+        r#"
+install:
+  require:
+    - id: "npm:prettier@3"
+      hooks:
+        post-install: "echo hi"
+    - id: "gem:neovim"
+      version: "0.9.0"
+"#,
+    )
+    .unwrap();
+    assert_eq!(
+        m.install.require[0].effective_version(),
+        Some("3".to_string())
+    );
+    assert!(m.install.require[0].has_hooks());
+    assert_eq!(
+        m.install.require[1].effective_version(),
+        Some("0.9.0".to_string())
+    );
 }
