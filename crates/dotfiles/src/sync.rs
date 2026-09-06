@@ -1,11 +1,11 @@
 //! `dotfiles sync` — the full pipeline (replacement for `make` / run.sh).
-//! Jobs: bootstrap → install → apply → prefs → history (+ software-update, opt-in).
+//! Jobs: bootstrap → install → prefs → history (+ software-update, opt-in).
 
 use crate::ctx::Ctx;
 use anyhow::Result;
 use clap::Parser;
 
-pub const JOBS: &[&str] = &["bootstrap", "install", "apply", "prefs", "history"];
+pub const JOBS: &[&str] = &["bootstrap", "install", "prefs", "history"];
 pub const OPT_IN_JOBS: &[&str] = &["software-update"];
 
 #[derive(Parser, Debug)]
@@ -120,13 +120,6 @@ pub fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
                     sequential: args.sequential,
                 },
             ),
-            "apply" => crate::apply::run(
-                ctx,
-                crate::apply::ApplyArgs {
-                    only: None,
-                    check: false,
-                },
-            ),
             "prefs" => crate::prefs_cmd::run(
                 ctx,
                 crate::prefs_cmd::PrefsArgs {
@@ -176,13 +169,13 @@ mod tests {
     #[test]
     fn skip_excludes_named_jobs() {
         let jobs = select_jobs(&sv(&["prefs", "history"]), &[]).unwrap();
-        assert_eq!(jobs, vec!["bootstrap", "install", "apply"]);
+        assert_eq!(jobs, vec!["bootstrap", "install"]);
     }
 
     #[test]
     fn only_runs_named_jobs_and_allows_opt_in() {
-        let jobs = select_jobs(&[], &sv(&["apply", "software-update"])).unwrap();
-        assert_eq!(jobs, vec!["apply", "software-update"]);
+        let jobs = select_jobs(&[], &sv(&["install", "software-update"])).unwrap();
+        assert_eq!(jobs, vec!["install", "software-update"]);
     }
 
     #[test]

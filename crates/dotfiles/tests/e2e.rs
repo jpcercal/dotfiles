@@ -28,7 +28,7 @@ fn sync_sandbox_completes_all_jobs() {
     );
     assert!(stdout.contains("sync: done"), "{}", stdout);
     // All default jobs ran, in order
-    let positions: Vec<Option<usize>> = ["bootstrap", "install", "apply", "prefs", "history"]
+    let positions: Vec<Option<usize>> = ["bootstrap", "install", "prefs", "history"]
         .iter()
         .map(|j| stdout.find(j))
         .collect();
@@ -48,7 +48,7 @@ fn sync_sandbox_completes_all_jobs() {
 #[test]
 fn sync_sandbox_skip_honored() {
     let out = Command::new(env!("CARGO_BIN_EXE_dotfiles"))
-        .args(["sync", "--sandbox", "--skip", "install,apply,prefs"])
+        .args(["sync", "--sandbox", "--skip", "install,prefs"])
         .env("DOTFILES_DIR", repo_root())
         .env("ATUIN_SESSION", "e2e-test")
         .output()
@@ -76,8 +76,8 @@ fn doctor_is_non_fatal_output() {
 /// The zero-shell gate: after the migration the repository must contain no
 /// shell/JXA automation scripts and no Makefile. Shell scripts generated at
 /// runtime (test stubs, askpass wrapper) live outside the repo and are exempt.
-/// Dotfile *configs* (.zshrc, .zshenv, .zprofile) are data synced by `apply`,
-/// not automation, and are exempt too.
+/// Dotfile *configs* (.zshrc, .zshenv, .zprofile) are data consumed by
+/// install hooks, not automation, and are exempt too.
 #[test]
 fn repo_contains_no_shell_scripts_or_makefile() {
     let out = Command::new("git")

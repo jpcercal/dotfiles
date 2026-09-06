@@ -8,7 +8,8 @@ Humans: see [README.md](README.md) for what this project is and how to use it.
 Single Rust binary (`dotfiles`) that manages a macOS machine: packages
 (Homebrew formulae/casks, MAS, gem, npm, pip/uv, cargo, go, composer),
 toolchains (rustup/node/python), filesystem config (dirs, symlinks, dock,
-shell, nvim), declarative macOS preferences (`prefs.yaml`), atuin history
+shell, nvim via post-install hooks), declarative macOS preferences
+(`prefs.yaml`), atuin history
 seeding, and a gated scheduled-upgrade pipeline. Driven by two declarative
 manifests (`apps.yaml`, `prefs.yaml`) validated against generated JSON
 Schemas (`schema/`).
@@ -21,7 +22,7 @@ Schemas (`schema/`).
   hook snippets: YAML-carried `sh -c` snippets (pre/post-install/update/uninstall)
   executed through the `dotfiles-exec` seam — reviewable, sandboxed, and stub-able
   (the `sh` stub records argv in tests/`sync --sandbox`), not committed as files.
-- **Everything must be idempotent.** Install/apply/prefs/sync are safe to
+- **Everything must be idempotent.** Install/prefs/sync are safe to
   re-run; re-running must converge, not duplicate or error.
 - **Never invoke real system tools directly.** All process execution goes
   through the `dotfiles-exec` seam (`Exec` trait: real vs sandbox env,
@@ -134,13 +135,13 @@ failures block dependents as `skipped (blocked by …)`, never abort). CLI:
 ## CLI surface (orientation)
 
 - `dotfiles sync [--only <job>] [--skip <jobs>] [--sandbox] [--jobs <N>] [--sequential]` — full pipeline:
-  bootstrap → install → apply → prefs → history
+  bootstrap → install → prefs → history
 - `dotfiles install [pkg...] [--jobs <N>] [--sequential]`, `uninstall`, `search`, `info`, `list`, `update`,
   `upgrade` (apt-like package ops; `--gate/--headless/--dry-run` on upgrade)
-- `dotfiles bootstrap|apply|history|software-update|doctor`
-- `dotfiles verify [--local-only]` — parallel read-only reference check: every
-  apps.yaml formula/cask/tap/MAS id/gem/npm/pip/go module exists upstream and
-  every symlink/dock reference resolves (exit non-zero on any miss)
+- `dotfiles bootstrap|history|software-update|doctor`
+- `dotfiles verify` — parallel read-only reference check: every
+  apps.yaml formula/cask/tap/MAS id/gem/npm/pip/go module exists upstream
+  (exit non-zero on any miss; filesystem/dock config now lives in hooks)
 - `dotfiles prefs apply|diff|validate`
 - `dotfiles agent install|status|uninstall|tick` (LaunchAgent, gated upgrades)
 - `dotfiles schema --kind <apps|prefs> [--write]`

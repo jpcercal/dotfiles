@@ -31,9 +31,9 @@ dotfiles upgrade                   # upgrade all backends (has --gate/--headless
 ## The full pipeline (used to be `make`)
 
 ```bash
-dotfiles sync                      # bootstrap → install → apply → prefs → history
+dotfiles sync                      # bootstrap → install → prefs → history
 dotfiles sync --skip prefs,history
-dotfiles sync --only apply
+dotfiles sync --only install
 dotfiles sync --sandbox            # full E2E + stub tools + temp HOME (zero real effects)
 ```
 
@@ -41,8 +41,7 @@ Individual jobs are also commands:
 
 ```bash
 dotfiles bootstrap                 # install Homebrew + taps
-dotfiles install                   # apps from apps.yaml (idempotent)
-dotfiles apply                     # dirs, symlinks (.bkp backups), dock, shell, nvim plugins
+dotfiles install                   # apps from apps.yaml (idempotent; runs config hooks)
 dotfiles prefs apply|diff|validate # ~190 declarative macOS preferences (defaults/pmset/dock/login items)
 dotfiles history seed              # seed atuin history from commands.yaml
 dotfiles software-update           # macOS updates (manual only, reboots!)
@@ -70,11 +69,12 @@ listed, never auto-installed.
 
 - **`apps.yaml`** — packages via `install.require` (`brew-formula:`, `brew-cask:`,
   `brew-tap:`, `mas:` with `label:`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`),
-  toolchains (rustup/node/python), typed bootstrap steps, plus config
-  (`mkdir`, `symbolic_links`, `dockutil`). Each entry may carry `requires:`
-  edges, `version:` pins (npm/pip/gem/cargo/go), and `hooks:` lifecycle
-  snippets (`pre-install`, `post-install`, etc.) executed via `sh -c`. Validated
-  with [# yaml-language-server](schema/apps.schema.json).
+  toolchains (rustup/node/python), typed bootstrap steps. Each entry may carry
+  `requires:` edges, `version:` pins (npm/pip/gem/cargo/go), and `hooks:`
+  lifecycle snippets (`pre-install`, `post-install`, etc.) executed via `sh -c`.
+  Filesystem config (dirs, symlinks, dock) is declarative `post-install` hooks
+  on the owning packages (`zsh`, `git`, `nvim`, `dockutil`, casks, MAS apps).
+  Validated with [# yaml-language-server](schema/apps.schema.json).
 - **`prefs.yaml`** — ~190 declarative macOS preferences: typed `defaults`
   entries (bool/int/float/string/array/dict, `current_host`, `sudo`,
   `-dict-add` merge mode), whitelisted `exec` steps (pmset/nvram/PlistBuddy/…),

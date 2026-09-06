@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 
 mod agent;
-mod apply;
 mod askpass;
 mod bootstrap;
 mod cache;
@@ -59,15 +58,13 @@ enum Commands {
     Bootstrap(bootstrap::BootstrapArgs),
     /// Diagnose the environment (brew, shell, PATH, manifest)
     Doctor(doctor::DoctorArgs),
-    /// Apply configuration: dirs, symlinks, dock, shell, nvim plugins
-    Apply(apply::ApplyArgs),
     /// Declarative macOS preferences (defaults/pmset/dock/login-items)
     Prefs(prefs_cmd::PrefsArgs),
     /// Seed shell history (atuin) from commands.yaml
     History(history::HistoryArgs),
     /// macOS system update (manual only — reboots the machine!)
     SoftwareUpdate(software_update::SoftwareUpdateArgs),
-    /// Run the full pipeline (bootstrap → install → apply → prefs → history)
+    /// Run the full pipeline (bootstrap → install → prefs → history)
     Sync(sync::SyncArgs),
     /// Manage the LaunchAgent (scheduled upgrades)
     Agent(agent::AgentArgs),
@@ -99,7 +96,6 @@ fn main() -> anyhow::Result<()> {
         Commands::Upgrade(args) => upgrade::run(args),
         Commands::Bootstrap(args) => bootstrap::run(&ctx, args),
         Commands::Doctor(args) => doctor::run(&ctx, args),
-        Commands::Apply(args) => apply::run(&ctx, args),
         Commands::Prefs(args) => prefs_cmd::run(&ctx, args),
         Commands::History(args) => history::run(&ctx, args),
         Commands::SoftwareUpdate(args) => software_update::run(&ctx, args),

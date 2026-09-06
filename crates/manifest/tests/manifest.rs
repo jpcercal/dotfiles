@@ -12,8 +12,6 @@ fn parses_real_apps_yaml() {
     assert_eq!(m.schema_version, 2);
     assert!(!m.install.require.is_empty());
     // config has been moved to post-install hooks; real file has no config section
-    assert!(m.config.symbolic_links.is_empty());
-    assert!(m.config.dockutil.add.is_empty());
     // some entries carry hooks (zsh, neovim, etc.)
     assert!(m.install.require.iter().any(|e| e.has_hooks()));
 }
@@ -72,6 +70,7 @@ install:
 
 #[test]
 fn rejects_absolute_link_source() {
+    // config section has been removed — unknown fields are rejected
     let yaml = r#"
 config:
   symbolic_links:
@@ -79,7 +78,7 @@ config:
       to: { absolute_path: "~/.x" }
 "#;
     let err = parse_manifest(yaml).unwrap_err();
-    assert!(err.to_string().contains("must be relative"), "{}", err);
+    assert!(matches!(err, ManifestError::Yaml { .. }), "{}", err);
 }
 
 #[test]
@@ -152,24 +151,11 @@ fn rejects_unknown_bootstrap_step_and_bad_toolchains() {
 
 #[test]
 fn rejects_invalid_dock_and_link_entries() {
+    // config section removed — these configs are now rejected as unknown fields
     let err =
         parse_manifest("config:\n  dockutil:\n    add:\n      - { app: \"relative/Foo.app\" }\n")
             .unwrap_err();
-    assert!(err.to_string().contains("absolute .app path"), "{}", err);
-    let err = parse_manifest(
-        "config:\n  dockutil:\n    add:\n      - { app: \"/Applications/Foo.app\", after: \"\" }\n",
-    )
-    .unwrap_err();
-    assert!(err.to_string().contains("empty 'after'"), "{}", err);
-    let err = parse_manifest(
-        "config:\n  symbolic_links:\n    - from: { relative_path: \".x\" }\n      to: { absolute_path: \"\" }\n",
-    )
-    .unwrap_err();
-    assert!(
-        err.to_string().contains("empty to.absolute_path"),
-        "{}",
-        err
-    );
+    assert!(matches!(err, ManifestError::Yaml { .. }), "{}", err);
     let err = parse_manifest("install:\n  require:\n    - \"\"\n").unwrap_err();
     assert!(err.to_string().contains("empty"), "{}", err);
 }
@@ -177,15 +163,14 @@ fn rejects_invalid_dock_and_link_entries() {
 #[test]
 fn schema_mentions_all_top_level_sections() {
     let schema = schema_json().expect("schema export");
-    for needle in [
-        "\"install\"",
-        "\"config\"",
-        "\"symbolic_links\"",
-        "\"dockutil\"",
-        "\"require\"",
-    ] {
+    for needle in ["\"install\"", "\"require\""] {
         assert!(schema.contains(needle), "schema missing {}", needle);
     }
+    // config has been removed — ensure it is not present
+    assert!(
+        !schema.contains("\"symbolic_links\""),
+        "schema should not contain config"
+    );
 }
 
 #[test]

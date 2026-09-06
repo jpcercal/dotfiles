@@ -108,10 +108,8 @@ jobs:
         run: ./target/release/dotfiles software-update --list-only
       - name: bootstrap (Homebrew + taps)
         run: DOTFILES_MANIFEST=e2e/apps.ci.yaml ./target/release/dotfiles bootstrap
-      - name: install (parallel dependency-graph engine)
+      - name: install (parallel dependency-graph engine, incl. config hooks)
         run: DOTFILES_MANIFEST=e2e/apps.ci.yaml ./target/release/dotfiles install
-      - name: configure (dirs, symlinks)
-        run: DOTFILES_MANIFEST=e2e/apps.ci.yaml ./target/release/dotfiles apply
       - name: prefs apply + drift gate
         run: |
           DOTFILES_PREFS=e2e/prefs.ci.yaml ./target/release/dotfiles prefs apply
@@ -124,9 +122,8 @@ jobs:
           test -L ~/.config/starship.toml
 
   # Full-manifest reference check: every formula/cask/MAS id/npm/pip/go
-  # module/tap listed in the production apps.yaml exists upstream and every
-  # symlink/dock/bootstrap reference is wired correctly. Read-only probes,
-  # fanned out in parallel by `dotfiles verify`.
+  # module/tap listed in the production apps.yaml exists upstream. Read-only
+  # probes, fanned out in parallel by `dotfiles verify`.
   verify-manifest:
     name: verify apps.yaml references
     runs-on: macos-15

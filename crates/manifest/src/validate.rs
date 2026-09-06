@@ -161,38 +161,6 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
         }
     }
 
-    for link in &m.config.symbolic_links {
-        if link.from.relative_path.trim().is_empty() {
-            errors.push("config.symbolic_links: empty from.relative_path".to_string());
-        }
-        if link.from.relative_path.starts_with('/') {
-            errors.push(format!(
-                "config.symbolic_links: from.relative_path '{}' must be relative",
-                link.from.relative_path
-            ));
-        }
-        if link.to.absolute_path.trim().is_empty() {
-            errors.push("config.symbolic_links: empty to.absolute_path".to_string());
-        }
-    }
-
-    for entry in &m.config.dockutil.add {
-        if !entry.app.starts_with('/') || !entry.app.ends_with(".app") {
-            errors.push(format!(
-                "config.dockutil.add: app '{}' must be an absolute .app path",
-                entry.app
-            ));
-        }
-        if let Some(after) = &entry.after {
-            if after.trim().is_empty() {
-                errors.push(format!(
-                    "config.dockutil.add: entry '{}' has an empty 'after'",
-                    entry.app
-                ));
-            }
-        }
-    }
-
     validate_graph(m, &mut errors);
 
     if errors.is_empty() {

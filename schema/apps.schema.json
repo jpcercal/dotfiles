@@ -4,24 +4,6 @@
   "description": "Root of `apps.yaml` — the declarative installation + configuration manifest.",
   "type": "object",
   "properties": {
-    "config": {
-      "default": {
-        "dockutil": {
-          "_before": {
-            "removeAll": false,
-            "reset": false
-          },
-          "add": []
-        },
-        "mkdir": [],
-        "symbolic_links": []
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/Config"
-        }
-      ]
-    },
     "install": {
       "default": {
         "bootstrap": [],
@@ -52,101 +34,38 @@
   },
   "additionalProperties": false,
   "definitions": {
-    "Config": {
+    "BootstrapDetail": {
       "type": "object",
+      "required": [
+        "id"
+      ],
       "properties": {
-        "dockutil": {
-          "default": {
-            "_before": {
-              "removeAll": false,
-              "reset": false
-            },
-            "add": []
-          },
-          "allOf": [
+        "hooks": {
+          "anyOf": [
             {
-              "$ref": "#/definitions/Dockutil"
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
             }
           ]
         },
-        "mkdir": {
-          "description": "Directories to create (supports `~`/`$HOME`).",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "symbolic_links": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/SymLink"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "DockBefore": {
-      "type": "object",
-      "properties": {
-        "removeAll": {
-          "description": "`dockutil --remove all` before adding.",
-          "default": false,
-          "type": "boolean"
-        },
-        "reset": {
-          "description": "`defaults delete com.apple.dock && killall Dock` before rebuilding.",
-          "default": false,
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "DockEntry": {
-      "type": "object",
-      "required": [
-        "app"
-      ],
-      "properties": {
-        "after": {
-          "description": "Dock item to position this entry after (e.g. \"Finder\").",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "app": {
-          "description": "Absolute path of the .app bundle.",
+        "id": {
           "type": "string"
         }
       },
       "additionalProperties": false
     },
-    "Dockutil": {
-      "type": "object",
-      "properties": {
-        "_before": {
-          "description": "Destructive pre-steps applied before adding entries.",
-          "default": {
-            "removeAll": false,
-            "reset": false
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/DockBefore"
-            }
-          ]
+    "BootstrapEntry": {
+      "description": "A bootstrap entry: either a bare step name (`\"opencode\"`) or a detailed form with hooks (`{ id: \"opencode\", hooks: { post-install: \"...\" } }`).",
+      "anyOf": [
+        {
+          "type": "string"
         },
-        "add": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/DockEntry"
-          }
+        {
+          "$ref": "#/definitions/BootstrapDetail"
         }
-      },
-      "additionalProperties": false
+      ]
     },
     "Execution": {
       "description": "Parallel execution tuning for the install phase. `apps.yaml` is the source of truth for the dependency graph; this section tunes the engine that executes it (worker count + per lock-class concurrency).",
@@ -219,11 +138,11 @@
       "type": "object",
       "properties": {
         "bootstrap": {
-          "description": "Typed, idempotent setup steps.",
+          "description": "Typed, idempotent setup steps (may carry post-install hooks).",
           "default": [],
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/BootstrapEntry"
           }
         },
         "execution": {
@@ -258,32 +177,6 @@
               "$ref": "#/definitions/Toolchains"
             }
           ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "LinkFrom": {
-      "type": "object",
-      "required": [
-        "relative_path"
-      ],
-      "properties": {
-        "relative_path": {
-          "description": "Path relative to the dotfiles repo root.",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "LinkTo": {
-      "type": "object",
-      "required": [
-        "absolute_path"
-      ],
-      "properties": {
-        "absolute_path": {
-          "description": "Destination path (supports `~`/`$HOME`).",
-          "type": "string"
         }
       },
       "additionalProperties": false
@@ -381,22 +274,6 @@
         "channel": {
           "default": "stable",
           "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "SymLink": {
-      "type": "object",
-      "required": [
-        "from",
-        "to"
-      ],
-      "properties": {
-        "from": {
-          "$ref": "#/definitions/LinkFrom"
-        },
-        "to": {
-          "$ref": "#/definitions/LinkTo"
         }
       },
       "additionalProperties": false

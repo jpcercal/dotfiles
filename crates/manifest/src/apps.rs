@@ -10,7 +10,6 @@ pub struct Manifest {
     #[schemars(range(min = 1))]
     pub schema_version: u32,
     pub install: Install,
-    pub config: Config,
 }
 
 fn default_schema_version() -> u32 {
@@ -297,62 +296,4 @@ pub struct PythonToolchain {
 
 fn default_python_provider() -> String {
     "uv".to_string()
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct Config {
-    /// Directories to create (supports `~`/`$HOME`).
-    pub mkdir: Vec<String>,
-    pub symbolic_links: Vec<SymLink>,
-    pub dockutil: Dockutil,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SymLink {
-    pub from: LinkFrom,
-    pub to: LinkTo,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct LinkFrom {
-    /// Path relative to the dotfiles repo root.
-    pub relative_path: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct LinkTo {
-    /// Destination path (supports `~`/`$HOME`).
-    pub absolute_path: String,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct Dockutil {
-    /// Destructive pre-steps applied before adding entries.
-    #[serde(rename = "_before")]
-    pub before: DockBefore,
-    pub add: Vec<DockEntry>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
-pub struct DockBefore {
-    /// `defaults delete com.apple.dock && killall Dock` before rebuilding.
-    pub reset: bool,
-    /// `dockutil --remove all` before adding.
-    #[serde(rename = "removeAll")]
-    pub remove_all: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct DockEntry {
-    /// Absolute path of the .app bundle.
-    pub app: String,
-    /// Dock item to position this entry after (e.g. "Finder").
-    pub after: Option<String>,
 }

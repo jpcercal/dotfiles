@@ -68,9 +68,9 @@ fn run_diagnosis(ctx: &Ctx) -> Result<()> {
             Ok(m) => {
                 let total = m.install.require.len();
                 format!(
-                    "{} packages, {} links",
+                    "{} packages, {} bootstrap steps",
                     total,
-                    m.config.symbolic_links.len()
+                    m.install.bootstrap.len()
                 )
             }
             Err(e) => e.to_string(),
@@ -85,7 +85,7 @@ fn run_diagnosis(ctx: &Ctx) -> Result<()> {
         detail: if local_bin.is_dir() {
             "exists".into()
         } else {
-            "missing — will be created by `dotfiles apply`".into()
+            "missing — will be created by install hooks".into()
         },
     });
 
