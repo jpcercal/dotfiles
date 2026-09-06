@@ -60,13 +60,6 @@ install:
     label: "go"
   - id: "brew-formula:dockutil"
     label: "dockutil"
-    hooks:
-      post-install: |
-        set -e
-        dockutil --add "/System/Applications/Launchpad.app" --after Finder >/dev/null
-        dockutil --add "/System/Applications/Reminders.app" --after Finder >/dev/null
-        dockutil --add "/System/Applications/Music.app" --after Finder >/dev/null
-        killall Dock >/dev/null
   - id: "brew-formula:mas"
     label: "mas"
   - id: "brew-formula:neovim"
