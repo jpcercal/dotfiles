@@ -11,13 +11,11 @@ fn parses_real_apps_yaml() {
         .expect("real apps.yaml must parse and validate");
     assert_eq!(m.schema_version, 2);
     assert!(!m.install.require.is_empty());
-    assert!(!m.config.symbolic_links.is_empty());
-    assert!(m.config.dockutil.before.reset);
-    assert!(m.config.dockutil.before.remove_all);
-    assert!(!m.config.dockutil.add.is_empty());
-    for entry in &m.config.dockutil.add {
-        assert_eq!(entry.after.as_deref(), Some("Finder"));
-    }
+    // config has been moved to post-install hooks; real file has no config section
+    assert!(m.config.symbolic_links.is_empty());
+    assert!(m.config.dockutil.add.is_empty());
+    // some entries carry hooks (zsh, neovim, etc.)
+    assert!(m.install.require.iter().any(|e| e.has_hooks()));
 }
 
 #[test]
