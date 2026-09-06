@@ -24,10 +24,10 @@ install:
     hooks:
       post-install: |
         mkdir -p "$HOME/.config/opencode/skills"
-        f="$HOME/.config/opencode/AGENTS.md"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/opencode/AGENTS.md" "$f"
-        f="$HOME/.config/opencode/opencode.json"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/opencode/opencode.json" "$f"
-        f="$HOME/.config/opencode/opencode.jsonc"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/opencode/opencode.jsonc" "$f"
-        f="$HOME/.config/opencode/skills/builder"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/opencode/skills/builder" "$f" 
+        ln -sfn "$DOTFILES_DIR/opencode/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
+        ln -sfn "$DOTFILES_DIR/opencode/opencode.json" "$HOME/.config/opencode/opencode.json"
+        ln -sfn "$DOTFILES_DIR/opencode/opencode.jsonc" "$HOME/.config/opencode/opencode.jsonc"
+        ln -sfn "$DOTFILES_DIR/opencode/skills/builder" "$HOME/.config/opencode/skills/builder" 
   - rtk-patch
   - claude-mem
   require:
@@ -99,9 +99,9 @@ install:
     label: "git"
     hooks:
       post-install: |
-        f="$HOME/.gitconfig"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.gitconfig" "$f"
-        f="$HOME/.gitignore_global"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.gitignore_global" "$f"
-        f="$HOME/.editorconfig"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.editorconfig" "$f" 
+        ln -sfn "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+        ln -sfn "$DOTFILES_DIR/.gitignore_global" "$HOME/.gitignore_global"
+        ln -sfn "$DOTFILES_DIR/.editorconfig" "$HOME/.editorconfig" 
   - id: "brew-formula:gmp"
     label: "gmp"
   - id: "brew-formula:gnu-sed"
@@ -145,7 +145,7 @@ install:
     hooks:
       post-install: |
         mkdir -p "$HOME/.config/nvim"
-        f="$HOME/.config/nvim/init.vim"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.vimrc" "$f"
+        ln -sfn "$DOTFILES_DIR/.vimrc" "$HOME/.config/nvim/init.vim"
         if command -v nvim >/dev/null 2>&1; then nvim --headless '+PlugInstall --sync' +qa 2>/dev/null || true; fi
   - id: "brew-formula:openssh"
     label: "openssh"
@@ -162,8 +162,8 @@ install:
     hooks:
       post-install: |
         mkdir -p "$HOME/Library/Application Support/rtk"
-        f="$HOME/Library/Application Support/rtk/config.toml"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/rtk/config.toml" "$f"
-        f="$HOME/Library/Application Support/rtk/filters.toml"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/rtk/filters.toml" "$f" 
+        ln -sfn "$DOTFILES_DIR/rtk/config.toml" "$HOME/Library/Application Support/rtk/config.toml"
+        ln -sfn "$DOTFILES_DIR/rtk/filters.toml" "$HOME/Library/Application Support/rtk/filters.toml" 
   - id: "brew-formula:screen"
     label: "screen"
   - id: "brew-formula:sops"
@@ -172,7 +172,8 @@ install:
     label: "starship"
     hooks:
       post-install: |
-        f="$HOME/.config/starship.toml"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/starship.toml" "$f" 
+        mkdir -p "$HOME/.config"
+        ln -sfn "$DOTFILES_DIR/starship.toml" "$HOME/.config/starship.toml" 
   - id: "brew-formula:taskwarrior-tui"
     label: "taskwarrior-tui"
   - id: "brew-formula:terminal-notifier"
@@ -184,7 +185,7 @@ install:
     hooks:
       post-install: |
         mkdir -p "$HOME/.config/tmux"
-        f="$HOME/.config/tmux/tmux.conf"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/tmux.conf" "$f" 
+        ln -sfn "$DOTFILES_DIR/tmux.conf" "$HOME/.config/tmux/tmux.conf" 
   - id: "brew-formula:tpm"
     label: "tpm"
   - id: "brew-formula:tree"
@@ -201,7 +202,7 @@ install:
     label: "vim"
     hooks:
       post-install: |
-        f="$HOME/.vimrc"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.vimrc" "$f" 
+        ln -sfn "$DOTFILES_DIR/.vimrc" "$HOME/.vimrc" 
   - id: "brew-formula:watch"
     label: "watch"
   - id: "brew-formula:watchexec"
@@ -227,11 +228,11 @@ install:
     hooks:
       post-install: |
         mkdir -p "$HOME/.config"
-        f="$HOME/.zshrc"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.zshrc" "$f"
-        f="$HOME/.zprofile"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.zprofile" "$f"
-        f="$HOME/.zshenv"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.zshenv" "$f"
-        f="$HOME/.curlrc"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.curlrc" "$f"
-        f="$HOME/.netrc"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.netrc" "$f"
+        ln -sfn "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+        ln -sfn "$DOTFILES_DIR/.zprofile" "$HOME/.zprofile"
+        ln -sfn "$DOTFILES_DIR/.zshenv" "$HOME/.zshenv"
+        ln -sfn "$DOTFILES_DIR/.curlrc" "$HOME/.curlrc"
+        ln -sfn "$DOTFILES_DIR/.netrc" "$HOME/.netrc"
         prefix="$(brew --prefix 2>/dev/null)"; [ -n "$prefix" ] && [ -x "$prefix/bin/zsh" ] && current="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')" && [ "$current" != "$prefix/bin/zsh" ] && sudo dscl . -create "/Users/$USER" UserShell "$prefix/bin/zsh" 
   - id: "brew-cask:alfred"
     label: "alfred"

@@ -58,7 +58,10 @@ install:
     hooks:
       post-install: |
         mkdir -p "$HOME/.config/nvim"
-        f="$HOME/.config/nvim/init.vim"; [ -e "$f" ] && [ ! -L "$f" ] && mv "$f" "${f}.$(date +%Y.%m.%d).bkp"; ln -sfn "$DOTFILES_DIR/.vimrc" "$f"
+        ln -sfn "$DOTFILES_DIR/e2e/vimrc.ci" "$HOME/.config/nvim/init.vim"
+        ln -sfn "$DOTFILES_DIR/.editorconfig" "$HOME/.editorconfig"
+        mkdir -p "$HOME/.config"
+        ln -sfn "$DOTFILES_DIR/starship.toml" "$HOME/.config/starship.toml"
         if command -v nvim >/dev/null 2>&1; then nvim --headless '+PlugInstall --sync' +qa 2>/dev/null || true; fi
   - id: "brew-formula:ruby"
     label: "ruby"

@@ -296,10 +296,14 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
         out
     });
 
-    // Post-install hook: only if install actually changed something (idempotency-preserving)
+    // Post-install hook: fires whenever the unit ended up present (newly
+    // installed or already installed) with no failures. Config hooks must
+    // converge on every run — a re-run with the package already present must
+    // still (re)apply its filesystem config.
     if let Some(hooks) = &unit.hooks {
         if let Some(snippet) = &hooks.post_install {
-            if !outcome.changed.is_empty() && outcome.failed.is_empty() {
+            let present = !outcome.changed.is_empty() || !outcome.unchanged.is_empty();
+            if present && outcome.failed.is_empty() {
                 let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &unit.id);
                 match run_hook(&hook_env, snippet) {
                     Ok(true) => {}
@@ -703,6 +707,37 @@ install:
             "{:?}",
             sh_calls
         );
+        assert!(
+            sh_calls.iter().any(|c| c.contains("echo post")),
+            "{:?}",
+            sh_calls
+        );
+    }
+
+    #[test]
+    fn post_hook_fires_when_package_already_installed() {
+        // Config hooks must converge on re-runs: even when the package is
+        // already installed (outcome.unchanged, nothing changed), the
+        // post-install hook still runs so filesystem config is re-applied.
+        let t = TestEnv::new();
+        t.stub(
+            "brew",
+            "case \"$*\" in \"list -1 --formula\") echo git ;; esac\nexit 0",
+        );
+        t.stub("sh", "exit 0");
+        let manifest = parse_manifest(
+            r#"
+install:
+  require:
+    - id: "brew-formula:git"
+      hooks:
+        post-install: "echo post"
+"#,
+        )
+        .unwrap();
+        let results = install_all(t.exec(), &manifest).unwrap();
+        assert!(results.iter().all(|r| r.ok()));
+        let sh_calls = t.calls_of("sh");
         assert!(
             sh_calls.iter().any(|c| c.contains("echo post")),
             "{:?}",
