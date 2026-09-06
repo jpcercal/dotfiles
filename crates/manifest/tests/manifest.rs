@@ -132,6 +132,18 @@ fn rejects_duplicate_mas_id_and_empty_name() {
 fn rejects_unknown_bootstrap_step_and_bad_toolchains() {
     let err = parse_manifest("install:\n  bootstrap: [nope]\n").unwrap_err();
     assert!(err.to_string().contains("unknown step"), "{}", err);
+    // moved to post-install hooks — no longer valid bootstrap steps
+    for step in [
+        "fzf-keybindings",
+        "git-lfs",
+        "python-links",
+        "nvim-plug",
+        "rtk-patch",
+        "claude-mem",
+    ] {
+        let err = parse_manifest(&format!("install:\n  bootstrap: [{step}]\n")).unwrap_err();
+        assert!(err.to_string().contains("unknown step"), "{step}: {err}");
+    }
     let err =
         parse_manifest("install:\n  toolchains:\n    node: { ensure: \"20\" }\n").unwrap_err();
     assert!(
@@ -308,13 +320,13 @@ fn unit_namespace_helpers() {
 #[test]
 fn implicit_edges_follow_declared_tools() {
     let m = parse_manifest(
-        "install:\n  require:\n    - \"brew-formula:fnm\"\n    - \"brew-formula:uv\"\n    - \"brew-formula:fzf\"\n    - \"brew-formula:git\"\n    - \"brew-formula:rtk\"\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap: [fzf-keybindings, git-lfs, python-links, claude-mem, rtk-patch, opencode, nvim-plug]\n",
+        "install:\n  require:\n    - \"brew-formula:fnm\"\n    - \"brew-formula:uv\"\n    - \"brew-formula:git\"\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap: [opencode]\n",
     )
     .unwrap();
     let ids = unit_ids(&m);
     assert!(!ids.contains("brew-tap:hashicorp/tap"));
     assert!(ids.contains("toolchain:node"));
-    assert!(ids.contains("bootstrap:claude-mem"));
+    assert!(ids.contains("bootstrap:opencode"));
     assert_eq!(
         implicit_requires("toolchain:node", &m),
         vec!["brew-formula:fnm"]
@@ -323,24 +335,9 @@ fn implicit_edges_follow_declared_tools() {
         implicit_requires("toolchain:python", &m),
         vec!["brew-formula:uv"]
     );
-    assert_eq!(
-        implicit_requires("bootstrap:claude-mem", &m),
-        vec!["toolchain:node"]
-    );
-    assert_eq!(
-        implicit_requires("bootstrap:python-links", &m),
-        vec!["toolchain:python"]
-    );
-    assert_eq!(
-        implicit_requires("bootstrap:fzf-keybindings", &m),
-        vec!["brew-formula:fzf"]
-    );
+    // opencode is the only typed step left (remote installer, no tool edges);
+    // all other setup moved to post-install hooks on owning packages.
     assert!(implicit_requires("bootstrap:opencode", &m).is_empty());
-    assert!(implicit_requires("bootstrap:nvim-plug", &m).is_empty());
-    // undeclared tools produce no edges (runtime bail/skip preserved)
-    let bare = parse_manifest("install:\n  bootstrap: [claude-mem, rtk-patch]\n").unwrap();
-    assert!(implicit_requires("bootstrap:claude-mem", &bare).is_empty());
-    assert!(implicit_requires("bootstrap:rtk-patch", &bare).is_empty());
 }
 
 #[test]

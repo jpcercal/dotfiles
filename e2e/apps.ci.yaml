@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=../schema/apps.schema.json
 ---
 # Reduced manifest for the real-machine CI E2E job (`e2e-machine`). Mirrors
-# the production structure (batches, implicit toolchain edges, bootstrap
-# steps, symlinks) at a fraction of the wall-clock cost. Selected via
+# the production structure (batches, implicit toolchain edges, install hooks,
+# symlinks) at a fraction of the wall-clock cost. Selected via
 # DOTFILES_MANIFEST=e2e/apps.ci.yaml (with DOTFILES_DIR set to the repo root
 # so symlink sources resolve).
 #
@@ -24,10 +24,6 @@ install:
       ensure: "lts"
     python:
       provider: "uv"
-  bootstrap:
-  - fzf-keybindings
-  - python-links
-  - nvim-plug
   require:
   - id: "brew-formula:jq"
     label: "jq"
@@ -35,34 +31,60 @@ install:
     label: "fd"
   - id: "brew-formula:fzf"
     label: "fzf"
+    hooks:
+      post-install: |
+        set -e
+        if [ ! -e "$HOME/.fzf.zsh" ]; then
+          prefix="$(brew --prefix)"
+          { echo y; echo y; echo y; } | "$prefix/opt/fzf/install" --no-update-rc >/dev/null
+        fi
   - id: "brew-formula:fnm"
     label: "fnm"
   - id: "brew-formula:uv"
     label: "uv"
+    hooks:
+      post-install: |
+        set -e
+        uv python install >/dev/null
+        py="$(uv python find)"
+        [ -n "$py" ] || exit 1
+        d="$(dirname "$py")"
+        mkdir -p "$HOME/.local/bin"
+        ln -sfn "$d/python3" "$HOME/.local/bin/python"
+        ln -sfn "$d/python3" "$HOME/.local/bin/python3"
+        if [ -e "$d/pip3" ]; then
+          ln -sfn "$d/pip3" "$HOME/.local/bin/pip"
+          ln -sfn "$d/pip3" "$HOME/.local/bin/pip3"
+        fi
   - id: "brew-formula:go"
     label: "go"
   - id: "brew-formula:dockutil"
     label: "dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then
-          dockutil --add "/System/Applications/Launchpad.app" --after Finder >/dev/null 2>&1 || true
-          dockutil --add "/System/Applications/Reminders.app" --after Finder >/dev/null 2>&1 || true
-          dockutil --add "/System/Applications/Music.app" --after Finder >/dev/null 2>&1 || true
-          killall Dock 2>/dev/null || true
-        fi
+        set -e
+        dockutil --add "/System/Applications/Launchpad.app" --after Finder >/dev/null
+        dockutil --add "/System/Applications/Reminders.app" --after Finder >/dev/null
+        dockutil --add "/System/Applications/Music.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "brew-formula:mas"
     label: "mas"
   - id: "brew-formula:neovim"
     label: "neovim"
     hooks:
       post-install: |
+        set -e
         mkdir -p "$HOME/.config/nvim"
         ln -sfn "$DOTFILES_DIR/e2e/vimrc.ci" "$HOME/.config/nvim/init.vim"
         ln -sfn "$DOTFILES_DIR/.editorconfig" "$HOME/.editorconfig"
         mkdir -p "$HOME/.config"
         ln -sfn "$DOTFILES_DIR/starship.toml" "$HOME/.config/starship.toml"
-        if command -v nvim >/dev/null 2>&1; then nvim --headless '+PlugInstall --sync' +qa 2>/dev/null || true; fi
+        plug="$HOME/.local/share/nvim/site/autoload/plug.vim"
+        if [ ! -e "$plug" ]; then
+          mkdir -p "$(dirname "$plug")"
+          curl -fsSLo "$plug" https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim >/dev/null
+        fi
+        nvim --headless '+PlugInstall --sync' +qa >/dev/null
   - id: "brew-formula:ruby"
     label: "ruby"
   - id: "brew-cask:caffeine"

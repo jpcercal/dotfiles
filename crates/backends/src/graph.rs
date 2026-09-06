@@ -534,20 +534,19 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_steps_carry_implicit_requires() {
+    fn bootstrap_opencode_carries_hooks_and_no_implicit_requires() {
+        // opencode is the only remaining typed step; all other setup moved
+        // to post-install hooks on owning packages.
         let g = build(&manifest(
-            "install:\n  require:\n    - \"brew-formula:fzf\"\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap: [fzf-keybindings, claude-mem, opencode]\n",
+            "install:\n  require:\n    - \"brew-formula:fzf\"\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap:\n    - id: \"opencode\"\n      hooks:\n        post-install: \"echo hi\"\n",
         ))
         .unwrap();
+        let unit = g.get("bootstrap:opencode").unwrap();
+        assert!(unit.requires.is_empty());
         assert_eq!(
-            g.get("bootstrap:fzf-keybindings").unwrap().requires,
-            vec!["brew-formula:fzf"]
+            unit.hooks.as_ref().unwrap().post_install.as_deref(),
+            Some("echo hi")
         );
-        assert_eq!(
-            g.get("bootstrap:claude-mem").unwrap().requires,
-            vec!["toolchain:node"]
-        );
-        assert!(g.get("bootstrap:opencode").unwrap().requires.is_empty());
     }
 
     #[test]

@@ -118,16 +118,19 @@ backend's batched install into schedulable single units. Aliases
 Canonical unit IDs (`crates/manifest/src/units.rs`): `brew-formula:x`,
 `brew-cask:x`, `brew-tap:o/r`, `mas:<id>` (with required `label:`), `gem:`,
 `npm:`, `pip:`, `cargo:`, `go:`, `composer:`, `toolchain:rustup|node|python`,
-`bootstrap:<step>`. Implicit edges (taps → brew units, toolchains → npm/pip,
-tool binaries → bootstrap steps) live in `units::implicit_requires`;
+`bootstrap:<step>`. Implicit edges (taps → brew units, toolchains → npm/pip)
+live in `units::implicit_requires`;
 validation rejects unknown targets and cycles. Hooks (`pre-install`,
 `post-install`, `pre-update`, `post-update`, `pre-uninstall`,
 `post-uninstall`) are `sh -c` snippets executed through the exec seam.
 `post-install` hooks fire whenever the unit ends up present (newly installed
 **or** already installed, with no failures) so filesystem/dock config
 converges on every run; pre hooks fire only ahead of the associated action.
-Snippets must be idempotency-preserving (e.g. `ln -sfn`, guarded dockutil
-adds). `install.execution`
+Snippets must be idempotency-preserving (e.g. `ln -sfn`, guarded `if` skips);
+never probe tool availability (`command -v`) or swallow faults (`|| true`) —
+a failing hook fails its unit with the hook's stderr, which fails install/sync.
+Multi-line snippets start with `set -e` so the first fault aborts the snippet.
+`install.execution`
 tunes the engine (`max_jobs`, per lock-class `locks`; `brew` capped at 1).
 Execution: `graph::build` → `schedule::run` (`std::thread::scope` ready-queue;
 failures block dependents as `skipped (blocked by …)`, never abort). CLI:

@@ -198,9 +198,25 @@ fn preflight_sudo(env: &ExecEnv, m: &Manifest) -> Result<()> {
     Ok(())
 }
 
-fn run_hook(env: &ExecEnv, snippet: &str) -> Result<bool> {
-    let res = env.output("sh", &["-c", snippet])?;
-    Ok(res.ok())
+fn run_hook(env: &ExecEnv, snippet: &str) -> Result<dotfiles_exec::ExecOutput> {
+    env.output("sh", &["-c", snippet])
+}
+
+/// Last non-empty line of hook stderr, for fault attribution.
+fn hook_stderr_tail(res: &dotfiles_exec::ExecOutput) -> String {
+    const MAX: usize = 500;
+    let tail = res
+        .stderr
+        .lines()
+        .rev()
+        .find(|l| !l.trim().is_empty())
+        .unwrap_or("")
+        .trim();
+    if tail.len() > MAX {
+        format!("{}…", &tail[..MAX])
+    } else {
+        tail.to_string()
+    }
 }
 
 /// Execute one graph unit. Backend errors become failed outcomes (the
@@ -211,14 +227,15 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
         if let Some(snippet) = &hooks.pre_install {
             let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &unit.id);
             match run_hook(&hook_env, snippet) {
-                Ok(true) => {}
-                Ok(false) => {
+                Ok(res) if res.ok() => {}
+                Ok(res) => {
                     let mut out = BackendOutcome::empty(unit.backend);
                     out.fail_one(
                         unit.id.clone(),
                         format!(
-                            "pre-install hook failed: {}",
-                            snippet.lines().next().unwrap_or("")
+                            "pre-install hook failed: {} ({})",
+                            snippet.lines().next().unwrap_or(""),
+                            hook_stderr_tail(&res),
                         ),
                     );
                     return out;
@@ -306,13 +323,14 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
             if present && outcome.failed.is_empty() {
                 let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &unit.id);
                 match run_hook(&hook_env, snippet) {
-                    Ok(true) => {}
-                    Ok(false) => {
+                    Ok(res) if res.ok() => {}
+                    Ok(res) => {
                         outcome.fail_one(
                             unit.id.clone(),
                             format!(
-                                "post-install hook failed: {}",
-                                snippet.lines().next().unwrap_or("")
+                                "post-install hook failed: {} ({})",
+                                snippet.lines().next().unwrap_or(""),
+                                hook_stderr_tail(&res),
                             ),
                         );
                     }
@@ -533,8 +551,6 @@ mod tests {
         t.stub_ok("rustup", ""); // toolchain ensure = no-op
         t.stub_ok("fnm", "");
         // uv stub above also covers toolchain python
-        t.stub_ok("git", "");
-        t.stub_ok("rtk", "");
         let manifest = parse_manifest(
             r#"
 install:
@@ -552,7 +568,6 @@ install:
     rustup: {}
     node: {}
     python: {}
-  bootstrap: ["git-lfs", "rtk-patch"]
 "#,
         )
         .unwrap();
@@ -593,8 +608,6 @@ install:
             t.calls_of("fnm"),
             vec!["install --lts", "default lts-latest"]
         );
-        assert_eq!(t.calls_of("git"), vec!["lfs install"]);
-        assert_eq!(t.calls_of("rtk"), vec!["init -g --opencode --auto-patch"]);
     }
 
     #[test]
@@ -811,53 +824,71 @@ install:
                 let t = TestEnv::new();
                 t.stub("sh", "exit 0");
                 t.stub("sudo", "exit 0"); // preflight_sudo; TestEnv PATH sees real /usr/bin/sudo
+                                          // Pull required deps in as bare entries so the graph resolves.
+                let mut require: Vec<RequireEntry> = case.require.clone().into_iter().collect();
+                if let Some(entry) = case.require.as_ref() {
+                    for dep in entry.requires() {
+                        require.push(RequireEntry::Simple(dep.clone()));
+                    }
+                }
                 if case.bootstrap.is_some() {
                     if present {
                         t.stub_ok("opencode", "1.0");
                     } else {
                         t.stub("curl", "exit 0");
                     }
-                } else if let Some((prefix, name)) =
-                    dotfiles_manifest::units::split_unit_id(&case.id)
-                        .map(|(p, n)| (p.to_string(), n))
-                {
-                    match prefix.as_str() {
-                        "brew-formula" | "brew-cask" => {
-                            let flag = if prefix == "brew-formula" {
-                                "--formula"
-                            } else {
-                                "--cask"
-                            };
-                            let list = if present {
-                                format!("echo '{name}'")
-                            } else {
-                                "printf ''".to_string()
-                            };
-                            t.stub(
-                                "brew",
-                                &format!(
-                                    "case \"$*\" in \"list -1 {flag}\") {list} ;; esac\nexit 0"
+                } else {
+                    // Brew list stubs cover the entry plus any bare dep
+                    // entries, so dep units stay quiet in present mode.
+                    let mut formulae: Vec<String> = vec![];
+                    let mut casks: Vec<String> = vec![];
+                    for e in &require {
+                        if let Some((p, n)) = dotfiles_manifest::units::split_unit_id(e.id()) {
+                            match p.as_str() {
+                                "brew-formula" => formulae.push(n),
+                                "brew-cask" => casks.push(n),
+                                "mas" => {
+                                    let list = if present {
+                                        format!("echo '{n} Label (1.0)'")
+                                    } else {
+                                        "printf ''".to_string()
+                                    };
+                                    t.stub(
+                                        "mas",
+                                        &format!("case \"$*\" in \"list\") {list} ;; esac\nexit 0"),
+                                    );
+                                }
+                                other => panic!(
+                                    "hook test: no stubs for backend '{other}' ({})",
+                                    case.id
                                 ),
-                            );
+                            }
                         }
-                        "mas" => {
-                            let list = if present {
-                                format!("echo '{name} Label (1.0)'")
-                            } else {
-                                "printf ''".to_string()
-                            };
-                            t.stub(
-                                "mas",
-                                &format!("case \"$*\" in \"list\") {list} ;; esac\nexit 0"),
-                            );
-                        }
-                        other => panic!("hook test: no stubs for backend '{other}' ({})", case.id),
+                    }
+                    if !formulae.is_empty() || !casks.is_empty() {
+                        let formulae = if present {
+                            formulae.join("\\n")
+                        } else {
+                            String::new()
+                        };
+                        let cask_list = if present {
+                            casks.join("\\n")
+                        } else {
+                            String::new()
+                        };
+                        t.stub(
+                            "brew",
+                            &format!(
+                                "case \"$*\" in \"list -1 --formula\") printf '{formulae}' ;; \
+                                 \"list -1 --cask\") printf '{cask_list}' ;; esac\nexit 0"
+                            ),
+                        );
                     }
                 }
                 let m = Manifest {
                     schema_version: 2,
                     install: Install {
-                        require: case.require.clone().into_iter().collect(),
+                        require,
                         bootstrap: case.bootstrap.clone().into_iter().collect(),
                         ..Default::default()
                     },

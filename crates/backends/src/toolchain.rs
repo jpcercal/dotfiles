@@ -1,7 +1,6 @@
 use crate::outcome::BackendOutcome;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use dotfiles_exec::ExecEnv;
-use std::path::PathBuf;
 
 /// Language toolchains (rustup / fnm-node / uv-python). Not a PackageBackend —
 /// toolchains are ensured and upgraded, not "package installed".
@@ -117,50 +116,6 @@ impl Toolchain {
     }
 }
 
-/// Symlink the uv-managed python/pip into `~/.local/bin` (bootstrap step
-/// "python-links"). Pure std::fs — no shell needed.
-pub fn python_links(env: &ExecEnv) -> Result<BackendOutcome> {
-    let mut out = BackendOutcome {
-        backend: "bootstrap:python-links",
-        ..Default::default()
-    };
-    let found = env
-        .output("uv", &["python", "find"])
-        .context("uv python find")?;
-    let python3 = found.stdout.trim().to_string();
-    if python3.is_empty() {
-        anyhow::bail!("uv python find returned nothing");
-    }
-    let dir = PathBuf::from(&python3);
-    let dir = dir.parent().context("python path has no parent")?;
-    let local_bin = env.home.join(".local/bin");
-    std::fs::create_dir_all(&local_bin)?;
-
-    let links = [
-        (dir.join("python3"), local_bin.join("python")),
-        (dir.join("python3"), local_bin.join("python3")),
-        (dir.join("pip3"), local_bin.join("pip")),
-        (dir.join("pip3"), local_bin.join("pip3")),
-    ];
-    for (src, dst) in links {
-        if !src.exists() {
-            out.note = format!("skipped missing {}", src.display());
-            continue;
-        }
-        // Re-point if already a symlink with the right target; replace stale links.
-        let current = std::fs::read_link(&dst).ok();
-        if current.as_deref() == Some(src.as_path()) {
-            out.unchanged.push(dst.display().to_string());
-            continue;
-        }
-        let _ = std::fs::remove_file(&dst);
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&src, &dst)?;
-        out.changed.push(dst.display().to_string());
-    }
-    Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,23 +158,5 @@ mod tests {
             t.calls_of("fnm"),
             vec!["install --lts", "default lts-latest"]
         );
-    }
-
-    #[test]
-    fn python_links_creates_four_symlinks_idempotently() {
-        let t = TestEnv::new();
-        let fake_py = t.home().join("upy/bin/python3");
-        std::fs::create_dir_all(fake_py.parent().unwrap()).unwrap();
-        std::fs::write(&fake_py, b"").unwrap();
-        std::fs::write(t.home().join("upy/bin/pip3"), b"").unwrap();
-        t.stub_ok("uv", &fake_py.display().to_string());
-        let out = python_links(t.exec()).unwrap();
-        assert_eq!(out.changed.len(), 4);
-        let p = t.home().join(".local/bin/python");
-        assert_eq!(std::fs::read_link(&p).unwrap(), fake_py);
-        // Second run: nothing changes.
-        let out2 = python_links(t.exec()).unwrap();
-        assert_eq!(out2.changed.len(), 0);
-        assert_eq!(out2.unchanged.len(), 4);
     }
 }

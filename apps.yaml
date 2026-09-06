@@ -16,20 +16,15 @@ install:
     python:
       provider: "uv"
   bootstrap:
-  - fzf-keybindings
-  - git-lfs
-  - python-links
-  - nvim-plug
   - id: "opencode"
     hooks:
       post-install: |
+        set -e
         mkdir -p "$HOME/.config/opencode/skills"
         ln -sfn "$DOTFILES_DIR/opencode/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
         ln -sfn "$DOTFILES_DIR/opencode/opencode.json" "$HOME/.config/opencode/opencode.json"
         ln -sfn "$DOTFILES_DIR/opencode/opencode.jsonc" "$HOME/.config/opencode/opencode.jsonc"
-        ln -sfn "$DOTFILES_DIR/opencode/skills/builder" "$HOME/.config/opencode/skills/builder" 
-  - rtk-patch
-  - claude-mem
+        ln -sfn "$DOTFILES_DIR/opencode/skills/builder" "$HOME/.config/opencode/skills/builder"
   require:
   - id: "brew-tap:anomalyco/tap"
     label: "anomalyco/tap"
@@ -63,12 +58,11 @@ install:
     label: "dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then
-          dockutil --add "/System/Applications/Launchpad.app" --after Finder >/dev/null 2>&1 || true
-          dockutil --add "/System/Applications/Reminders.app" --after Finder >/dev/null 2>&1 || true
-          dockutil --add "/System/Applications/Music.app" --after Finder >/dev/null 2>&1 || true
-          killall Dock 2>/dev/null || true
-        fi
+        set -e
+        dockutil --add "/System/Applications/Launchpad.app" --after Finder >/dev/null
+        dockutil --add "/System/Applications/Reminders.app" --after Finder >/dev/null
+        dockutil --add "/System/Applications/Music.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "brew-formula:doctl"
     label: "doctl"
   - id: "brew-formula:eza"
@@ -83,10 +77,20 @@ install:
     label: "findutils"
   - id: "brew-formula:fnm"
     label: "fnm"
+    hooks:
+      post-install: |
+        npx claude-mem install --ide opencode --provider openrouter >/dev/null
   - id: "brew-formula:fswatch"
     label: "fswatch"
   - id: "brew-formula:fzf"
     label: "fzf"
+    hooks:
+      post-install: |
+        set -e
+        if [ ! -e "$HOME/.fzf.zsh" ]; then
+          prefix="$(brew --prefix)"
+          { echo y; echo y; echo y; } | "$prefix/opt/fzf/install" --no-update-rc >/dev/null
+        fi
   - id: "brew-formula:gdrive"
     label: "gdrive"
   - id: "brew-formula:gh"
@@ -95,13 +99,19 @@ install:
     label: "git-delta"
   - id: "brew-formula:git-lfs"
     label: "git-lfs"
+    requires:
+    - "brew-formula:git"
+    hooks:
+      post-install: |
+        git lfs install >/dev/null
   - id: "brew-formula:git"
     label: "git"
     hooks:
       post-install: |
+        set -e
         ln -sfn "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
         ln -sfn "$DOTFILES_DIR/.gitignore_global" "$HOME/.gitignore_global"
-        ln -sfn "$DOTFILES_DIR/.editorconfig" "$HOME/.editorconfig" 
+        ln -sfn "$DOTFILES_DIR/.editorconfig" "$HOME/.editorconfig"
   - id: "brew-formula:gmp"
     label: "gmp"
   - id: "brew-formula:gnu-sed"
@@ -144,9 +154,15 @@ install:
     label: "neovim"
     hooks:
       post-install: |
+        set -e
         mkdir -p "$HOME/.config/nvim"
         ln -sfn "$DOTFILES_DIR/.vimrc" "$HOME/.config/nvim/init.vim"
-        if command -v nvim >/dev/null 2>&1; then nvim --headless '+PlugInstall --sync' +qa 2>/dev/null || true; fi
+        plug="$HOME/.local/share/nvim/site/autoload/plug.vim"
+        if [ ! -e "$plug" ]; then
+          mkdir -p "$(dirname "$plug")"
+          curl -fsSLo "$plug" https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim >/dev/null
+        fi
+        nvim --headless '+PlugInstall --sync' +qa >/dev/null
   - id: "brew-formula:openssh"
     label: "openssh"
   - id: "brew-formula:php"
@@ -161,9 +177,11 @@ install:
     label: "rtk"
     hooks:
       post-install: |
+        set -e
         mkdir -p "$HOME/Library/Application Support/rtk"
         ln -sfn "$DOTFILES_DIR/rtk/config.toml" "$HOME/Library/Application Support/rtk/config.toml"
-        ln -sfn "$DOTFILES_DIR/rtk/filters.toml" "$HOME/Library/Application Support/rtk/filters.toml" 
+        ln -sfn "$DOTFILES_DIR/rtk/filters.toml" "$HOME/Library/Application Support/rtk/filters.toml"
+        rtk init -g --opencode --auto-patch >/dev/null
   - id: "brew-formula:screen"
     label: "screen"
   - id: "brew-formula:sops"
@@ -172,8 +190,9 @@ install:
     label: "starship"
     hooks:
       post-install: |
+        set -e
         mkdir -p "$HOME/.config"
-        ln -sfn "$DOTFILES_DIR/starship.toml" "$HOME/.config/starship.toml" 
+        ln -sfn "$DOTFILES_DIR/starship.toml" "$HOME/.config/starship.toml"
   - id: "brew-formula:taskwarrior-tui"
     label: "taskwarrior-tui"
   - id: "brew-formula:terminal-notifier"
@@ -184,8 +203,9 @@ install:
     label: "tmux"
     hooks:
       post-install: |
+        set -e
         mkdir -p "$HOME/.config/tmux"
-        ln -sfn "$DOTFILES_DIR/tmux.conf" "$HOME/.config/tmux/tmux.conf" 
+        ln -sfn "$DOTFILES_DIR/tmux.conf" "$HOME/.config/tmux/tmux.conf"
   - id: "brew-formula:tpm"
     label: "tpm"
   - id: "brew-formula:tree"
@@ -198,11 +218,25 @@ install:
     label: "universal-ctags"
   - id: "brew-formula:uv"
     label: "uv"
+    hooks:
+      post-install: |
+        set -e
+        uv python install >/dev/null
+        py="$(uv python find)"
+        [ -n "$py" ] || exit 1
+        d="$(dirname "$py")"
+        mkdir -p "$HOME/.local/bin"
+        ln -sfn "$d/python3" "$HOME/.local/bin/python"
+        ln -sfn "$d/python3" "$HOME/.local/bin/python3"
+        if [ -e "$d/pip3" ]; then
+          ln -sfn "$d/pip3" "$HOME/.local/bin/pip"
+          ln -sfn "$d/pip3" "$HOME/.local/bin/pip3"
+        fi
   - id: "brew-formula:vim"
     label: "vim"
     hooks:
       post-install: |
-        ln -sfn "$DOTFILES_DIR/.vimrc" "$HOME/.vimrc" 
+        ln -sfn "$DOTFILES_DIR/.vimrc" "$HOME/.vimrc"
   - id: "brew-formula:watch"
     label: "watch"
   - id: "brew-formula:watchexec"
@@ -227,22 +261,29 @@ install:
     label: "zsh"
     hooks:
       post-install: |
+        set -e
         mkdir -p "$HOME/.config"
         ln -sfn "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
         ln -sfn "$DOTFILES_DIR/.zprofile" "$HOME/.zprofile"
         ln -sfn "$DOTFILES_DIR/.zshenv" "$HOME/.zshenv"
         ln -sfn "$DOTFILES_DIR/.curlrc" "$HOME/.curlrc"
         ln -sfn "$DOTFILES_DIR/.netrc" "$HOME/.netrc"
-        prefix="$(brew --prefix 2>/dev/null)"; [ -n "$prefix" ] && [ -x "$prefix/bin/zsh" ] && current="$(dscl . -read "/Users/$USER" UserShell 2>/dev/null | awk '{print $2}')" && [ "$current" != "$prefix/bin/zsh" ] && sudo dscl . -create "/Users/$USER" UserShell "$prefix/bin/zsh" 
+        prefix="$(brew --prefix)"
+        current="$(dscl . -read "/Users/$USER" UserShell | awk '{print $2}')"
+        if [ "$current" != "$prefix/bin/zsh" ]; then sudo dscl . -create "/Users/$USER" UserShell "$prefix/bin/zsh"; fi
   - id: "brew-cask:alfred"
     label: "alfred"
   - id: "brew-cask:appcleaner"
     label: "appcleaner"
   - id: "brew-cask:brave-browser"
     label: "brave-browser"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/Brave Browser.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/Brave Browser.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "brew-cask:caffeine"
     label: "caffeine"
   - id: "brew-cask:discord"
@@ -357,9 +398,13 @@ install:
     label: "hoppscotch"
   - id: "brew-cask:iterm2"
     label: "iterm2"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/iTerm.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/iTerm.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "brew-cask:jetbrains-toolbox"
     label: "jetbrains-toolbox"
   - id: "brew-cask:microsoft-teams"
@@ -376,9 +421,13 @@ install:
     label: "shottr"
   - id: "brew-cask:slack"
     label: "slack"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/Slack.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/Slack.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "brew-cask:steam"
     label: "steam"
   - id: "brew-cask:sublime-text"
@@ -387,16 +436,24 @@ install:
     label: "teamviewer"
   - id: "brew-cask:visual-studio-code"
     label: "visual-studio-code"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/Visual Studio Code.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/Visual Studio Code.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "brew-cask:vlc"
     label: "vlc"
   - id: "brew-cask:whatsapp"
     label: "whatsapp"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/WhatsApp.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/WhatsApp.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "brew-cask:zoom"
     label: "zoom"
   - id: "pip:pynvim"
@@ -409,27 +466,39 @@ install:
     label: "AdBlock Pro"
   - id: "mas:918858936"
     label: "Airmail"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/Airmail.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/Airmail.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "mas:1352778147"
     label: "Bitwarden"
   - id: "mas:935235287"
     label: "Encrypto"
   - id: "mas:975937182"
     label: "Fantastical 2"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/Fantastical.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/Fantastical.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "mas:682658836"
     label: "GarageBand"
   - id: "mas:668208984"
     label: "Giphy Capture"
   - id: "mas:775737590"
     label: "iA Writer"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/iA Writer.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/iA Writer.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "mas:408981434"
     label: "iMovie"
   - id: "mas:361285480"
@@ -450,9 +519,13 @@ install:
     label: "Speedtest"
   - id: "mas:1278508951"
     label: "Trello"
+    requires:
+    - "brew-formula:dockutil"
     hooks:
       post-install: |
-        if command -v dockutil >/dev/null 2>&1; then dockutil --add "/Applications/Trello.app" --after Finder >/dev/null 2>&1 || true; killall Dock 2>/dev/null || true; fi
+        set -e
+        dockutil --add "/Applications/Trello.app" --after Finder >/dev/null
+        killall Dock >/dev/null
   - id: "mas:1607635845"
     label: "Velja"
   - id: "mas:533696630"

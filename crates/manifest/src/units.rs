@@ -19,7 +19,7 @@
 //! | Go module     | `go:github.com/oklog/ulid/v2/cmd/ulid@latest`      | `go`       |
 //! | Composer      | `composer:vendor/pkg`                              | `composer` |
 //! | Toolchain     | `toolchain:rustup` / `node` / `python`             | `toolchain`|
-//! | Bootstrap     | `bootstrap:nvim-plug`                              | `bootstrap`|
+//! | Bootstrap     | `bootstrap:opencode`                               | `bootstrap`|
 //!
 //! All Homebrew traffic shares the `brew` lock class (limit 1 — concurrent
 //! `brew` invocations are unsupported by Homebrew); every other prefix is its
@@ -348,45 +348,10 @@ pub fn implicit_requires(id: &str, m: &Manifest) -> Vec<String> {
             }
             _ => vec![],
         },
-        "bootstrap" => match name_str {
-            "fzf-keybindings" => {
-                if has_formula(m, "fzf") {
-                    vec!["brew-formula:fzf".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "git-lfs" => {
-                if has_formula(m, "git") {
-                    vec!["brew-formula:git".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "python-links" => {
-                if m.install.toolchains.python.is_some() {
-                    vec!["toolchain:python".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "rtk-patch" => {
-                if has_formula(m, "rtk") {
-                    vec!["brew-formula:rtk".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "claude-mem" => {
-                if m.install.toolchains.node.is_some() {
-                    vec!["toolchain:node".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            // nvim-plug (curl) and opencode (remote installer) need no tools.
-            _ => vec![],
-        },
+        // Only opencode remains a typed step (remote installer); everything
+        // else moved to post-install hooks, so bootstrap units take no
+        // implicit edges.
+        "bootstrap" => vec![],
         _ => vec![],
     }
 }

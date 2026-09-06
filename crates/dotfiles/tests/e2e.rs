@@ -70,11 +70,23 @@ fn sync_sandbox_completes_all_jobs() {
         }
     }
     assert!(!hooks.is_empty(), "no hooks found in apps.yaml");
+    // Line-set matching, not verbatim substrings: the parallel scheduler
+    // runs hooks concurrently and their multi-line `sh -c` records interleave
+    // in the log. Interleaving scrambles line order, never line content, so
+    // every non-empty snippet line must appear as a full log line (minus the
+    // `sh -c ` prefix the stub prepends to each invocation's first line).
+    let log_lines: std::collections::HashSet<&str> = log
+        .lines()
+        .map(str::trim_end)
+        .map(|l| l.strip_prefix("sh -c ").unwrap_or(l))
+        .collect();
     for (id, snippet) in &hooks {
-        assert!(
-            log.contains(snippet.as_str()),
-            "hook for {id} never executed in sandbox sync"
-        );
+        for line in snippet.lines().map(str::trim_end).filter(|l| !l.is_empty()) {
+            assert!(
+                log_lines.contains(line),
+                "hook line for {id} never executed in sandbox sync: {line}"
+            );
+        }
     }
 }
 
