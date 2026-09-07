@@ -352,6 +352,8 @@ require:
       killall Dock >/dev/null
 - id: "mas:1607635845"
 - id: "mas:533696630"
+# max_jobs: 0 = auto = min(cpu cores, 4) — a bounded default, since install
+# units spawn app/OS-installer children; explicit values pin it exactly.
 execution:
   max_jobs: 0
   locks:

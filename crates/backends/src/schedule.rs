@@ -23,14 +23,21 @@ pub struct SchedOpts {
     pub lock_limits: BTreeMap<String, usize>,
 }
 
-/// Resolve the worker count (0 = auto).
+/// Auto concurrency ceiling when neither `--jobs` nor the manifest pins a
+/// count: bounded fan-out across lock classes. Install units spawn app and
+/// OS-installer children (brew, mas, sh hook snippets); an all-cores default
+/// proved heavy enough to starve the machine during parallel runs.
+pub const DEFAULT_MAX_JOBS: usize = 4;
+
+/// Resolve the worker count (0 = auto: `min(cpus, DEFAULT_MAX_JOBS)`).
 pub fn effective_jobs(opts: &SchedOpts) -> usize {
     if opts.max_jobs > 0 {
         opts.max_jobs
     } else {
         std::thread::available_parallelism()
             .map(|n| n.get())
-            .unwrap_or(4)
+            .unwrap_or(DEFAULT_MAX_JOBS)
+            .min(DEFAULT_MAX_JOBS)
     }
 }
 
@@ -417,9 +424,20 @@ mod tests {
     }
 
     #[test]
-    fn effective_jobs_defaults_to_cpus() {
+    fn effective_jobs_defaults_capped_at_default_max() {
+        // Explicit pins always win …
         assert_eq!(effective_jobs(&opts(3)), 3);
-        assert!(effective_jobs(&opts(0)) >= 1);
+        assert_eq!(
+            effective_jobs(&opts(DEFAULT_MAX_JOBS + 4)),
+            DEFAULT_MAX_JOBS + 4
+        );
+        // … but auto is bounded, never all-cores.
+        let auto = effective_jobs(&opts(0));
+        assert!(
+            (1..DEFAULT_MAX_JOBS).contains(&auto) || auto == DEFAULT_MAX_JOBS,
+            "auto = {auto}"
+        );
+        assert!(auto <= DEFAULT_MAX_JOBS, "auto = {auto}");
     }
 
     #[test]
