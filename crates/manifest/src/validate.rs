@@ -53,26 +53,13 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
         }
 
         // MAS specific
-        if prefix == "mas" {
-            if bare_name.is_empty() || !bare_name.chars().all(|c| c.is_ascii_digit()) {
-                errors.push(format!(
-                    "require: mas id '{}' is not a numeric App Store id",
-                    bare_name
-                ));
-            }
-            match entry.label() {
-                Some(l) if !l.trim().is_empty() => {}
-                _ => errors.push(format!(
-                    "require: mas:{} missing non-empty 'label'",
-                    bare_name
-                )),
-            }
-        }
-        // Label if present must be non-empty (allowed on any entry)
-        if let Some(l) = entry.label() {
-            if l.trim().is_empty() {
-                errors.push(format!("require: '{}' has empty label", raw_id));
-            }
+        if prefix == "mas"
+            && (bare_name.is_empty() || !bare_name.chars().all(|c| c.is_ascii_digit()))
+        {
+            errors.push(format!(
+                "require: mas id '{}' is not a numeric App Store id",
+                bare_name
+            ));
         }
 
         // brew-tap shape

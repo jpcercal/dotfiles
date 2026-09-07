@@ -58,7 +58,6 @@ fn rejects_non_numeric_mas_id() {
     let yaml = r#"
 require:
   - id: "mas:abc"
-    label: "Foo"
 "#;
     let err = parse_manifest(yaml).unwrap_err();
     assert!(err.to_string().contains("numeric App Store id"), "{}", err);
@@ -113,14 +112,9 @@ fn rejects_empty_require_id() {
 }
 
 #[test]
-fn rejects_duplicate_mas_id_and_empty_name() {
-    let err = parse_manifest(
-        "require:\n  - id: \"mas:1\"\n    label: \"A\"\n  - id: \"mas:1\"\n    label: \"B\"\n",
-    )
-    .unwrap_err();
+fn rejects_duplicate_mas_id() {
+    let err = parse_manifest("require:\n  - id: \"mas:1\"\n  - id: \"mas:1\"\n").unwrap_err();
     assert!(err.to_string().contains("duplicate"), "{}", err);
-    let err = parse_manifest("require:\n  - id: \"mas:2\"\n    label: \"\"\n").unwrap_err();
-    assert!(err.to_string().contains("label"), "{}", err);
 }
 
 #[test]
@@ -178,7 +172,6 @@ require:
     requires: ["brew-formula:php"]
   - "brew-formula:php"
   - id: "mas:1"
-    label: "A"
     requires: ["brew-formula:git"]
 "#,
     )
@@ -191,7 +184,6 @@ require:
     assert!(m.require[0].requires().is_empty());
     assert!(m.require[1].is_detailed());
     assert_eq!(m.require[1].requires(), &["brew-formula:php".to_string()]);
-    assert_eq!(m.require[3].label(), Some("A"));
 }
 
 #[test]
@@ -254,9 +246,7 @@ fn rejects_version_on_unsupported_drivers() {
         "{}",
         err
     );
-    let err =
-        parse_manifest("require:\n  - id: \"mas:123\"\n    label: \"Foo\"\n    version: \"1.0\"\n")
-            .unwrap_err();
+    let err = parse_manifest("require:\n  - id: \"mas:123\"\n    version: \"1.0\"\n").unwrap_err();
     assert!(
         err.to_string().contains("does not support version"),
         "{}",

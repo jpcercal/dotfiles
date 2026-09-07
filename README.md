@@ -68,7 +68,7 @@ listed, never auto-installed.
 ## Manifests
 
 - **`apps.yaml`** — packages via `require` (`brew-formula:`, `brew-cask:`,
-  `brew-tap:`, `mas:` with `label:`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`,
+  `brew-tap:`, `mas:`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`,
   `custom:`), language toolchains (rustup via `custom:rustup` hooks, node via
   `fnm` post-install hook, python via `uv` post-install hook). Each entry may carry
   `requires:` edges, `version:` pins (npm/pip/gem/cargo/go), and `hooks:`

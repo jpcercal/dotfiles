@@ -117,7 +117,7 @@ version-pinned, hook-carrying, or referenced packages split out of their
 backend's batched install into schedulable single units. Aliases
 `tap:`/`formula:`/`cask:` normalize to `brew-tap:`/`brew-formula:`/`brew-cask:`.
 Canonical unit IDs (`crates/manifest/src/units.rs`): `brew-formula:x`,
-`brew-cask:x`, `brew-tap:o/r`, `mas:<id>` (with required `label:`), `gem:`,
+`brew-cask:x`, `brew-tap:o/r`, `mas:<id>`, `gem:`,
 `npm:`, `pip:`, `cargo:`, `go:`, `composer:`, `custom:<step>`. Implicit edges
 (taps → brew units, npm → `brew-formula:fnm`, pip → `brew-formula:uv`) live in
 `units::implicit_requires`; validation rejects unknown targets and cycles.

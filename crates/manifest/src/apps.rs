@@ -14,7 +14,7 @@ pub struct Manifest {
     #[schemars(range(min = 1))]
     pub schema_version: u32,
     /// Unified package list: every installable item as `driver:name` with
-    /// optional version, label, requires, lock, and lifecycle hooks.
+    /// optional version, requires, lock, and lifecycle hooks.
     #[serde(default)]
     pub require: Vec<RequireEntry>,
     /// Parallel execution tuning for the install phase (the DAG engine).
@@ -59,9 +59,6 @@ pub struct RequireDetail {
     /// `npm:prettier@3` (version suffix is sugar for the `version` field),
     /// `custom:rustup` (custom install hook carrier).
     pub id: String,
-    /// Human label, required for `mas:` entries (App Store display name).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
     /// Unit IDs that must complete first, e.g. `["brew-formula:php"]`.
     /// See `crate::units` for the canonical `<prefix>:<name>` namespace.
     #[serde(default)]
@@ -114,13 +111,6 @@ impl RequireEntry {
         match self {
             RequireEntry::Simple(s) => s.as_str(),
             RequireEntry::Detailed(d) => d.id.as_str(),
-        }
-    }
-
-    pub fn label(&self) -> Option<&str> {
-        match self {
-            RequireEntry::Simple(_) => None,
-            RequireEntry::Detailed(d) => d.label.as_deref(),
         }
     }
 

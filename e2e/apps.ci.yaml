@@ -14,11 +14,8 @@
 schema_version: 2
 require:
 - id: "brew-formula:jq"
-  label: "jq"
 - id: "brew-formula:fd"
-  label: "fd"
 - id: "brew-formula:fzf"
-  label: "fzf"
   hooks:
     post-install: |
       set -e
@@ -27,14 +24,12 @@ require:
         { echo y; echo y; echo y; } | "$prefix/opt/fzf/install" --no-update-rc >/dev/null
       fi
 - id: "brew-formula:fnm"
-  label: "fnm"
   hooks:
     post-install: |
       set -e
       fnm install --lts >/dev/null
       fnm default lts-latest >/dev/null
 - id: "brew-formula:uv"
-  label: "uv"
   hooks:
     post-install: |
       set -e
@@ -50,13 +45,9 @@ require:
         ln -sfn "$d/pip3" "$HOME/.local/bin/pip3"
       fi
 - id: "brew-formula:go"
-  label: "go"
 - id: "brew-formula:dockutil"
-  label: "dockutil"
 - id: "brew-formula:mas"
-  label: "mas"
 - id: "brew-formula:neovim"
-  label: "neovim"
   hooks:
     post-install: |
       set -e
@@ -83,19 +74,13 @@ require:
     pre-uninstall: |
       rustup self uninstall -y
 - id: "brew-formula:ruby"
-  label: "ruby"
 - id: "brew-cask:caffeine"
-  label: "caffeine"
 - id: "pip:pynvim"
-  label: "pynvim"
 - id: "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
-  label: "github.com/oklog/ulid/v2/cmd/ulid"
 - id: "gem:neovim"
-  label: "neovim"
   requires:
   - "brew-formula:ruby"
 - id: "npm:prettier"
-  label: "prettier"
 execution:
   max_jobs: 0
   locks:

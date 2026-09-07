@@ -626,7 +626,6 @@ require:
   - "pip:pynvim"
   - "go:example.com/x/tool@latest"
   - id: "mas:123"
-    label: "Foo"
 "#,
         )
         .unwrap();

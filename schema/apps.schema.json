@@ -17,7 +17,7 @@
       ]
     },
     "require": {
-      "description": "Unified package list: every installable item as `driver:name` with optional version, label, requires, lock, and lifecycle hooks.",
+      "description": "Unified package list: every installable item as `driver:name` with optional version, requires, lock, and lifecycle hooks.",
       "default": [],
       "type": "array",
       "items": {
@@ -121,13 +121,6 @@
         "id": {
           "description": "Canonical unit ID, e.g. `brew-formula:git`, `mas:1352778147`, `npm:prettier@3` (version suffix is sugar for the `version` field), `custom:rustup` (custom install hook carrier).",
           "type": "string"
-        },
-        "label": {
-          "description": "Human label, required for `mas:` entries (App Store display name).",
-          "type": [
-            "string",
-            "null"
-          ]
         },
         "lock": {
           "description": "Resource-class override (default = the backend's own lock class).",
