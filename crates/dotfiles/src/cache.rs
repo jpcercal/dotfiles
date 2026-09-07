@@ -33,9 +33,13 @@ pub fn run(ctx: &Ctx, args: CacheArgs) -> Result<()> {
 fn clean(ctx: &Ctx, yes: bool) -> Result<()> {
     let user_caches = ctx.env.home.join("Library/Caches");
     let system_caches = PathBuf::from("/Library/Caches");
+    // The exact elevated command is shown before any prompt, so the user
+    // knows precisely what would run as root.
+    let system_arg = format!("{}/", system_caches.display());
     println!("This deletes the contents of:");
     println!("  {} (user)", user_caches.display());
     println!("  {} (system, needs sudo)", system_caches.display());
+    println!("  $ sudo rm -rf {system_arg}");
     if !yes {
         eprint!("Continue? [y/N] ");
         std::io::stderr().flush()?;
@@ -59,9 +63,11 @@ fn clean(ctx: &Ctx, yes: bool) -> Result<()> {
         }
         if sudo {
             // Trailing slash: delete contents, keep the dir (script parity).
-            let ok = ctx
-                .env
-                .output("sudo", &["rm", "-rf", &format!("{}/", dir.display())])?;
+            let ok = ctx.env.elevate(
+                "sudo",
+                &["rm", "-rf", &system_arg],
+                "delete the contents of the system caches",
+            )?;
             if !ok.ok() {
                 anyhow::bail!("failed to clean {}: {}", dir.display(), ok.stderr.trim());
             }

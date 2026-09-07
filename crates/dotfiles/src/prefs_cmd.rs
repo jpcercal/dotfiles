@@ -54,15 +54,52 @@ pub fn run(ctx: &Ctx, args: PrefsArgs) -> Result<()> {
             ctx.env.report(Event::Section {
                 title: "prefs".to_string(),
             });
-            // sudo keep-alive parity (support-require-sudo.sh + support-keep-alive.sh):
-            // cache credentials once up front when any entry needs sudo.
-            let any_sudo = file.prefs.iter().any(|e| match e {
-                dotfiles_prefs::PrefEntry::Defaults { sudo, .. } => *sudo,
-                dotfiles_prefs::PrefEntry::Exec { sudo, .. } => *sudo,
-                dotfiles_prefs::PrefEntry::Builtin { name, .. } => name == "restart-apps",
-            });
-            if any_sudo && !ctx.env.dry_run {
-                ctx.env.output("sudo", &["-v"])?;
+            // Necessity scan (sudo keep-alive parity, but precise): cache
+            // credentials once up front — but only when an elevated entry
+            // would actually change. `defaults` entries are diffed; `exec`
+            // entries are not diffable (conservative: always elevate);
+            // `restart-apps` always runs `sudo killall`.
+            if !ctx.env.dry_run {
+                match entries_needing_sudo(&ctx.env, &file) {
+                    Ok(needed) if needed.is_empty() => {
+                        if file.prefs.iter().any(|e| match e {
+                            dotfiles_prefs::PrefEntry::Defaults { sudo, .. } => *sudo,
+                            dotfiles_prefs::PrefEntry::Exec { sudo, .. } => *sudo,
+                            dotfiles_prefs::PrefEntry::Builtin { name, .. } => {
+                                name == "restart-apps"
+                            }
+                        }) {
+                            ctx.env.report(Event::Note {
+                                msg: "sudo: every elevated preference already in sync — no elevation needed".to_string(),
+                            });
+                        }
+                    }
+                    Ok(needed) => {
+                        ctx.env.report(Event::Note {
+                            msg: format!(
+                                "sudo: {} elevated entr{} will change ({}); caching credentials once",
+                                needed.len(),
+                                if needed.len() == 1 { "y" } else { "ies" },
+                                needed.join(", "),
+                            ),
+                        });
+                        ctx.env.elevate(
+                            "sudo",
+                            &["-v"],
+                            "elevated preferences are out of sync — caching credentials once up front",
+                        )?;
+                    }
+                    // Diff itself failed (e.g. `defaults` missing): fall back
+                    // to the old unconditional warmup rather than prompting
+                    // once per entry mid-run.
+                    Err(_) => {
+                        ctx.env.elevate(
+                            "sudo",
+                            &["-v"],
+                            "could not determine preference drift — caching credentials once up front",
+                        )?;
+                    }
+                }
             }
             let report = engine::apply(&ctx.env, &file)?;
             let mut applied = 0;
@@ -138,5 +175,81 @@ pub fn run(ctx: &Ctx, args: PrefsArgs) -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+/// Ids of entries whose application may elevate: out-of-sync `sudo: true`
+/// `defaults` entries (via `diff`; `add`-mode entries always write),
+/// every `sudo: true` exec entry (not diffable), and `restart-apps`.
+fn entries_needing_sudo(
+    env: &dotfiles_exec::ExecEnv,
+    file: &dotfiles_prefs::PrefsFile,
+) -> Result<Vec<String>> {
+    use dotfiles_prefs::PrefEntry;
+    let drifted: std::collections::BTreeSet<String> = engine::diff(env, file)?
+        .into_iter()
+        .filter(|e| e.status == engine::DiffStatus::Drifted)
+        .map(|e| e.id)
+        .collect();
+    let mut needed = vec![];
+    for e in &file.prefs {
+        match e {
+            PrefEntry::Defaults {
+                sudo: true, add, ..
+            } if *add || drifted.contains(e.id()) => needed.push(e.id().to_string()),
+            PrefEntry::Exec { sudo: true, .. } => needed.push(e.id().to_string()),
+            PrefEntry::Builtin { name, .. } if name == "restart-apps" => {
+                needed.push(e.id().to_string())
+            }
+            _ => {}
+        }
+    }
+    Ok(needed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dotfiles_testkit::TestEnv;
+
+    fn prefs(yaml: &str) -> dotfiles_prefs::PrefsFile {
+        dotfiles_prefs::parse_prefs(yaml).unwrap()
+    }
+
+    #[test]
+    fn in_sync_sudo_entries_need_nothing() {
+        let t = TestEnv::new();
+        t.stub("defaults", "echo 1; exit 0");
+        let file = prefs(
+            "prefs:\n  - { id: a, kind: defaults, domain: D, key: K, type: bool, value: true, sudo: true }\n",
+        );
+        assert!(entries_needing_sudo(t.exec(), &file).unwrap().is_empty());
+    }
+
+    #[test]
+    fn drifted_sudo_defaults_exec_and_restart_apps_need_sudo() {
+        let t = TestEnv::new();
+        // `defaults read` echoes 1: `a` (want true) is in sync, `b` drifted.
+        t.stub("defaults", "echo 1; exit 0");
+        let file = prefs(
+            "prefs:\n\
+             \x20 - { id: a, kind: defaults, domain: D, key: K1, type: bool, value: true, sudo: true }\n\
+             \x20 - { id: b, kind: defaults, domain: D, key: K2, type: bool, value: false, sudo: true }\n\
+             \x20 - { id: c, kind: defaults, domain: D, key: K3, type: bool, value: false }\n\
+             \x20 - { id: d, kind: exec, program: pmset, args: [], sudo: true }\n\
+             \x20 - { id: e, kind: builtin, name: restart-apps }\n",
+        );
+        let needed = entries_needing_sudo(t.exec(), &file).unwrap();
+        assert_eq!(needed, vec!["b", "d", "e"]);
+    }
+
+    #[test]
+    fn add_mode_sudo_entries_always_need_sudo() {
+        let t = TestEnv::new();
+        t.stub("defaults", "echo 1; exit 0");
+        let file = prefs(
+            "prefs:\n  - { id: m, kind: defaults, domain: D, key: K, type: dict, value: {x: 1}, add: true, sudo: true }\n",
+        );
+        assert_eq!(entries_needing_sudo(t.exec(), &file).unwrap(), vec!["m"]);
     }
 }
