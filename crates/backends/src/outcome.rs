@@ -70,6 +70,19 @@ impl BackendOutcome {
             format!("already ok — {}", self.note)
         }
     }
+
+    /// Structural twin of [`BackendOutcome::detail`] for renderer visibility
+    /// decisions: `failed` (including `blocked by …` skips) → `Failed`,
+    /// anything changed → `Changed`, otherwise `NoOp`.
+    pub fn outcome_kind(&self) -> dotfiles_exec::UnitOutcome {
+        if !self.failed.is_empty() {
+            dotfiles_exec::UnitOutcome::Failed
+        } else if !self.changed.is_empty() {
+            dotfiles_exec::UnitOutcome::Changed
+        } else {
+            dotfiles_exec::UnitOutcome::NoOp
+        }
+    }
 }
 
 #[cfg(test)]
@@ -93,5 +106,24 @@ mod tests {
         let mut failed = BackendOutcome::empty("brew");
         failed.fail_one("git", "boom");
         assert_eq!(failed.detail(), "git: boom");
+    }
+
+    #[test]
+    fn outcome_kind_classifies_outcomes() {
+        use dotfiles_exec::UnitOutcome;
+        let mut ok = BackendOutcome::empty("brew");
+        ok.unchanged.push("git".into());
+        assert_eq!(ok.outcome_kind(), UnitOutcome::NoOp);
+        // Notes alone (missing tools, skips) are still no-ops to show.
+        assert_eq!(
+            BackendOutcome::unavailable("brew").outcome_kind(),
+            UnitOutcome::NoOp
+        );
+        let mut changed = BackendOutcome::empty("brew");
+        changed.changed.push("git".into());
+        assert_eq!(changed.outcome_kind(), UnitOutcome::Changed);
+        let mut failed = BackendOutcome::empty("brew");
+        failed.fail_one("child", "blocked by 'fail' (not attempted)");
+        assert_eq!(failed.outcome_kind(), UnitOutcome::Failed);
     }
 }

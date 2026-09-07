@@ -7,7 +7,9 @@ use std::sync::Arc;
 pub mod report;
 pub mod stubs;
 
-pub use report::{elevated_command, Event, NoopReporter, RecordingReporter, Reporter, Stream};
+pub use report::{
+    elevated_command, Event, NoopReporter, RecordingReporter, Reporter, Stream, UnitOutcome,
+};
 
 /// Result of running a command through an [`ExecEnv`].
 #[derive(Debug, Clone)]

@@ -148,6 +148,7 @@ pub fn run(
                     id,
                     ok: outcome.ok(),
                     detail: outcome.detail(),
+                    outcome: outcome.outcome_kind(),
                 };
                 env.report(finished);
                 {
@@ -177,6 +178,7 @@ pub fn run(
                                 id: unit.id.clone(),
                                 ok: false,
                                 detail: skip.detail(),
+                                outcome: skip.outcome_kind(),
                             });
                             st.outcomes[d] = Some(skip);
                             st.done += 1;
@@ -448,10 +450,15 @@ mod tests {
                 _ => None,
             })
             .collect();
-        let finished: Vec<(&str, bool, &str)> = events
+        let finished: Vec<(&str, bool, &str, dotfiles_exec::UnitOutcome)> = events
             .iter()
             .filter_map(|e| match e {
-                Event::UnitFinished { id, ok, detail } => Some((id.as_str(), *ok, detail.as_str())),
+                Event::UnitFinished {
+                    id,
+                    ok,
+                    detail,
+                    outcome,
+                } => Some((id.as_str(), *ok, detail.as_str(), *outcome)),
                 _ => None,
             })
             .collect();
@@ -460,20 +467,23 @@ mod tests {
         assert!(started.contains(&"sibling"));
         // … blocked units are never started, only finished as failed …
         assert!(!started.contains(&"child"), "{started:?}");
-        let by_id: BTreeMap<&str, (bool, &str)> = finished
+        let by_id: BTreeMap<&str, (bool, &str, dotfiles_exec::UnitOutcome)> = finished
             .into_iter()
-            .map(|(id, ok, d)| (id, (ok, d)))
+            .map(|(id, ok, d, o)| (id, (ok, d, o)))
             .collect();
         assert_eq!(by_id.len(), 3);
         assert!(!by_id["fail"].0);
         assert!(by_id["fail"].1.contains("boom"), "{:?}", by_id["fail"]);
+        assert_eq!(by_id["fail"].2, dotfiles_exec::UnitOutcome::Failed);
         assert!(by_id["sibling"].0);
+        assert_eq!(by_id["sibling"].2, dotfiles_exec::UnitOutcome::Changed);
         assert!(!by_id["child"].0);
         assert!(
             by_id["child"].1.contains("blocked by 'fail'"),
             "{:?}",
             by_id["child"]
         );
+        assert_eq!(by_id["child"].2, dotfiles_exec::UnitOutcome::Failed);
         // Every start precedes its finish in the recorded order.
         for id in ["fail", "sibling"] {
             let s = events

@@ -176,7 +176,12 @@ impl Reporter for TermReporter {
                     ),
                 }
             }
-            Event::UnitFinished { id, ok, detail } => {
+            Event::UnitFinished {
+                id,
+                ok,
+                detail,
+                outcome: _,
+            } => {
                 let mark = if ok { "✓" } else { "✗" };
                 let head = if ok {
                     format!("{mark} {id} ({detail})")
@@ -286,6 +291,7 @@ mod tests {
             id: "brew-formula:git".into(),
             ok: true,
             detail: "already ok".into(),
+            outcome: dotfiles_exec::UnitOutcome::NoOp,
         });
         assert_eq!(
             text(&buf),
@@ -310,6 +316,7 @@ mod tests {
             id: "u".into(),
             ok: false,
             detail: "boom".into(),
+            outcome: dotfiles_exec::UnitOutcome::Failed,
         });
         // Captured sink is not a tty → plain glyphs, no ANSI escapes. The
         // `✗ u (boom)` head goes to real stderr (always user-visible); the
@@ -365,6 +372,7 @@ mod tests {
             id: "a".into(),
             ok: true,
             detail: "changed".into(),
+            outcome: dotfiles_exec::UnitOutcome::Changed,
         });
         r.report(Event::UnitLog {
             id: "b".into(),
@@ -375,6 +383,7 @@ mod tests {
             id: "b".into(),
             ok: true,
             detail: "changed".into(),
+            outcome: dotfiles_exec::UnitOutcome::Changed,
         });
         let out = text(&buf);
         let pa = out.find("✓ a (changed)").unwrap();

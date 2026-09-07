@@ -142,11 +142,13 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
             id: "brew-taps".into(),
             ok: out.ok(),
             detail: out.detail(),
+            outcome: out.outcome_kind(),
         }),
         Err(e) => env.report(Event::UnitFinished {
             id: "brew-taps".into(),
             ok: false,
             detail: e.to_string(),
+            outcome: dotfiles_exec::UnitOutcome::Failed,
         }),
     }
     results.push(taps?);
@@ -201,11 +203,13 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
                         id,
                         ok: out.ok(),
                         detail: out.detail(),
+                        outcome: out.outcome_kind(),
                     }),
                     Err(e) => env.report(Event::UnitFinished {
                         id,
                         ok: false,
                         detail: e.to_string(),
+                        outcome: dotfiles_exec::UnitOutcome::Failed,
                     }),
                 }
                 results.push(res?);
@@ -229,6 +233,7 @@ fn run_sequential(
         id: id.to_string(),
         ok: out.ok(),
         detail: out.detail(),
+        outcome: out.outcome_kind(),
     });
     out
 }

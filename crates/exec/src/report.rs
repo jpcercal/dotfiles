@@ -22,6 +22,19 @@ pub enum Stream {
     Stderr,
 }
 
+/// How a schedulable unit ended up — structural (not string-parsed) so
+/// renderers can decide visibility: hide `NoOp` rows, keep `Changed` /
+/// `Failed` settled lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnitOutcome {
+    /// Already in the desired state: nothing to show (aggregate only).
+    NoOp,
+    /// Actually modified something: keep a settled final line.
+    Changed,
+    /// Failed or never attempted (blocked by a failed dependency).
+    Failed,
+}
+
 /// One user-visible fact about what is happening (or happened).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -39,11 +52,14 @@ pub enum Event {
         line: String,
     },
     /// A unit finished (`✓`/`✗ id (detail)`); `detail` is a one-line
-    /// summary (`already ok`, `changed`, or the failure reason).
+    /// summary (`already ok`, `changed`, or the failure reason) and
+    /// `outcome` is the same fact structurally, for renderer visibility
+    /// decisions (docker-pull: hide `NoOp`, keep `Changed`/`Failed`).
     UnitFinished {
         id: String,
         ok: bool,
         detail: String,
+        outcome: UnitOutcome,
     },
     /// An external command about to run (`$ brew install git`).
     /// Rendered live when no unit context applies (`unit: None`), buffered
