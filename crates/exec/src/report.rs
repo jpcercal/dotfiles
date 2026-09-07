@@ -46,10 +46,7 @@ pub enum Event {
     /// that may open an interactive prompt on the tty (App Store/cask
     /// installers, hooks that invoke `sudo`) — renderers suspend live
     /// regions while such units run so the prompt stays visible.
-    UnitStarted {
-        id: String,
-        prompt_capable: bool,
-    },
+    UnitStarted { id: String, prompt_capable: bool },
     /// One captured stdout/stderr line of unit `id` (buffered by the
     /// renderer, flushed as a block on `UnitFinished`).
     UnitLog {

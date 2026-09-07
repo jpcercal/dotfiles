@@ -101,9 +101,10 @@ crates/
   core/       upgrade pipeline state machine (gates, probes, steps, reports)
   dotfiles/   the CLI binary (+ egui GUI behind the default `gui` feature)
               + term_report (TermReporter: sections, per-unit blocks, elevation notices)
-              + tui (TuiReporter: model = pure event fold incl. review merge,
-                render = frame + hit-testing, review = failures-only post-run
-                inspector, driver in mod.rs owns the region lifecycle)
+              + tui (TuiReporter: model = pure event fold + review merge,
+                render = pure ANSI line renderer + diff painter, review =
+                failures-only post-run inspector, driver in mod.rs owns the
+                region lifecycle)
   testkit/    test fixtures (stub binaries with argv recording)
 schema/       generated JSON Schemas (committed, CI-enforced freshness)
 e2e/          reduced fixture manifests for the real-machine CI E2E job
@@ -139,16 +140,28 @@ e2e/          reduced fixture manifests for the real-machine CI E2E job
   `Section` (or at exit), printing settled rows + aggregates + sudo usage as
   plain scrollback. Between jobs events pass through plain, so confirmations
   and `sudo` password prompts always meet a normal terminal.
-- **The mid-run region is strictly output-only (hard rule).** It must never
-  touch terminal modes or stdin: no raw mode, no mouse capture, no
-  `crossterm::event` reads — and no ratatui inline viewport either (its
-  cursor-position query reads the tty and hangs on bare ptys). The region is
-  a `Fixed` viewport sized via ioctl; notes/elevations fold into the frame
-  (feed/footer) instead of printing, and settle lines print only after the
-  region is dropped, so external writes can never detach it. Violating this
-  hangs `sudo` password prompts (byte-stealing on the pty) and can leave the
-  user's shell unusable — `tests/pty.rs` reproduces the exact scenario
-  (sudo stub prompting on `/dev/tty` mid-run) and must stay green.
+- **The mid-run region is strictly output-only — and strictly stdin-free
+  (hard rule).** It must never touch terminal modes or stdin: no raw mode,
+  no mouse capture, no `crossterm::event` reads, and NO library that sends
+  cursor-position queries (`\x1b[6n` DSR — ratatui's crossterm backend does
+  this in `Terminal::with_options`/`clear()`/draw paths AND toggles raw
+  mode around the read, stealing bytes from `sudo` prompts and hanging on
+  ptys that never answer). This is why the renderer is a hand-rolled diffed
+  ANSI painter: `render::render_lines` produces styled strings per frame,
+  `render::diff_commands` emits `MoveTo`+text+erase-EOL only for changed
+  rows.
+- **Region geometry & prompt safety.** The region owns rows `0..h-1` (top
+  of screen); engagement scrolls a full screen so prior output survives in
+  scrollback and the region never floats detached. The LAST row stays free
+  and the cursor is parked there after every frame: interactive prompts
+  from children (`sudo` via mas/cask installers or hook snippets, announced
+  or not) land on that line, visible and typeable, never overwritten. A
+  1-second forced full repaint heals any scroll the password Entry causes.
+  `prompt_capable` on `UnitStarted` (mas/cask backends or sudo-carrying
+  hooks) powers the `⌨` footer heads-up. Degenerate terminals (`h < 10`)
+  fall back to TermReporter-style plain block printing.
+  `tests/pty.rs` reproduces a `sudo` stub prompting on `/dev/tty` mid-run
+  and must stay green.
 - **Failures-only post-run reviewer.** After the run completes, if any unit
   failed in any job, an alternate-screen inspector opens over the merged
   models (`Model::merged_for_review`, failed first): click/Space expands

@@ -32,7 +32,6 @@ notify-rust.workspace = true
 ulid.workspace = true
 libc = "0.2"
 owo-colors.workspace = true
-ratatui = { workspace = true, optional = true }
 crossterm = { workspace = true, optional = true }
 eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow"], optional = true }
 egui = { version = "0.32", optional = true }
@@ -46,4 +45,4 @@ portable-pty = "0.9"
 [features]
 default = ["gui", "tui"]
 gui = ["dep:eframe", "dep:egui", "dep:dark-light"]
-tui = ["dep:ratatui", "dep:crossterm"]
+tui = ["dep:crossterm"]

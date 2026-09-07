@@ -572,7 +572,11 @@ mod tests {
         assert!(matches!(&events[0], Event::Command { .. }));
         assert!(matches!(
             &events[1],
-            Event::CommandDone { ok: true, unit: None, .. }
+            Event::CommandDone {
+                ok: true,
+                unit: None,
+                ..
+            }
         ));
     }
 

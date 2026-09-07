@@ -1,23 +1,27 @@
-//! Interactive docker-pull-style progress UI (ratatui, fixed viewport).
+//! Interactive docker-pull-style progress UI (top-anchored ANSI region).
 //!
 //! [`TuiReporter`] implements the exec [`Reporter`](dotfiles_exec::Reporter):
 //! scheduler threads push [`Event`](dotfiles_exec::Event)s into a channel and
-//! a single driver thread owns rendering. Mid-run the region is **strictly
-//! output-only** — no raw mode, no mouse capture, and crucially **no stdin
-//! reads of any kind** (not even ratatui's inline-viewport cursor query, so
-//! the region uses a `Fixed` viewport sized via ioctl). Interactive children
-//! (`sudo` password prompts, confirmations) and the user's Ctrl-C/selection
-//! work on a completely normal terminal. Interactive click-to-expand review
-//! happens only after the run completes (see [`Driver::review_failed`]),
-//! when no child can contend for the tty.
+//! a single driver thread owns rendering. The renderer is a **hand-rolled
+//! diffed ANSI painter** — no terminal library in the hot path, and
+//! therefore no cursor-position queries (`[6n` DSR), no raw-mode toggling
+//! and no stdin reads of any kind mid-run. Those queries are exactly how
+//! terminal UIs hijack the tty: they race `sudo` password prompts for input
+//! bytes and hang forever on ptys that never answer.
 //!
-//! While the region is active, *nothing* else writes to the terminal: notes
-//! and elevation notices fold into the frame (feed/footer) instead of
-//! scrolling the region out of alignment. Lifecycle: the region activates
-//! lazily on the first unit event, tears down on the next `Section` (settled
-//! rows + aggregates print as plain scrollback), and at process end prints
-//! its final settle lines. Shutdown is synchronous: `finish()` disconnects
-//! the channel and joins the driver.
+//! The region owns screen rows `0..h-1`; the LAST row stays free and the
+//! cursor is parked there after every frame, so a child's interactive
+//! prompt (sudo from mas/cask installers or hook snippets — announced or
+//! not) lands on that line, fully visible and typeable, never overwritten
+//! by a redraw. A one-second forced repaint heals any scroll the password
+//! Entry causes.
+//!
+//! Engaging the region scrolls a full screen (prior output is preserved in
+//! the terminal's scrollback), so the region never floats detached from the
+//! output. Interactive click-to-expand review happens only after the run
+//! completes ([`Driver::review_failed`]), when no child can contend for the
+//! tty. Shutdown is synchronous: `finish()` disconnects the channel and
+//! joins the driver.
 
 pub mod model;
 pub mod render;
@@ -26,8 +30,8 @@ pub mod review;
 use review::TerminalGuard;
 
 use dotfiles_exec::{Event, Reporter};
-use model::{Model, SettleLine};
-use render::{draw_frame, UiState};
+use model::{Model, RowState, SettleLine};
+use render::{diff_commands, render_lines, UiState};
 use std::io::{stdout, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -36,6 +40,9 @@ use std::time::{Duration, Instant};
 
 /// Redraw cadence while the region is active (~30 fps; spinner stays live).
 const FRAME_BUDGET: Duration = Duration::from_millis(33);
+/// Forced full repaint cadence: heals garbling caused by external tty
+/// writes (prompt lines, password-Entry scroll) within a second.
+const REPAIR_EVERY: Duration = Duration::from_secs(1);
 
 enum DriverMsg {
     Event(Event),
@@ -52,12 +59,17 @@ struct Driver {
     /// Settled models of past jobs (kept for the post-run reviewer).
     jobs: Vec<Model>,
     ui: UiState,
-    term: Option<Term>,
+    /// Last painted rows (shadow buffer for the diff painter).
+    painted: Vec<String>,
+    /// Screen geometry while the region is active (`None` = idle).
+    region: Option<(u16, u16)>,
+    /// Set when the region cannot engage (degenerate size): unit finishes
+    /// then print plainly, TermReporter-style.
+    fallback: bool,
     shutdown: bool,
     last_draw: Option<Instant>,
+    last_repaint: Option<Instant>,
 }
-
-type Term = ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>;
 
 impl Driver {
     fn run(mut self) {
@@ -87,7 +99,7 @@ impl Driver {
             if self.shutdown {
                 break;
             }
-            if self.term.is_some() {
+            if self.region.is_some() {
                 self.maybe_draw();
             }
         }
@@ -104,42 +116,90 @@ impl Driver {
     fn on_event(&mut self, e: Event) {
         match e {
             Event::Section { title } => {
-                // Job boundary: drop the region FIRST (printing scrolls the
-                // screen and would detach a live viewport), then settle this
-                // job into scrollback and start fresh.
+                // Job boundary: drop the region, settle its content into
+                // plain scrollback, then start the next job fresh.
                 let settle = self.model.settle_lines();
-                self.deactivate();
-                self.print_settled(&settle);
+                let mut feed: Vec<SettleLine> = self
+                    .model
+                    .recent
+                    .iter()
+                    .map(|f| SettleLine {
+                        stderr: f.stderr,
+                        text: f.text.clone(),
+                    })
+                    .collect();
+                let print_settle = self.region.is_some() || !self.model.rows.is_empty();
+                self.disengage();
+                if print_settle {
+                    let mut all = settle;
+                    all.append(&mut feed);
+                    self.print_settled(&all);
+                }
                 println!("▶ {title}");
                 self.finish_job(title);
-                let _ = stdout().flush();
             }
-            Event::Subsection { title } if self.term.is_none() => println!("  {title}"),
-            Event::Note { msg } if self.term.is_none() => println!("{msg}"),
-            Event::Warn { msg } if self.term.is_none() => eprintln!("{msg}"),
-            Event::Elevate { command, reason } => {
-                // While the region is live, the notice folds into the frame
-                // footer — printing to stderr here would scroll the region
-                // out of alignment. Idle mode prints plain (sudo may be
-                // about to prompt on the tty, which stays fully normal).
-                if self.term.is_none() {
-                    eprintln!("⚠ sudo: {command}");
-                    eprintln!("  reason: {reason}");
-                    let _ = std::io::stderr().flush();
-                }
+            // Idle passthrough: identical to the plain reporter, and none of
+            // these engage the region (preflight probes, prompts, section
+            // markers stay normal terminal output).
+            Event::Subsection { title } if self.region.is_none() => println!("  {title}"),
+            Event::Note { msg } if self.region.is_none() => println!("{msg}"),
+            Event::Warn { msg } if self.region.is_none() => eprintln!("{msg}"),
+            Event::Elevate { command, reason } if self.region.is_none() => {
+                eprintln!("⚠ sudo: {command}");
+                eprintln!("  reason: {reason}");
+                let _ = std::io::stderr().flush();
                 self.model.apply(Event::Elevate { command, reason });
             }
-            Event::Subsection { .. } | Event::Note { .. } | Event::Warn { .. } => {
-                // Inside an active region: non-unit messages fold into the
-                // model's feed so they render within the frame.
-                self.model.apply(e);
-            }
-            unit_event => {
-                // First unit activity: engage the inline region.
-                if self.term.is_none() {
-                    self.activate();
+            Event::Command {
+                argv,
+                dry_run,
+                unit: None,
+            } if self.region.is_none() => {
+                // Unscoped commands (probes, warmups) echo plainly and never
+                // engage the region.
+                if dry_run {
+                    println!("$ {argv} [dry-run]");
+                } else {
+                    println!("$ {argv}");
                 }
-                self.model.apply(unit_event);
+            }
+            Event::CommandDone { .. } => {
+                // Announcement bookkeeping (balanced with Command); nothing
+                // to render.
+            }
+            other => {
+                // Unit-context events (and in-frame non-unit events). Unit
+                // events engage the region on first sight.
+                let unit_event = matches!(
+                    other,
+                    Event::UnitStarted { .. }
+                        | Event::UnitLog { .. }
+                        | Event::UnitFinished { .. }
+                        | Event::Command { unit: Some(_), .. }
+                );
+                // Region impossible (degenerate size): finishes print
+                // plainly so nothing is lost.
+                let finished = if self.region.is_none() && self.fallback {
+                    match &other {
+                        Event::UnitFinished {
+                            id,
+                            detail,
+                            outcome:
+                                dotfiles_exec::UnitOutcome::Changed | dotfiles_exec::UnitOutcome::Failed,
+                            ..
+                        } => Some((id.clone(), detail.clone())),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                self.model.apply(other);
+                if let Some((id, detail)) = finished {
+                    self.print_finished_plainly(&id, &detail);
+                }
+                if unit_event && self.region.is_none() && !self.fallback {
+                    self.engage();
+                }
             }
         }
         let _ = stdout().flush();
@@ -152,48 +212,36 @@ impl Driver {
         self.model.reset_job(title);
     }
 
-    fn activate(&mut self) {
-        // Fixed viewport sized via ioctl: reserving the region must never
-        // read stdin (ratatui's inline viewport queries the cursor position
-        // over the tty, which races interactive children and hangs on bare
-        // ptys that never answer the DSR query).
+    /// Own the screen: scroll a full screen (prior output is preserved in
+    /// the terminal's scrollback, never lost), then take rows `0..h-1` as
+    /// the region. The last row stays free — see the module docs.
+    fn engage(&mut self) {
         let (w, h) = crossterm::terminal::size().unwrap_or((80, 24));
         if h < 10 || w < 20 {
-            // Degenerate size: stay in plain passthrough.
+            self.fallback = true;
             return;
         }
-        let height = (h / 2).clamp(8, 18);
-        let area = ratatui::layout::Rect::new(0, h.saturating_sub(height), w, height);
-        let backend = ratatui::backend::CrosstermBackend::new(stdout());
-        match ratatui::Terminal::with_options(
-            backend,
-            ratatui::TerminalOptions {
-                viewport: ratatui::Viewport::Fixed(area),
-            },
-        ) {
-            Ok(term) => {
-                self.term = Some(term);
-                self.ui = UiState::new();
-            }
-            Err(_) => {
-                // Could not reserve the region: keep plain passthrough.
-                self.term = None;
-            }
+        print!("{}", "\n".repeat(h as usize));
+        let _ = stdout().flush();
+        self.region = Some((w, h));
+        self.painted = vec![String::new(); (h - 1) as usize];
+        self.ui = UiState::new();
+        self.ui.scroll = usize::MAX; // start at the tail
+        self.maybe_draw();
+    }
+
+    /// Release the region: erase it (its content was ephemeral progress)
+    /// and leave the cursor at the top-left for plain output.
+    fn disengage(&mut self) {
+        if self.region.take().is_some() {
+            self.painted.clear();
+            let _ = write!(stdout(), "\x1b[1;1H\x1b[0m\x1b[2J\x1b[?25h");
+            let _ = stdout().flush();
         }
     }
 
-    /// Drop the region. Safe to call any number of times; terminal modes
-    /// were never modified while active.
-    fn deactivate(&mut self) {
-        self.term = None;
-    }
-
-    /// Last frame, settled summary below it.
+    /// Final settle: region content becomes plain scrollback lines.
     fn teardown(&mut self) {
-        if self.term.is_some() {
-            self.maybe_draw();
-            self.deactivate();
-        }
         let settle = self.model.settle_lines();
         let mut feed: Vec<SettleLine> = self
             .model
@@ -206,7 +254,33 @@ impl Driver {
             .collect();
         let mut all = settle;
         all.append(&mut feed);
+        self.disengage();
         self.print_settled(&all);
+    }
+
+    /// TermReporter-style block print for the fallback path (region could
+    /// not engage): the row is removed from the model after printing.
+    fn print_finished_plainly(&mut self, id: &str, detail: &str) {
+        let Some(row) = self.model.take_row(id) else {
+            return;
+        };
+        let failed = row.state == RowState::Failed;
+        let head = format!("{} {id} ({detail})", if failed { "✗" } else { "✓" });
+        if failed {
+            eprintln!("{head}");
+        } else {
+            println!("{head}");
+        }
+        for b in &row.block {
+            let text = if b.command {
+                format!("    $ {}", b.text)
+            } else if b.stderr {
+                format!("    ! {}", b.text)
+            } else {
+                format!("    {}", b.text)
+            };
+            println!("{text}");
+        }
     }
 
     /// All job models (past jobs + the current one) for the reviewer.
@@ -220,7 +294,7 @@ impl Driver {
     fn review_failed(&mut self) -> bool {
         self.all_models()
             .iter()
-            .any(|m| m.rows.values().any(|r| r.state == model::RowState::Failed))
+            .any(|m| m.rows.values().any(|r| r.state == RowState::Failed))
     }
 
     fn print_settled(&self, lines: &[SettleLine]) {
@@ -235,7 +309,7 @@ impl Driver {
     }
 
     fn maybe_draw(&mut self) {
-        let Some(term) = self.term.as_mut() else {
+        let Some((w, h)) = self.region else {
             return;
         };
         let now = Instant::now();
@@ -247,11 +321,33 @@ impl Driver {
             return;
         }
         self.last_draw = Some(now);
+        // Periodic forced repaint: heals garbling from external tty writes
+        // (prompt lines, password-Entry scroll) within a second.
+        let force = self
+            .last_repaint
+            .map(|t| now - t >= REPAIR_EVERY)
+            .unwrap_or(true);
+        if force {
+            self.last_repaint = Some(now);
+        }
         // Auto-follow: keep the newest activity visible.
         self.ui.scroll = usize::MAX;
-        let model = &self.model;
-        let ui = &mut self.ui;
-        let _ = term.draw(|f| draw_frame(f, model, ui));
+        let height = (h - 1) as usize;
+        let frame = render_lines(&self.model, &mut self.ui, height);
+        let next: Vec<String> = frame.iter().map(|(l, _)| l.clone()).collect();
+        let bytes = diff_commands(&self.painted, &frame, force, h - 1);
+        self.painted = next;
+        let _ = stdout().write_all(&bytes);
+        let _ = stdout().flush();
+        let _ = w;
+    }
+}
+
+impl Drop for Driver {
+    fn drop(&mut self) {
+        // Panic-safe region teardown: drop order guarantees the region is
+        // released even if the loop unwinds.
+        self.disengage();
     }
 }
 
@@ -265,14 +361,6 @@ pub struct TuiReporter {
     driver: Mutex<Option<JoinHandle<()>>>,
 }
 
-impl Drop for Driver {
-    fn drop(&mut self) {
-        // Panic-safe region teardown: drop order guarantees the terminal
-        // viewport is released even if the loop unwinds.
-        self.deactivate();
-    }
-}
-
 impl TuiReporter {
     pub fn new() -> Self {
         let (tx, rx) = mpsc::channel::<DriverMsg>();
@@ -284,9 +372,12 @@ impl TuiReporter {
                     model: Model::new(),
                     jobs: vec![],
                     ui: UiState::new(),
-                    term: None,
+                    painted: vec![],
+                    region: None,
+                    fallback: false,
                     shutdown: false,
                     last_draw: None,
+                    last_repaint: None,
                 }
                 .run();
             })
@@ -331,11 +422,10 @@ impl Reporter for TuiReporter {
         }
         // Belt and braces: regardless of how the driver ended, the terminal
         // is restored from the main thread too (idempotent, cheap).
-        let _ = crossterm::execute!(
+        let _ = write!(
             stdout(),
-            crossterm::event::DisableMouseCapture,
-            crossterm::terminal::LeaveAlternateScreen
+            "\x1b[?1006l\x1b[?1015l\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1049l\x1b[?25h"
         );
-        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = stdout().flush();
     }
 }

@@ -6,10 +6,14 @@
 //! collapsed by default; details unfold inline on click or Enter.
 //! `q`/`Esc`/`Enter`/`Ctrl-C` exits; [`TerminalGuard`] restores modes even
 //! on unwind.
+//!
+//! Rendering goes through the same diffed ANSI painter as the mid-run
+//! region (full-screen), so no terminal library is involved on this path
+//! either — crossterm is used only for raw mode + event input.
 
 use super::model::Model;
-use super::render::{draw_frame, UiState};
-use std::io::stdout;
+use super::render::{diff_commands, render_lines, UiState};
+use std::io::{stdout, Write};
 use std::time::Duration;
 
 /// RAII: whatever happens (panic, early return, wrapper error), the
@@ -24,62 +28,62 @@ impl TerminalGuard {
         if crossterm::terminal::enable_raw_mode().is_err() {
             return g;
         }
-        let _ = crossterm::execute!(
+        let _ = write!(
             stdout(),
-            crossterm::terminal::EnterAlternateScreen,
-            crossterm::event::EnableMouseCapture
+            "\x1b[?1049h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1015h\x1b[?1006h"
         );
+        let _ = stdout().flush();
         g
     }
 }
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        let _ = crossterm::execute!(
+        let _ = write!(
             stdout(),
-            crossterm::event::DisableMouseCapture,
-            crossterm::terminal::LeaveAlternateScreen
+            "\x1b[?1006l\x1b[?1015l\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1049l\x1b[?25h"
         );
+        let _ = stdout().flush();
         let _ = crossterm::terminal::disable_raw_mode();
     }
 }
 
 /// Run the reviewer over `model` until the user exits.
 pub fn run(model: Model) {
-    let backend = ratatui::backend::CrosstermBackend::new(stdout());
-    let mut term = match ratatui::Terminal::new(backend) {
-        Ok(t) => t,
-        Err(_) => return,
+    let Ok((w, h)) = crossterm::terminal::size() else {
+        return;
     };
+    if h < 5 || w < 20 {
+        return;
+    }
     let mut model = model;
     let mut ui = UiState::new();
     ui.interactive = true;
+    ui.color = std::env::var_os("NO_COLOR").is_none();
+    let mut painted: Vec<String> = vec![String::new(); h as usize];
+    let draw = |model: &Model, ui: &mut UiState, painted: &mut Vec<String>, force: bool| {
+        let frame = render_lines(model, ui, h as usize);
+        let next: Vec<String> = frame.iter().map(|(l, _)| l.clone()).collect();
+        let bytes = diff_commands(painted, &frame, force, h - 1);
+        *painted = next;
+        let _ = stdout().write_all(&bytes);
+        let _ = stdout().flush();
+    };
+    draw(&model, &mut ui, &mut painted, true);
     loop {
-        // Draw first so a resize glitch never eats the initial frame.
-        let r = term.draw(|f| draw_frame(f, &model, &mut ui));
-        if r.is_err() {
-            break;
-        }
         match crossterm::event::poll(Duration::from_millis(200)) {
             Ok(true) => {}
             _ => continue,
         }
         use crossterm::event::{
-            self, Event as CEvent, KeyCode, KeyEventKind, MouseButton, MouseEventKind,
+            self, Event as CEvent, KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
         };
         let exit = match event::read() {
             Ok(CEvent::Key(k)) if k.kind == KeyEventKind::Press => match k.code {
-                KeyCode::Char('q') | KeyCode::Esc | KeyCode::Enter => true,
-                KeyCode::Char('c') if k.modifiers.contains(event::KeyModifiers::CONTROL) => true,
+                KeyCode::Char('q') | KeyCode::Esc => true,
+                KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => true,
                 KeyCode::Up => {
                     ui.selected = ui.selected.saturating_sub(1);
-                    false
-                }
-                KeyCode::Char(' ') | KeyCode::Tab => {
-                    // Toggle the selected row from the keyboard.
-                    if let Some(id) = model.order.get(ui.selected).cloned() {
-                        model.toggle(&id);
-                    }
                     false
                 }
                 KeyCode::Down => {
@@ -89,12 +93,19 @@ pub fn run(model: Model) {
                     }
                     false
                 }
+                KeyCode::Char(' ') | KeyCode::Tab => {
+                    // Toggle the selected row from the keyboard.
+                    if let Some(id) = model.order.get(ui.selected).cloned() {
+                        model.toggle(&id);
+                    }
+                    false
+                }
                 KeyCode::PageUp => {
-                    ui.scroll_by(-10, ui.row_map.len());
+                    ui.scroll_by(-10, ui.row_map.len(), h as usize);
                     false
                 }
                 KeyCode::PageDown => {
-                    ui.scroll_by(10, ui.row_map.len());
+                    ui.scroll_by(10, ui.row_map.len(), h as usize);
                     false
                 }
                 _ => false,
@@ -102,15 +113,15 @@ pub fn run(model: Model) {
             Ok(CEvent::Mouse(m)) => {
                 match m.kind {
                     MouseEventKind::Down(MouseButton::Left) => {
-                        if let Some(idx) = ui.hit_test(m.column, m.row) {
+                        if let Some(idx) = ui.hit_test(m.row) {
                             if let Some(id) = model.order.get(idx).cloned() {
                                 model.toggle(&id);
                                 ui.selected = idx;
                             }
                         }
                     }
-                    MouseEventKind::ScrollUp => ui.scroll_by(-3, ui.row_map.len()),
-                    MouseEventKind::ScrollDown => ui.scroll_by(3, ui.row_map.len()),
+                    MouseEventKind::ScrollUp => ui.scroll_by(-3, ui.row_map.len(), h as usize),
+                    MouseEventKind::ScrollDown => ui.scroll_by(3, ui.row_map.len(), h as usize),
                     _ => {}
                 }
                 false
@@ -119,8 +130,14 @@ pub fn run(model: Model) {
             Ok(_) => false,
             Err(_) => true,
         };
+        draw(&model, &mut ui, &mut painted, false);
         if exit {
             break;
         }
     }
+    // Repaint one last time so the final state is on screen before the
+    // guard wipes the alternate screen; then a blank line for the shell.
+    draw(&model, &mut ui, &mut painted, true);
+    let _ = write!(stdout(), "\r\n");
+    let _ = stdout().flush();
 }

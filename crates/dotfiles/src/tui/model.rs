@@ -101,10 +101,7 @@ impl Model {
                 self.reset_job(title);
             }
             Event::Subsection { .. } => {}
-            Event::UnitStarted {
-                id,
-                prompt_capable,
-            } => {
+            Event::UnitStarted { id, prompt_capable } => {
                 self.started += 1;
                 if prompt_capable {
                     self.prompt_risk.insert(id.clone());
@@ -296,28 +293,13 @@ impl Model {
     }
 
     /// Remove and return one row (id from `order` and `rows`). Used by the
-    /// driver to print a finished unit's block in plain mode without the
-    /// resumed region duplicating it.
+    /// driver to print a finished unit's block in the plain fallback path
+    /// (region could not engage) without the region duplicating it later.
     pub fn take_row(&mut self, id: &str) -> Option<UnitRow> {
         if let Some(pos) = self.order.iter().position(|e| e == id) {
             self.order.remove(pos);
         }
         self.rows.remove(id)
-    }
-
-    /// Drop settled `Changed` rows (already printed to scrollback on a
-    /// suspend boundary). `Failed` rows stay — failures must reach the
-    /// reviewer even across suspensions.
-    pub fn prune_settled(&mut self) {
-        let settled: Vec<String> = self
-            .rows
-            .values()
-            .filter(|r| r.state == RowState::Changed)
-            .map(|r| r.id.clone())
-            .collect();
-        for id in settled {
-            self.take_row(&id);
-        }
     }
 
     /// Merge every job's model into a single reviewer model: all visible
@@ -595,7 +577,8 @@ mod tests {
     }
 
     #[test]
-    fn merged_review_resolves_cross_job_id_collisions() {        let mut a = Model::new();
+    fn merged_review_resolves_cross_job_id_collisions() {
+        let mut a = Model::new();
         a.apply(started("brew-taps"));
         a.apply(finished("brew-taps", UnitOutcome::Changed));
         let mut b = Model::new();
@@ -639,20 +622,5 @@ mod tests {
         assert_eq!(m.order, vec!["b"]);
         assert!(!m.rows.contains_key("a"));
         assert!(m.take_row("a").is_none());
-    }
-
-    #[test]
-    fn prune_settled_drops_changed_but_keeps_failed_and_in_flight() {
-        let mut m = Model::new();
-        m.apply(started("changed"));
-        m.apply(finished("changed", UnitOutcome::Changed));
-        m.apply(started("failed"));
-        m.apply(finished("failed", UnitOutcome::Failed));
-        m.apply(started("flying"));
-        m.prune_settled();
-        assert!(!m.rows.contains_key("changed"));
-        assert!(m.rows.contains_key("failed"), "failures reach the reviewer");
-        assert!(m.rows.contains_key("flying"));
-        assert_eq!(m.changed, 1, "counters survive the prune");
     }
 }
