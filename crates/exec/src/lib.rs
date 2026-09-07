@@ -205,7 +205,18 @@ impl ExecEnv {
                 });
             }
         };
-        self.run_streamed(program, args, &mut attribute)
+        let out = self.run_streamed(program, args, &mut attribute);
+        self.report_command_done(program, args, out.as_ref().map(|o| o.ok()).unwrap_or(false));
+        out
+    }
+
+    /// Close the announcement window opened by `Command`/`Elevate`.
+    fn report_command_done(&self, program: &str, args: &[&str], ok: bool) {
+        self.report(Event::CommandDone {
+            argv: report::display_argv(program, args),
+            unit: self.unit.clone(),
+            ok,
+        });
     }
 
     /// Run an elevated command with an explicit reason shown to the user
@@ -222,13 +233,16 @@ impl ExecEnv {
             unit: self.unit.clone(),
         });
         if self.dry_run {
+            self.report_command_done(program, args, true);
             return Ok(ExecOutput {
                 status: 0,
                 stdout: String::new(),
                 stderr: String::new(),
             });
         }
-        self.spawn_capturing(program, args, None, &mut |_, _| {})
+        let out = self.spawn_capturing(program, args, None, &mut |_, _| {});
+        self.report_command_done(program, args, out.as_ref().map(|o| o.ok()).unwrap_or(false));
+        out
     }
 
     /// Announce a spawn: the exact command line, plus — for `sudo` — what is
@@ -255,6 +269,7 @@ impl ExecEnv {
         use std::io::Write;
         self.announce(program, args, None);
         if self.dry_run {
+            self.report_command_done(program, args, true);
             return Ok(ExecOutput {
                 status: 0,
                 stdout: String::new(),
@@ -278,6 +293,7 @@ impl ExecEnv {
             stderr: String::from_utf8_lossy(&out.stderr).to_string(),
         };
         self.emit_captured(&output);
+        self.report_command_done(program, args, output.ok());
         Ok(output)
     }
 
@@ -285,13 +301,16 @@ impl ExecEnv {
     pub fn status(&self, program: &str, args: &[&str]) -> Result<i32> {
         self.announce(program, args, None);
         if self.dry_run {
+            self.report_command_done(program, args, true);
             return Ok(0);
         }
         let status = self
             .command(program, args)
             .status()
             .with_context(|| format!("failed to spawn {}", program))?;
-        Ok(status.code().unwrap_or(-1))
+        let code = status.code().unwrap_or(-1);
+        self.report_command_done(program, args, code == 0);
+        Ok(code)
     }
 
     /// Run a command capturing stdout/stderr while delivering every output
@@ -548,8 +567,13 @@ mod tests {
         let out = env.output("sh", &["-c", "echo hi"]).unwrap();
         assert!(out.ok());
         let events = reporter.events();
-        assert_eq!(events.len(), 1);
+        // Announcement + balanced completion, nothing else (no unit logs).
+        assert_eq!(events.len(), 2);
         assert!(matches!(&events[0], Event::Command { .. }));
+        assert!(matches!(
+            &events[1],
+            Event::CommandDone { ok: true, unit: None, .. }
+        ));
     }
 
     #[test]
@@ -628,7 +652,10 @@ mod tests {
         assert_eq!(out.status, 0);
         assert!(matches!(
             &reporter.events()[..],
-            [Event::Command { argv, dry_run: true, .. }] if argv == "false"
+            [
+                Event::Command { argv, dry_run: true, .. },
+                Event::CommandDone { argv: done, ok: true, .. },
+            ] if argv == "false" && done == "false"
         ));
     }
 
@@ -686,7 +713,10 @@ mod tests {
         assert_eq!(rc, 0);
         assert!(matches!(
             &reporter.events()[..],
-            [Event::Command { argv, dry_run: false, .. }] if argv == "true"
+            [
+                Event::Command { argv, dry_run: false, .. },
+                Event::CommandDone { ok: true, .. },
+            ] if argv == "true"
         ));
     }
 }

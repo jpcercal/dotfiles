@@ -114,17 +114,20 @@ pub fn draw_frame(frame: &mut Frame, model: &Model, ui: &mut UiState) {
     let mut lines: Vec<Line> = vec![];
     let mut row_map: Vec<RowMapEntry> = vec![];
 
-    // Header: `▶ install   87/181` (+ spinner while anything runs).
-    let mut head = vec![
-        styled("▶ ", bold, color),
-        styled(model.section.clone(), bold, color),
-    ];
+    // Header: `{spin} 13/17 done · 4 running · ✗ 1 failed`. The job title
+    // is NOT repeated here — the plain `▶ title` line already marks the
+    // section in scrollback; the reviewer (interactive) shows it.
+    let mut head = vec![styled(spin, dim, color)];
     head.push(Span::raw(format!(
-        "   {}/{} done",
-        model.finished, model.started
+        " {}/{} done · {} running",
+        model.finished, model.started, in_flight
     )));
-    if in_flight > 0 {
-        head.push(Span::raw(format!("  {spin} {in_flight} running")));
+    if model.failed > 0 {
+        head.push(styled(format!(" · ✗ {} failed", model.failed), red, color));
+    }
+    if ui.interactive {
+        head.push(styled("  ▶ ", bold, color));
+        head.push(styled(model.section.clone(), bold, color));
     }
     push_line(Line::from(head), None, &mut lines, &mut row_map);
 
@@ -275,6 +278,7 @@ mod tests {
         });
         m.apply(Event::UnitStarted {
             id: "brew-formula:git".into(),
+            prompt_capable: false,
         });
         m.apply(Event::Command {
             argv: "brew install --formula git".into(),
@@ -294,6 +298,7 @@ mod tests {
         });
         m.apply(Event::UnitStarted {
             id: "brew-formula:fd".into(),
+            prompt_capable: false,
         });
         m.apply(Event::UnitFinished {
             id: "brew-formula:fd".into(),
@@ -303,6 +308,7 @@ mod tests {
         });
         m.apply(Event::UnitStarted {
             id: "mas:123".into(),
+            prompt_capable: false,
         });
         m.apply(Event::UnitFinished {
             id: "mas:123".into(),

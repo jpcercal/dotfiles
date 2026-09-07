@@ -13,6 +13,31 @@ use dotfiles_exec::{Event, ExecEnv};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Condvar, Mutex};
 
+/// Units that may open an interactive prompt on the tty while they run:
+/// App Store installs (`mas` shells out to `sudo installer`), cask
+/// installers (pkg binaries may prompt), and any unit whose lifecycle
+/// hooks invoke `sudo`. Renderers suspend live regions while such units
+/// are in flight so password prompts stay visible and typeable.
+fn unit_may_prompt(unit: &Unit) -> bool {
+    if unit.backend == "cask" || unit.backend == "mas" {
+        return true;
+    }
+    let Some(hooks) = &unit.hooks else {
+        return false;
+    };
+    [
+        hooks.pre_install.as_deref(),
+        hooks.post_install.as_deref(),
+        hooks.pre_update.as_deref(),
+        hooks.post_update.as_deref(),
+        hooks.pre_uninstall.as_deref(),
+        hooks.post_uninstall.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .any(|s| s.contains("sudo"))
+}
+
 /// Scheduler tuning (defaults come from `execution` in apps.yaml;
 /// `--jobs` / `--sequential` override on the CLI).
 #[derive(Debug, Clone, Default)]
@@ -148,7 +173,10 @@ pub fn run(
                 // units below never reach the runner: they emit `UnitFinished`
                 // without `UnitStarted`, since they were never attempted.
                 let id = graph.units[i].id.clone();
-                env.report(Event::UnitStarted { id: id.clone() });
+                env.report(Event::UnitStarted {
+                    prompt_capable: unit_may_prompt(&graph.units[i]),
+                    id: id.clone(),
+                });
                 let unit_env = env.clone().for_unit(&id);
                 let outcome = runner(&graph.units[i], &unit_env);
                 let finished = Event::UnitFinished {
@@ -464,7 +492,7 @@ mod tests {
         let started: Vec<&str> = events
             .iter()
             .filter_map(|e| match e {
-                Event::UnitStarted { id } => Some(id.as_str()),
+                Event::UnitStarted { id, .. } => Some(id.as_str()),
                 _ => None,
             })
             .collect();
@@ -506,7 +534,7 @@ mod tests {
         for id in ["fail", "sibling"] {
             let s = events
                 .iter()
-                .position(|e| matches!(e, Event::UnitStarted { id: i } if i == id))
+                .position(|e| matches!(e, Event::UnitStarted { id: i, .. } if i == id))
                 .unwrap();
             let f = events
                 .iter()

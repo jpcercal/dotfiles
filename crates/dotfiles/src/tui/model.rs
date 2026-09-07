@@ -8,7 +8,7 @@
 //! unit-testable.
 
 use dotfiles_exec::{Event, Stream, UnitOutcome};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Max unscoped/feed lines kept (status lines under the rows).
 const FEED_CAP: usize = 4;
@@ -72,6 +72,9 @@ pub struct Model {
     pub rows: BTreeMap<String, UnitRow>,
     /// Hidden no-op finishes per driver (`brew-formula` → 118).
     pub aggregates: BTreeMap<String, usize>,
+    /// In-flight units that may open an interactive tty prompt (mas/cask
+    /// installers, sudo-carrying hooks). Non-empty ⇒ live regions suspend.
+    pub prompt_risk: BTreeSet<String>,
     pub started: usize,
     pub finished: usize,
     pub changed: usize,
@@ -86,6 +89,11 @@ impl Model {
         Self::default()
     }
 
+    /// True while any prompt-capable unit is in flight.
+    pub fn may_prompt(&self) -> bool {
+        !self.prompt_risk.is_empty()
+    }
+
     /// Fold one event into display state.
     pub fn apply(&mut self, event: Event) {
         match event {
@@ -93,8 +101,14 @@ impl Model {
                 self.reset_job(title);
             }
             Event::Subsection { .. } => {}
-            Event::UnitStarted { id } => {
+            Event::UnitStarted {
+                id,
+                prompt_capable,
+            } => {
                 self.started += 1;
+                if prompt_capable {
+                    self.prompt_risk.insert(id.clone());
+                }
                 if !self.rows.contains_key(&id) {
                     self.order.push(id.clone());
                     self.rows.insert(
@@ -152,6 +166,7 @@ impl Model {
                 ..
             } => {
                 self.finished += 1;
+                self.prompt_risk.remove(&id);
                 match outcome {
                     UnitOutcome::NoOp => {
                         // Vanish into the aggregate (docker's "Already exists"
@@ -181,6 +196,9 @@ impl Model {
                         row.current_cmd = None;
                     }
                 }
+            }
+            Event::CommandDone { .. } => {
+                // Window-closing signal, consumed by the driver.
             }
             Event::Elevate { command, reason } => {
                 self.elevate_count += 1;
@@ -218,10 +236,13 @@ impl Model {
                     RowState::Changed => ("✓", false),
                     RowState::Failed => ("✗", true),
                 };
-                out.push(SettleLine {
-                    stderr,
-                    text: format!("{mark} {} ({})", row.id, row.detail),
-                });
+                // In-flight rows have no detail yet: settle them bare.
+                let text = if row.detail.is_empty() {
+                    format!("{mark} {}", row.id)
+                } else {
+                    format!("{mark} {} ({})", row.id, row.detail)
+                };
+                out.push(SettleLine { stderr, text });
             }
         }
         let mut drivers: Vec<(&String, &usize)> = self.aggregates.iter().collect();
@@ -271,6 +292,31 @@ impl Model {
             RowState::Failed => 0,
             RowState::Changed => 1,
             RowState::InFlight => 2,
+        }
+    }
+
+    /// Remove and return one row (id from `order` and `rows`). Used by the
+    /// driver to print a finished unit's block in plain mode without the
+    /// resumed region duplicating it.
+    pub fn take_row(&mut self, id: &str) -> Option<UnitRow> {
+        if let Some(pos) = self.order.iter().position(|e| e == id) {
+            self.order.remove(pos);
+        }
+        self.rows.remove(id)
+    }
+
+    /// Drop settled `Changed` rows (already printed to scrollback on a
+    /// suspend boundary). `Failed` rows stay — failures must reach the
+    /// reviewer even across suspensions.
+    pub fn prune_settled(&mut self) {
+        let settled: Vec<String> = self
+            .rows
+            .values()
+            .filter(|r| r.state == RowState::Changed)
+            .map(|r| r.id.clone())
+            .collect();
+        for id in settled {
+            self.take_row(&id);
         }
     }
 
@@ -353,7 +399,14 @@ mod tests {
     use dotfiles_exec::UnitOutcome;
 
     fn started(id: &str) -> Event {
-        Event::UnitStarted { id: id.into() }
+        started_capable(id, false)
+    }
+
+    fn started_capable(id: &str, prompt_capable: bool) -> Event {
+        Event::UnitStarted {
+            id: id.into(),
+            prompt_capable,
+        }
     }
 
     fn finished(id: &str, outcome: UnitOutcome) -> Event {
@@ -542,8 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn merged_review_resolves_cross_job_id_collisions() {
-        let mut a = Model::new();
+    fn merged_review_resolves_cross_job_id_collisions() {        let mut a = Model::new();
         a.apply(started("brew-taps"));
         a.apply(finished("brew-taps", UnitOutcome::Changed));
         let mut b = Model::new();
@@ -560,5 +612,47 @@ mod tests {
         );
         // Rows map and order must agree on size.
         assert_eq!(merged.rows.len(), merged.order.len());
+    }
+
+    #[test]
+    fn prompt_risk_tracks_capable_units_in_flight() {
+        let mut m = Model::new();
+        m.apply(started_capable("cask:docker", true));
+        assert!(m.may_prompt());
+        m.apply(started("brew-formula:git"));
+        assert!(m.may_prompt(), "other in-flight units do not clear risk");
+        m.apply(finished("cask:docker", UnitOutcome::Changed));
+        assert!(!m.may_prompt(), "finish clears the risk flag");
+        // NoOp and Failed finishes clear it too.
+        m.apply(started_capable("mas:1", true));
+        m.apply(finished("mas:1", UnitOutcome::NoOp));
+        assert!(!m.may_prompt());
+    }
+
+    #[test]
+    fn take_row_removes_row_and_order_entry() {
+        let mut m = Model::new();
+        m.apply(started("a"));
+        m.apply(started("b"));
+        let row = m.take_row("a").expect("row");
+        assert_eq!(row.id, "a");
+        assert_eq!(m.order, vec!["b"]);
+        assert!(!m.rows.contains_key("a"));
+        assert!(m.take_row("a").is_none());
+    }
+
+    #[test]
+    fn prune_settled_drops_changed_but_keeps_failed_and_in_flight() {
+        let mut m = Model::new();
+        m.apply(started("changed"));
+        m.apply(finished("changed", UnitOutcome::Changed));
+        m.apply(started("failed"));
+        m.apply(finished("failed", UnitOutcome::Failed));
+        m.apply(started("flying"));
+        m.prune_settled();
+        assert!(!m.rows.contains_key("changed"));
+        assert!(m.rows.contains_key("failed"), "failures reach the reviewer");
+        assert!(m.rows.contains_key("flying"));
+        assert_eq!(m.changed, 1, "counters survive the prune");
     }
 }

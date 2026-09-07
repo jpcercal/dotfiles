@@ -42,8 +42,14 @@ pub enum Event {
     Section { title: String },
     /// A backend group inside a job (`brew`, `cask`, …).
     Subsection { title: String },
-    /// A schedulable unit started executing (`→ brew-formula:git`).
-    UnitStarted { id: String },
+    /// A schedulable unit started executing. `prompt_capable` marks units
+    /// that may open an interactive prompt on the tty (App Store/cask
+    /// installers, hooks that invoke `sudo`) — renderers suspend live
+    /// regions while such units run so the prompt stays visible.
+    UnitStarted {
+        id: String,
+        prompt_capable: bool,
+    },
     /// One captured stdout/stderr line of unit `id` (buffered by the
     /// renderer, flushed as a block on `UnitFinished`).
     UnitLog {
@@ -68,6 +74,15 @@ pub enum Event {
         argv: String,
         dry_run: bool,
         unit: Option<String>,
+    },
+    /// An external command finished (balanced with [`Event::Command`]).
+    /// `argv` matches the announcement, so consumers can close per-command
+    /// windows — e.g. a live region suspends from `Elevate`/`Command` of a
+    /// `sudo` spawn until its `CommandDone` arrives.
+    CommandDone {
+        argv: String,
+        unit: Option<String>,
+        ok: bool,
     },
     /// A command is about to run elevated. Emitted on **every** elevated
     /// spawn — even when sudo's timestamp cache means no password prompt

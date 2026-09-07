@@ -134,6 +134,7 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
     // Taps keep their original fallibility (`?` aborts the run on spawn
     // failure); only the announcements are new.
     env.report(Event::UnitStarted {
+        prompt_capable: false,
         id: "brew-taps".into(),
     });
     let taps = ensure_taps(&env.clone().for_unit("brew-taps"), &taps_from_manifest(m));
@@ -196,7 +197,12 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
         if let Some((p, n)) = dotfiles_manifest::units::split_unit_id(e.id()) {
             if p == "custom" {
                 let id = format!("custom:{n}");
-                env.report(Event::UnitStarted { id: id.clone() });
+                env.report(Event::UnitStarted {
+                    // Sequential chunks never run hooks (legacy path); only
+                    // cask/mas chunks can prompt.
+                    prompt_capable: id == "cask" || id == "mas",
+                    id: id.clone(),
+                });
                 let res = custom::run(&n, &env.clone().for_unit(&id));
                 match &res {
                     Ok(out) => env.report(Event::UnitFinished {
@@ -227,7 +233,10 @@ fn run_sequential(
     id: &str,
     f: impl FnOnce(&ExecEnv) -> BackendOutcome,
 ) -> BackendOutcome {
-    env.report(Event::UnitStarted { id: id.to_string() });
+    env.report(Event::UnitStarted {
+        prompt_capable: id == "cask" || id == "mas",
+        id: id.to_string(),
+    });
     let out = f(&env.clone().for_unit(id));
     env.report(Event::UnitFinished {
         id: id.to_string(),

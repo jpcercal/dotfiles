@@ -114,7 +114,7 @@ impl Reporter for TermReporter {
                     .to_string();
                 self.emit(line, false);
             }
-            Event::UnitStarted { id } => {
+            Event::UnitStarted { id, .. } => {
                 self.inner
                     .lock()
                     .unwrap()
@@ -214,6 +214,9 @@ impl Reporter for TermReporter {
                 self.emit(head, true);
                 self.emit(format!("  reason: {reason}"), true);
             }
+            Event::CommandDone { .. } => {
+                // Plain reporter has no per-command windows to close.
+            }
             Event::Note { msg } => self.emit(msg, false),
             Event::Warn { msg } => {
                 let line = if msg.starts_with("✗") {
@@ -283,6 +286,7 @@ mod tests {
         });
         r.report(Event::UnitStarted {
             id: "brew-formula:git".into(),
+            prompt_capable: false,
         });
         r.report(Event::Command {
             argv: "brew install git".into(),
@@ -314,7 +318,10 @@ mod tests {
     #[test]
     fn noop_units_print_nothing_at_all() {
         let (r, buf) = capture();
-        r.report(Event::UnitStarted { id: "u".into() });
+        r.report(Event::UnitStarted {
+            id: "u".into(),
+            prompt_capable: false,
+        });
         r.report(Event::Command {
             argv: "brew list".into(),
             dry_run: false,
@@ -338,7 +345,10 @@ mod tests {
     #[test]
     fn stderr_lines_get_bang_markers_and_failures_go_red() {
         let (r, buf) = capture();
-        r.report(Event::UnitStarted { id: "u".into() });
+        r.report(Event::UnitStarted {
+            id: "u".into(),
+            prompt_capable: false,
+        });
         r.report(Event::UnitLog {
             id: "u".into(),
             stream: Stream::Stderr,
@@ -387,7 +397,10 @@ mod tests {
     fn parallel_units_keep_separate_blocks() {
         let (r, buf) = capture();
         for id in ["a", "b"] {
-            r.report(Event::UnitStarted { id: id.into() });
+            r.report(Event::UnitStarted {
+                id: id.into(),
+                prompt_capable: false,
+            });
         }
         // Interleaved arrival …
         r.report(Event::UnitLog {
