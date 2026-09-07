@@ -121,10 +121,10 @@ impl Reporter for TermReporter {
                     .buffers
                     .entry(id.clone())
                     .or_default();
-                let line = format!("→ {id}")
-                    .if_supports_color(ColorStream::Stdout, |t| t.dimmed())
-                    .to_string();
-                self.emit(line, false);
+                // No live line: the start is implied by the finish block
+                // (docker-pull: only in-flight work is visible, and plain
+                // output has no live region — interesting units print their
+                // whole block on finish, no-ops print nothing at all).
             }
             Event::UnitLog { id, stream, line } => {
                 let buffered = match stream {
@@ -180,8 +180,17 @@ impl Reporter for TermReporter {
                 id,
                 ok,
                 detail,
-                outcome: _,
+                outcome,
             } => {
+                // Docker-pull philosophy for plain logs: no-op units
+                // ("already ok") vanish entirely — their counts live in the
+                // end-of-job recap. Only changed/failed units print, as one
+                // grouped block each.
+                if outcome == dotfiles_exec::UnitOutcome::NoOp {
+                    self.inner.lock().unwrap().buffers.remove(&id);
+                    self.inner.lock().unwrap().finished.insert(id);
+                    return;
+                }
                 let mark = if ok { "✓" } else { "✗" };
                 let head = if ok {
                     format!("{mark} {id} ({detail})")
@@ -280,27 +289,50 @@ mod tests {
             dry_run: false,
             unit: Some("brew-formula:git".into()),
         });
-        // Nothing but the start line is visible before the finish …
-        assert_eq!(text(&buf), "▶ install\n→ brew-formula:git\n");
+        // Starts print nothing live (the finish block implies them) …
+        assert_eq!(text(&buf), "▶ install\n");
         r.report(Event::UnitLog {
             id: "brew-formula:git".into(),
             stream: Stream::Stdout,
-            line: "already installed".into(),
+            line: "pouring git".into(),
         });
         r.report(Event::UnitFinished {
             id: "brew-formula:git".into(),
             ok: true,
-            detail: "already ok".into(),
-            outcome: dotfiles_exec::UnitOutcome::NoOp,
+            detail: "changed".into(),
+            outcome: dotfiles_exec::UnitOutcome::Changed,
         });
         assert_eq!(
             text(&buf),
             "▶ install\n\
-             → brew-formula:git\n\
-             ✓ brew-formula:git (already ok)\n\
+             ✓ brew-formula:git (changed)\n\
              \x20   $ brew install git\n\
-             \x20   already installed\n"
+             \x20   pouring git\n"
         );
+    }
+
+    #[test]
+    fn noop_units_print_nothing_at_all() {
+        let (r, buf) = capture();
+        r.report(Event::UnitStarted { id: "u".into() });
+        r.report(Event::Command {
+            argv: "brew list".into(),
+            dry_run: false,
+            unit: Some("u".into()),
+        });
+        r.report(Event::UnitLog {
+            id: "u".into(),
+            stream: Stream::Stdout,
+            line: "already there".into(),
+        });
+        r.report(Event::UnitFinished {
+            id: "u".into(),
+            ok: true,
+            detail: "already ok".into(),
+            outcome: dotfiles_exec::UnitOutcome::NoOp,
+        });
+        // No start line, no finish line, no block — counts live in the recap.
+        assert_eq!(text(&buf), "");
     }
 
     #[test]
@@ -320,9 +352,9 @@ mod tests {
         });
         // Captured sink is not a tty → plain glyphs, no ANSI escapes. The
         // `✗ u (boom)` head goes to real stderr (always user-visible); the
-        // sink keeps the start line plus the flushed block.
+        // sink keeps just the flushed block (no start line).
         let out = text(&buf);
-        assert!(out.contains("→ u"), "{out}");
+        assert!(!out.contains("→"), "{out}");
         assert!(out.contains("    ! boom"), "{out}");
         assert!(!out.contains("✗"), "{out}");
         assert!(!out.contains('\x1b'), "{out:?}");

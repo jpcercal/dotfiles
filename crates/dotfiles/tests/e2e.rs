@@ -27,15 +27,24 @@ fn sync_sandbox_completes_all_jobs() {
         stderr
     );
     assert!(stdout.contains("sync: done"), "{}", stdout);
-    // Structured live feedback: every job opens a section, units announce
-    // start/finish, and each finished unit flushes a grouped block with its
-    // exact commands (`    $ …`).
+    // Structured live feedback: every job opens a section, changed units
+    // flush a grouped block with their exact commands (`    $ …`), and
+    // start lines never print (the finish block implies them — docker-pull
+    // philosophy: only work worth showing is shown).
     for section in ["▶ bootstrap", "▶ install", "▶ prefs", "▶ history"] {
         assert!(stdout.contains(section), "missing {section}:\n{stdout}");
     }
     assert!(
-        stdout.contains("→ brew-formula:"),
-        "no unit start lines:\n{stdout}"
+        !stdout.contains("→ "),
+        "plain mode must not print unit start lines:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("✓ brew-formula:"),
+        "no unit finish lines:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("    $ brew "),
+        "no grouped command blocks:\n{stdout}"
     );
     assert!(
         stdout.contains("✓ brew-formula:"),
