@@ -2,7 +2,7 @@
 //! `install-apps.sh` + brew tap bootstrapping from `install-dependencies.sh`.
 
 use crate::outcome::BackendOutcome;
-use crate::{bootstrap, brew, graph, schedule, toolchain, Spec};
+use crate::{brew, custom, graph, schedule, Spec};
 use anyhow::Result;
 use dotfiles_exec::ExecEnv;
 use dotfiles_manifest::Manifest;
@@ -49,8 +49,7 @@ pub fn ensure_taps(env: &ExecEnv, taps: &[String]) -> Result<BackendOutcome> {
 }
 
 fn taps_from_manifest(m: &Manifest) -> Vec<String> {
-    m.install
-        .require
+    m.require
         .iter()
         .filter_map(|e| {
             let (p, n) = dotfiles_manifest::units::split_unit_id(e.id())?;
@@ -64,8 +63,7 @@ fn taps_from_manifest(m: &Manifest) -> Vec<String> {
 }
 
 fn packages_for_backend(m: &Manifest, prefix: &str) -> Vec<String> {
-    m.install
-        .require
+    m.require
         .iter()
         .filter_map(|e| {
             let (p, n) = dotfiles_manifest::units::split_unit_id(e.id())?;
@@ -90,7 +88,7 @@ pub fn install_all(env: &ExecEnv, m: &Manifest) -> Result<Vec<BackendOutcome>> {
 }
 
 /// `install_all` with explicit scheduler tuning (the CLI layers `--jobs` /
-/// `--sequential` over the manifest's `install.execution` defaults).
+/// `--sequential` over the manifest's `execution` defaults).
 pub fn install_all_with_opts(
     env: &ExecEnv,
     m: &Manifest,
@@ -103,11 +101,26 @@ pub fn install_all_with_opts(
     }))
 }
 
-/// Scheduler tuning from `install.execution` (manifest = source of truth).
+/// Run update hooks across the manifest graph. Fires `pre-update` hooks,
+/// per-unit upgrade actions (`backend.upgrade()` for package units; no-op for
+/// custom units), and `post-update` hooks. Used by `dotfiles update` (after
+/// index refresh) and `dotfiles upgrade` (after the core pipeline).
+pub fn update_all_with_opts(
+    env: &ExecEnv,
+    m: &Manifest,
+    opts: &schedule::SchedOpts,
+) -> Result<Vec<BackendOutcome>> {
+    let g = graph::build(m)?;
+    Ok(schedule::run(&g, opts, env, &|unit, env| {
+        run_unit_update(env, unit)
+    }))
+}
+
+/// Scheduler tuning from `execution` (manifest = source of truth).
 pub fn sched_opts_from_manifest(m: &Manifest) -> schedule::SchedOpts {
     schedule::SchedOpts {
-        max_jobs: m.install.execution.max_jobs,
-        lock_limits: m.install.execution.locks.clone(),
+        max_jobs: m.execution.max_jobs,
+        lock_limits: m.execution.locks.clone(),
     }
 }
 
@@ -164,20 +177,14 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
     let mas_ids: Vec<String> = packages_for_backend(m, "mas");
     results.push(run_if_available(env, &crate::mas::Mas, &mas_ids));
 
-    // Toolchains
-    if let Some(r) = &m.install.toolchains.rustup {
-        results.push(toolchain::Toolchain::ensure_rustup(env, &r.channel)?);
-    }
-    if m.install.toolchains.node.is_some() {
-        results.push(toolchain::Toolchain::ensure_node(env)?);
-    }
-    if m.install.toolchains.python.is_some() {
-        results.push(toolchain::Toolchain::ensure_python(env)?);
-    }
-
-    // Typed bootstrap steps (manifest order)
-    for entry in &m.install.bootstrap {
-        results.push(bootstrap::run(entry.id(), env)?);
+    // Custom steps (manifest order) — pure hook carriers (hooks fire in the
+    // graph engine path; sequential path is legacy and does not run hooks).
+    for e in &m.require {
+        if let Some((p, n)) = dotfiles_manifest::units::split_unit_id(e.id()) {
+            if p == "custom" {
+                results.push(custom::run(&n, env)?);
+            }
+        }
     }
 
     Ok(results)
@@ -188,7 +195,7 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
 /// `sudo -v` pre-flight). Best-effort: failures are ignored here and surface
 /// per-unit like any other error.
 fn preflight_sudo(env: &ExecEnv, m: &Manifest) -> Result<()> {
-    let has_cask = m.install.require.iter().any(|e| {
+    let has_cask = m.require.iter().any(|e| {
         dotfiles_manifest::units::split_unit_id(e.id()).is_some_and(|(p, _)| p == "brew-cask")
     });
     if !has_cask || !env.has_command("sudo") {
@@ -219,9 +226,10 @@ fn hook_stderr_tail(res: &dotfiles_exec::ExecOutput) -> String {
     }
 }
 
-/// Execute one graph unit. Backend errors become failed outcomes (the
-/// scheduler blocks dependents); only spawn-level failures escape as `Err`.
-fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
+/// Execute one graph unit (install phase). Backend errors become failed
+/// outcomes (the scheduler blocks dependents); only spawn-level failures
+/// escape as `Err`.
+fn run_unit(env: &ExecEnv, _m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
     // Pre-install hook (only for package units that have it)
     if let Some(hooks) = &unit.hooks {
         if let Some(snippet) = &hooks.pre_install {
@@ -252,8 +260,6 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
     let res: Result<BackendOutcome> = match &unit.kind {
         graph::UnitKind::Taps => ensure_taps(env, &unit.packages),
         graph::UnitKind::Batch("brew") | graph::UnitKind::Package("brew") => {
-            // For brew, reconstruct packages with version suffix if needed? brew-formula pins not supported,
-            // so version is None always.
             Ok(run_if_available_with_version(env, &brew::Brew, unit))
         }
         graph::UnitKind::Batch("cask") | graph::UnitKind::Package("cask") => {
@@ -284,27 +290,9 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
             "unknown backend '{other}' for unit '{}'",
             unit.id
         )),
-        graph::UnitKind::Toolchain => {
-            let key = unit.packages.first().map(String::as_str).unwrap_or("");
-            match key {
-                "rustup" => {
-                    let channel = m
-                        .install
-                        .toolchains
-                        .rustup
-                        .as_ref()
-                        .map(|r| r.channel.as_str())
-                        .unwrap_or("stable");
-                    toolchain::Toolchain::ensure_rustup(env, channel)
-                }
-                "node" => toolchain::Toolchain::ensure_node(env),
-                "python" => toolchain::Toolchain::ensure_python(env),
-                other => Err(anyhow::anyhow!("unknown toolchain '{other}'")),
-            }
-        }
-        graph::UnitKind::Bootstrap => {
+        graph::UnitKind::Custom => {
             let step = unit.packages.first().map(String::as_str).unwrap_or("");
-            bootstrap::run(step, env)
+            custom::run(step, env)
         }
     };
     let mut outcome = res.unwrap_or_else(|e| {
@@ -337,6 +325,85 @@ fn run_unit(env: &ExecEnv, m: &Manifest, unit: &graph::Unit) -> BackendOutcome {
                     Err(e) => {
                         outcome
                             .fail_one(unit.id.clone(), format!("post-install hook error: {}", e));
+                    }
+                }
+            }
+        }
+    }
+
+    outcome
+}
+
+/// Execute one graph unit (update phase). Fires pre-update hooks, runs the
+/// per-unit upgrade action, then fires post-update hooks.
+fn run_unit_update(env: &ExecEnv, unit: &graph::Unit) -> BackendOutcome {
+    // Pre-update hook
+    if let Some(hooks) = &unit.hooks {
+        if let Some(snippet) = &hooks.pre_update {
+            let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &unit.id);
+            match run_hook(&hook_env, snippet) {
+                Ok(res) if res.ok() => {}
+                Ok(res) => {
+                    let mut out = BackendOutcome::empty(unit.backend);
+                    out.fail_one(
+                        unit.id.clone(),
+                        format!(
+                            "pre-update hook failed: {} ({})",
+                            snippet.lines().next().unwrap_or(""),
+                            hook_stderr_tail(&res),
+                        ),
+                    );
+                    return out;
+                }
+                Err(e) => {
+                    let mut out = BackendOutcome::empty(unit.backend);
+                    out.fail_one(unit.id.clone(), format!("pre-update hook error: {}", e));
+                    return out;
+                }
+            }
+        }
+    }
+
+    // Update action: ecosystem upgrade for package units; no-op for custom.
+    let res: Result<BackendOutcome> = match &unit.kind {
+        graph::UnitKind::Taps => Ok(BackendOutcome::empty(unit.backend)),
+        graph::UnitKind::Custom => {
+            let step = unit.packages.first().map(String::as_str).unwrap_or("");
+            custom::run(step, env)
+        }
+        graph::UnitKind::Batch(_) | graph::UnitKind::Package(_) => {
+            match crate::by_name(unit.backend) {
+                Some(b) => b.upgrade(env),
+                None => Ok(BackendOutcome::empty(unit.backend)),
+            }
+        }
+    };
+    let mut outcome = res.unwrap_or_else(|e| {
+        let mut out = BackendOutcome::empty(unit.backend);
+        out.fail_one(unit.id.clone(), e.to_string());
+        out
+    });
+
+    // Post-update hook: fires on success.
+    if let Some(hooks) = &unit.hooks {
+        if let Some(snippet) = &hooks.post_update {
+            if outcome.failed.is_empty() {
+                let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &unit.id);
+                match run_hook(&hook_env, snippet) {
+                    Ok(res) if res.ok() => {}
+                    Ok(res) => {
+                        outcome.fail_one(
+                            unit.id.clone(),
+                            format!(
+                                "post-update hook failed: {} ({})",
+                                snippet.lines().next().unwrap_or(""),
+                                hook_stderr_tail(&res),
+                            ),
+                        );
+                    }
+                    Err(e) => {
+                        outcome
+                            .fail_one(unit.id.clone(), format!("post-update hook error: {}", e));
                     }
                 }
             }
@@ -548,26 +615,19 @@ mod tests {
         t.stub("uv", "case \"$1 $2\" in \"python find\") echo '/usr/bin/python3' ;; \"pip list\") echo '[]' ;; esac; exit 0");
         t.stub("go", "case \"$*\" in \"env GOPATH\") echo \"$HOME/gopath\" ;; \"env GOBIN\") echo '' ;; esac; exit 0");
         t.stub("mas", "case \"$1\" in list) echo '';; esac; exit 0");
-        t.stub_ok("rustup", ""); // toolchain ensure = no-op
         t.stub_ok("fnm", "");
-        // uv stub above also covers toolchain python
         let manifest = parse_manifest(
             r#"
-install:
-  require:
-    - "brew-tap:hashicorp/tap"
-    - "brew-formula:git"
-    - "brew-cask:iterm2"
-    - "gem:neovim"
-    - "npm:prettier"
-    - "pip:pynvim"
-    - "go:example.com/x/tool@latest"
-    - id: "mas:123"
-      label: "Foo"
-  toolchains:
-    rustup: {}
-    node: {}
-    python: {}
+require:
+  - "brew-tap:hashicorp/tap"
+  - "brew-formula:git"
+  - "brew-cask:iterm2"
+  - "gem:neovim"
+  - "npm:prettier"
+  - "pip:pynvim"
+  - "go:example.com/x/tool@latest"
+  - id: "mas:123"
+    label: "Foo"
 "#,
         )
         .unwrap();
@@ -604,17 +664,12 @@ install:
             .iter()
             .any(|c| c == "install example.com/x/tool@latest"));
         assert_eq!(t.calls_of("mas"), vec!["list", "install 123"]);
-        assert_eq!(
-            t.calls_of("fnm"),
-            vec!["install --lts", "default lts-latest"]
-        );
     }
 
     #[test]
     fn unavailable_backend_is_reported_not_fatal() {
         let t = TestEnv::new();
-        let manifest =
-            parse_manifest("install:\n  require:\n    - \"brew-formula:git\"\n").unwrap();
+        let manifest = parse_manifest("require:\n  - \"brew-formula:git\"\n").unwrap();
         let results = install_all(t.exec(), &manifest).unwrap();
         // brew is absent from the isolated PATH: the formula-install outcome is
         // a non-fatal skip (so `sync` continues on machines mid-bootstrap).
@@ -633,15 +688,11 @@ install:
             "brew",
             "case \"$1\" in tap) echo 'network down' 1>&2; exit 1 ;; esac; exit 0",
         );
-        t.stub_ok("rustup", "");
         let manifest = parse_manifest(
             r#"
-install:
-  require:
-    - "brew-tap:hashicorp/tap"
-    - "brew-formula:git"
-  toolchains:
-    rustup: {}
+require:
+  - "brew-tap:hashicorp/tap"
+  - "brew-formula:git"
 "#,
         )
         .unwrap();
@@ -659,14 +710,6 @@ install:
             .expect("blocked batch");
         assert!(!batch.ok());
         assert!(t.calls_of("brew").iter().all(|c| !c.starts_with("install")));
-        // … while the independent rustup toolchain still ran.
-        assert!(
-            results
-                .iter()
-                .any(|r| r.backend == "toolchain:rustup" && r.ok()),
-            "{:?}",
-            results.iter().map(|r| &r.backend).collect::<Vec<_>>()
-        );
     }
 
     #[test]
@@ -674,7 +717,7 @@ install:
         let t = TestEnv::new();
         t.stub("brew", BREW_STUB);
         let manifest = parse_manifest(
-            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"brew-cask:iterm2\"\n",
+            "require:\n  - \"brew-formula:git\"\n  - \"brew-cask:iterm2\"\n",
         )
         .unwrap();
         let results = install_all_sequential(t.exec(), &manifest).unwrap();
@@ -703,12 +746,11 @@ install:
         t.stub("sh", "exit 0");
         let manifest = parse_manifest(
             r#"
-install:
-  require:
-    - id: "brew-formula:git"
-      hooks:
-        pre-install: "echo pre"
-        post-install: "echo post"
+require:
+  - id: "brew-formula:git"
+    hooks:
+      pre-install: "echo pre"
+      post-install: "echo post"
 "#,
         )
         .unwrap();
@@ -728,115 +770,65 @@ install:
     }
 
     #[test]
-    fn every_manifest_hook_executes_when_changed_and_when_present() {
-        // Every hook declared in the real manifests must actually execute:
-        // on a fresh install (package changed) AND on a re-run where the
-        // package is already installed (outcome.unchanged — the convergence
-        // case that broke the e2e-machine CI job).
-        use dotfiles_manifest::{BootstrapEntry, Install, Manifest, RequireEntry};
+    fn every_install_hook_executes_when_changed_and_when_present() {
+    // Every install-phase hook declared in the real manifests must actually
+    // execute: on a fresh install (package changed) AND on a re-run where the
+    // package is already installed (outcome.unchanged — the convergence
+    // case that broke the e2e-machine CI job).
+        use dotfiles_manifest::{Manifest, RequireEntry};
 
         /// One hook snippet declared in a real manifest, with its entry for
         /// building a minimal single-entry install manifest.
         struct HookCase {
             file: &'static str,
             require: Option<RequireEntry>,
-            bootstrap: Option<BootstrapEntry>,
             id: String,
             snippet: String,
         }
 
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let mut cases: Vec<HookCase> = vec![];
-        let mut non_install_hooks: Vec<String> = vec![];
         for file in ["apps.yaml", "e2e/apps.ci.yaml"] {
             let text = std::fs::read_to_string(root.join(file)).unwrap();
             let m = parse_manifest(&text).unwrap();
-            for e in &m.install.require {
+            for e in &m.require {
                 if let Some(h) = e.hooks() {
-                    for (kind, snippet) in [
-                        ("pre-install", &h.pre_install),
-                        ("post-install", &h.post_install),
-                    ] {
-                        if let Some(s) = snippet {
-                            cases.push(HookCase {
-                                file,
-                                require: Some(e.clone()),
-                                bootstrap: None,
-                                id: e.id().into(),
-                                snippet: s.clone(),
-                            });
-                            let _ = kind;
-                        }
+                    if let Some(s) = &h.pre_install {
+                        cases.push(HookCase {
+                            file,
+                            require: Some(e.clone()),
+                            id: e.id().into(),
+                            snippet: s.clone(),
+                        });
                     }
-                    for (kind, opt) in [
-                        ("pre-update", &h.pre_update),
-                        ("post-update", &h.post_update),
-                        ("pre-uninstall", &h.pre_uninstall),
-                        ("post-uninstall", &h.post_uninstall),
-                    ] {
-                        if opt.is_some() {
-                            non_install_hooks.push(format!("{file} {} {kind}", e.id()));
-                        }
-                    }
-                }
-            }
-            for b in &m.install.bootstrap {
-                if let Some(h) = b.hooks() {
-                    for (kind, snippet) in [
-                        ("pre-install", &h.pre_install),
-                        ("post-install", &h.post_install),
-                    ] {
-                        if let Some(s) = snippet {
-                            cases.push(HookCase {
-                                file,
-                                require: None,
-                                bootstrap: Some(b.clone()),
-                                id: format!("bootstrap:{}", b.id()),
-                                snippet: s.clone(),
-                            });
-                            let _ = kind;
-                        }
-                    }
-                    for (kind, opt) in [
-                        ("pre-update", &h.pre_update),
-                        ("post-update", &h.post_update),
-                        ("pre-uninstall", &h.pre_uninstall),
-                        ("post-uninstall", &h.post_uninstall),
-                    ] {
-                        if opt.is_some() {
-                            non_install_hooks.push(format!("{file} bootstrap:{} {kind}", b.id()));
-                        }
+                    if let Some(s) = &h.post_install {
+                        cases.push(HookCase {
+                            file,
+                            require: Some(e.clone()),
+                            id: e.id().into(),
+                            snippet: s.clone(),
+                        });
                     }
                 }
             }
         }
-        // The install engine only executes install-phase hooks; any other
-        // hook kind in the manifests would silently never run.
-        assert!(
-            non_install_hooks.is_empty(),
-            "hooks the install engine never executes: {:?}",
-            non_install_hooks
-        );
-        assert!(!cases.is_empty(), "no hooks found in manifests");
+        assert!(!cases.is_empty(), "no install hooks found in manifests");
 
         for case in &cases {
             for present in [false, true] {
                 let t = TestEnv::new();
                 t.stub("sh", "exit 0");
-                t.stub("sudo", "exit 0"); // preflight_sudo; TestEnv PATH sees real /usr/bin/sudo
-                                          // Pull required deps in as bare entries so the graph resolves.
+                t.stub("sudo", "exit 0");
+                // Pull required deps in as bare entries so the graph resolves.
                 let mut require: Vec<RequireEntry> = case.require.clone().into_iter().collect();
                 if let Some(entry) = case.require.as_ref() {
                     for dep in entry.requires() {
                         require.push(RequireEntry::Simple(dep.clone()));
                     }
                 }
-                if case.bootstrap.is_some() {
-                    if present {
-                        t.stub_ok("opencode", "1.0");
-                    } else {
-                        t.stub("curl", "exit 0");
-                    }
+                let is_custom = case.id.starts_with("custom:");
+                if is_custom {
+                    // Custom steps are pure hook carriers — no tool stubs needed.
                 } else {
                     // Brew list stubs cover the entry plus any bare dep
                     // entries, so dep units stay quiet in present mode.
@@ -887,11 +879,8 @@ install:
                 }
                 let m = Manifest {
                     schema_version: 2,
-                    install: Install {
-                        require,
-                        bootstrap: case.bootstrap.clone().into_iter().collect(),
-                        ..Default::default()
-                    },
+                    require,
+                    ..Default::default()
                 };
                 let results = install_all(t.exec(), &m).unwrap();
                 assert!(
@@ -918,17 +907,76 @@ install:
     }
 
     #[test]
+    fn update_hooks_fire_via_sh() {
+        let t = TestEnv::new();
+        t.stub("brew", BREW_STUB);
+        t.stub("sh", "exit 0");
+        let manifest = parse_manifest(
+            r#"
+require:
+  - id: "brew-formula:git"
+    hooks:
+      pre-update: "echo pre-up"
+      post-update: "echo post-up"
+"#,
+        )
+        .unwrap();
+        let results = update_all_with_opts(t.exec(), &manifest, &sched_opts_from_manifest(&manifest)).unwrap();
+        assert!(
+            results.iter().all(|r| r.ok()),
+            "failures: {:?}",
+            results
+                .iter()
+                .flat_map(|r| r.failed.clone())
+                .collect::<Vec<_>>()
+        );
+        let sh_calls = t.calls_of("sh");
+        assert!(
+            sh_calls.iter().any(|c| c.contains("echo pre-up")),
+            "{:?}",
+            sh_calls
+        );
+        assert!(
+            sh_calls.iter().any(|c| c.contains("echo post-up")),
+            "{:?}",
+            sh_calls
+        );
+    }
+
+    #[test]
+    fn custom_pre_update_hook_fires() {
+        let t = TestEnv::new();
+        t.stub("sh", "exit 0");
+        let manifest = parse_manifest(
+            r#"
+require:
+  - id: "custom:rustup"
+    hooks:
+      post-install: "echo install"
+      pre-update: "rustup update"
+"#,
+        )
+        .unwrap();
+        let results = update_all_with_opts(t.exec(), &manifest, &sched_opts_from_manifest(&manifest)).unwrap();
+        assert!(results.iter().all(|r| r.ok()));
+        let log = std::fs::read_to_string(t.root().join("calls.log")).unwrap();
+        assert!(
+            log.contains("rustup update"),
+            "pre-update hook never executed.\nlog:\n{log}"
+        );
+    }
+
+    #[test]
     fn pre_hook_failure_blocks_install() {
         let t = TestEnv::new();
         t.stub("brew", BREW_STUB);
         t.stub("sh", "exit 1");
         let manifest = parse_manifest(
             r#"
-install:
-  require:
-    - id: "brew-formula:git"
-      hooks:
-        pre-install: "false"
+require:
+  - id: "brew-formula:git"
+    hooks:
+      pre-install: "false"
 "#,
         )
         .unwrap();

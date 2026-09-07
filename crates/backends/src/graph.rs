@@ -2,8 +2,7 @@
 //!
 //! Grouping rules (all deterministic, manifest order preserved):
 //! - one unit per tap (`brew-tap:<tap>`), one unit per MAS app (`mas:<id>`),
-//!   one unit per Go module (`go:<module>`), one unit per toolchain and per
-//!   bootstrap step;
+//!   one unit per Go module (`go:<module>`), one unit per custom step;
 //! - formulas / casks / gems / npm / pip / cargo / composer packages **without** explicit
 //!   `requires:`/`lock:`/`version`/`hooks`/`label` coalesce into one batch unit per backend
 //!   (`brew-formula:batch`, …) so today's single batched tool invocation is
@@ -21,8 +20,8 @@ use dotfiles_manifest::{units, Manifest, RequireEntry};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// What a unit executes. The `&'static str` payloads are backend labels used
-/// for dispatch and reporting; toolchain/bootstrap dispatch reads the key
-/// from `Unit.packages[0]`.
+/// for dispatch and reporting; custom dispatch reads the key from
+/// `Unit.packages[0]`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnitKind {
     /// `brew tap` (+ trust) for a subset of taps.
@@ -31,10 +30,8 @@ pub enum UnitKind {
     Batch(&'static str),
     /// A single package inside a backend's tool invocation.
     Package(&'static str),
-    /// `rustup` / `node` / `python` toolchain ensure (key in packages[0]).
-    Toolchain,
-    /// Bootstrap step (name in packages[0]).
-    Bootstrap,
+    /// Custom step (name in packages[0]) — pure hook carrier.
+    Custom,
 }
 
 /// One schedulable work item.
@@ -99,7 +96,7 @@ fn backend_for_prefix(prefix: &str) -> &'static str {
 }
 
 fn is_single_always(prefix: &str) -> bool {
-    matches!(prefix, "brew-tap" | "mas" | "go")
+    matches!(prefix, "brew-tap" | "mas" | "go" | "custom")
 }
 
 /// Build the install-phase DAG. Assumes the manifest already passed
@@ -120,7 +117,7 @@ pub fn build(m: &Manifest) -> Result<Graph> {
     // version is None. Batch units won't have version.
 
     // Taps: one unit per tap (serialized by the shared `brew` lock).
-    for e in &m.install.require {
+    for e in &m.require {
         let (prefix, name) = match units::split_unit_id(e.id()) {
             Some((p, n)) => (p, n),
             None => continue,
@@ -141,17 +138,35 @@ pub fn build(m: &Manifest) -> Result<Graph> {
         });
     }
 
-    // All non-tap, non-mas, non-go entries: apply batching logic
-    for e in &m.install.require {
+    // Custom steps (manifest order) — pure hook carriers.
+    for e in &m.require {
+        let (prefix, bare_name) = match units::split_unit_id(e.id()) {
+            Some((p, n)) => (p, n),
+            None => continue,
+        };
+        if prefix != "custom" {
+            continue;
+        }
+        let id = format!("custom:{bare_name}");
+        graph.units.push(Unit {
+            id: id.clone(),
+            kind: UnitKind::Custom,
+            backend: "custom",
+            packages: vec![bare_name.clone()],
+            requires: requires_for(&id, e, m)?,
+            lock: e.lock().unwrap_or("custom").to_string(),
+            version: None,
+            hooks: e.hooks().cloned(),
+        });
+    }
+
+    // All non-tap, non-mas, non-go, non-custom entries: apply batching logic
+    for e in &m.require {
         let (prefix, bare_name) = match units::split_unit_id(e.id()) {
             Some((p, n)) => (p, n),
             None => continue,
         };
         if is_single_always(&prefix) {
-            continue;
-        }
-        // Toolchain/bootstrap not in require — skip
-        if prefix == "toolchain" || prefix == "bootstrap" {
             continue;
         }
         let norm_id = format!("{prefix}:{bare_name}");
@@ -214,7 +229,7 @@ pub fn build(m: &Manifest) -> Result<Graph> {
     }
 
     // Go modules: one unit each (always singles)
-    for e in &m.install.require {
+    for e in &m.require {
         let (prefix, bare_name) = match units::split_unit_id(e.id()) {
             Some((p, n)) => (p, n),
             None => continue,
@@ -236,7 +251,7 @@ pub fn build(m: &Manifest) -> Result<Graph> {
     }
 
     // MAS apps: one unit each.
-    for e in &m.install.require {
+    for e in &m.require {
         let (prefix, bare_name) = match units::split_unit_id(e.id()) {
             Some((p, n)) => (p, n),
             None => continue,
@@ -270,61 +285,6 @@ pub fn build(m: &Manifest) -> Result<Graph> {
             lock: e.lock().unwrap_or("mas").to_string(),
             version: None,
             hooks: e.hooks().cloned(),
-        });
-    }
-
-    // Toolchains (rustup, node, python — manifest order).
-    if let Some(r) = &m.install.toolchains.rustup {
-        let _ = r;
-        graph.units.push(Unit {
-            id: "toolchain:rustup".to_string(),
-            kind: UnitKind::Toolchain,
-            backend: "toolchain",
-            packages: vec!["rustup".to_string()],
-            requires: requires_for_id("toolchain:rustup", m),
-            lock: "toolchain".to_string(),
-            version: None,
-            hooks: None,
-        });
-    }
-    if m.install.toolchains.node.is_some() {
-        graph.units.push(Unit {
-            id: "toolchain:node".to_string(),
-            kind: UnitKind::Toolchain,
-            backend: "toolchain",
-            packages: vec!["node".to_string()],
-            requires: requires_for_id("toolchain:node", m),
-            lock: "toolchain".to_string(),
-            version: None,
-            hooks: None,
-        });
-    }
-    if m.install.toolchains.python.is_some() {
-        graph.units.push(Unit {
-            id: "toolchain:python".to_string(),
-            kind: UnitKind::Toolchain,
-            backend: "toolchain",
-            packages: vec!["python".to_string()],
-            requires: requires_for_id("toolchain:python", m),
-            lock: "toolchain".to_string(),
-            version: None,
-            hooks: None,
-        });
-    }
-
-    // Bootstrap steps (manifest order).
-    for entry in &m.install.bootstrap {
-        let step = entry.id();
-        let id = format!("bootstrap:{step}");
-        graph.units.push(Unit {
-            id: id.clone(),
-            kind: UnitKind::Bootstrap,
-            backend: "bootstrap",
-            packages: vec![step.to_string()],
-            requires: requires_for_id(&id, m),
-            lock: "bootstrap".to_string(),
-            version: None,
-            hooks: entry.hooks().cloned(),
         });
     }
 
@@ -380,23 +340,12 @@ fn requires_for(id: &str, entry: &RequireEntry, m: &Manifest) -> Result<Vec<Stri
     Ok(requires)
 }
 
-fn requires_for_id(id: &str, m: &Manifest) -> Vec<String> {
-    let declared = units::unit_ids(m);
-    let mut requires: Vec<String> = units::implicit_requires(id, m)
-        .into_iter()
-        .filter(|r| declared.contains(r))
-        .collect();
-    requires.sort();
-    requires
-}
-
 /// Batch-level implicit requirements (mirrors `units::implicit_requires` at
 /// item granularity): brew batches wait for taps, npm/pip batches for their
-/// toolchains when declared.
+/// carrier formulae (fnm/uv) when declared.
 fn batch_requires(prefix: &str, m: &Manifest) -> Vec<String> {
     match prefix {
         "brew-formula" | "brew-cask" => m
-            .install
             .require
             .iter()
             .filter_map(|e| {
@@ -409,15 +358,19 @@ fn batch_requires(prefix: &str, m: &Manifest) -> Vec<String> {
             })
             .collect(),
         "npm" => {
-            if m.install.toolchains.node.is_some() {
-                vec!["toolchain:node".to_string()]
+            if m.require.iter().any(|e| {
+                units::split_unit_id(e.id()).is_some_and(|(p, n)| p == "brew-formula" && n == "fnm")
+            }) {
+                vec!["brew-formula:fnm".to_string()]
             } else {
                 vec![]
             }
         }
         "pip" => {
-            if m.install.toolchains.python.is_some() {
-                vec!["toolchain:python".to_string()]
+            if m.require.iter().any(|e| {
+                units::split_unit_id(e.id()).is_some_and(|(p, n)| p == "brew-formula" && n == "uv")
+            }) {
+                vec!["brew-formula:uv".to_string()]
             } else {
                 vec![]
             }
@@ -471,7 +424,7 @@ mod tests {
     #[test]
     fn simple_entries_coalesce_into_batches() {
         let g = build(&manifest(
-            "install:\n  require:\n    - \"brew-tap:a/b\"\n    - \"brew-formula:git\"\n    - \"brew-formula:jq\"\n    - \"brew-cask:iterm2\"\n",
+            "require:\n  - \"brew-tap:a/b\"\n  - \"brew-formula:git\"\n  - \"brew-formula:jq\"\n  - \"brew-cask:iterm2\"\n",
         ))
         .unwrap();
         let ids: Vec<&str> = g.units.iter().map(|u| u.id.as_str()).collect();
@@ -489,7 +442,7 @@ mod tests {
     #[test]
     fn referenced_packages_split_out_of_batches() {
         let g = build(&manifest(
-            "install:\n  require:\n    - \"brew-formula:git\"\n    - id: \"brew-formula:phpstan\"\n      requires: [\"brew-formula:php\"]\n    - \"brew-formula:php\"\n",
+            "require:\n  - \"brew-formula:git\"\n  - id: \"brew-formula:phpstan\"\n    requires: [\"brew-formula:php\"]\n  - \"brew-formula:php\"\n",
         ))
         .unwrap();
         // php is referenced → single; git stays batched; phpstan is detailed → single.
@@ -505,16 +458,14 @@ mod tests {
     #[test]
     fn implicit_toolchain_edges_pin_tool_formulas() {
         let g = build(&manifest(
-            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"brew-formula:fnm\"\n    - \"npm:prettier\"\n  toolchains:\n    node: {}\n",
+            "require:\n  - \"brew-formula:git\"\n  - \"brew-formula:fnm\"\n  - \"npm:prettier\"\n",
         ))
         .unwrap();
-        // fnm is referenced by toolchain:node → single unit.
+        // fnm is referenced by npm's implicit edge → single unit.
         assert!(g.get("brew-formula:fnm").is_some());
-        let node = g.get("toolchain:node").unwrap();
-        assert_eq!(node.requires, vec!["brew-formula:fnm"]);
-        // npm batch waits for the node toolchain.
+        // npm batch waits for fnm (node converges via fnm's post-install hook).
         let npm = g.get("npm:batch").unwrap();
-        assert_eq!(npm.requires, vec!["toolchain:node"]);
+        assert_eq!(npm.requires, vec!["brew-formula:fnm"]);
         // git stays in the batch.
         assert_eq!(g.get("brew-formula:batch").unwrap().packages, vec!["git"]);
     }
@@ -522,7 +473,7 @@ mod tests {
     #[test]
     fn mas_and_go_become_single_units() {
         let g = build(&manifest(
-            "install:\n  require:\n    - \"go:example.com/x/tool@latest\"\n    - id: \"mas:123\"\n      label: \"Foo\"\n    - id: \"mas:456\"\n      label: \"Bar\"\n",
+            "require:\n  - \"go:example.com/x/tool@latest\"\n  - id: \"mas:123\"\n    label: \"Foo\"\n  - id: \"mas:456\"\n    label: \"Bar\"\n",
         ))
         .unwrap();
         assert!(
@@ -534,14 +485,12 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_opencode_carries_hooks_and_no_implicit_requires() {
-        // opencode is the only remaining typed step; all other setup moved
-        // to post-install hooks on owning packages.
+    fn custom_step_carries_hooks_and_no_implicit_requires() {
         let g = build(&manifest(
-            "install:\n  require:\n    - \"brew-formula:fzf\"\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap:\n    - id: \"opencode\"\n      hooks:\n        post-install: \"echo hi\"\n",
+            "require:\n  - \"brew-formula:fzf\"\n  - id: \"custom:rustup\"\n    hooks:\n      post-install: \"echo hi\"\n",
         ))
         .unwrap();
-        let unit = g.get("bootstrap:opencode").unwrap();
+        let unit = g.get("custom:rustup").unwrap();
         assert!(unit.requires.is_empty());
         assert_eq!(
             unit.hooks.as_ref().unwrap().post_install.as_deref(),
@@ -552,7 +501,7 @@ mod tests {
     #[test]
     fn lock_override_is_honored() {
         let g = build(&manifest(
-            "install:\n  require:\n    - id: \"brew-formula:git\"\n      lock: \"my-lock\"\n",
+            "require:\n  - id: \"brew-formula:git\"\n    lock: \"my-lock\"\n",
         ))
         .unwrap();
         assert_eq!(g.get("brew-formula:git").unwrap().lock, "my-lock");
@@ -563,7 +512,7 @@ mod tests {
         // A real package literally named `batch` that is referenced splits out
         // as `brew-formula:batch`; the leftover batch unit takes a suffix.
         let g = build(&manifest(
-            "install:\n  require:\n    - \"brew-formula:git\"\n    - id: \"brew-formula:other\"\n      requires: [\"brew-formula:batch\"]\n    - \"brew-formula:batch\"\n",
+            "require:\n  - \"brew-formula:git\"\n  - id: \"brew-formula:other\"\n    requires: [\"brew-formula:batch\"]\n  - \"brew-formula:batch\"\n",
         ))
         .unwrap();
         assert!(g.get("brew-formula:batch").is_some()); // the real package
@@ -599,9 +548,8 @@ mod tests {
     fn unknown_requires_target_bails_in_build() {
         // parse_manifest validates, so craft the invalid state by editing a
         // valid manifest in memory (defense-in-depth path).
-        let mut m = manifest("install:\n  require:\n    - \"brew-formula:git\"\n");
-        m.install
-            .require
+        let mut m = manifest("require:\n  - \"brew-formula:git\"\n");
+        m.require
             .push(RequireEntry::Detailed(dotfiles_manifest::RequireDetail {
                 id: "brew-formula:x".into(),
                 label: None,
@@ -616,7 +564,7 @@ mod tests {
     #[test]
     fn alias_prefixes_normalize() {
         let g = build(&manifest(
-            "install:\n  require:\n    - \"tap:a/b\"\n    - \"formula:git\"\n    - \"cask:iterm2\"\n",
+            "require:\n  - \"tap:a/b\"\n  - \"formula:git\"\n  - \"cask:iterm2\"\n",
         ))
         .unwrap();
         assert!(g.get("brew-tap:a/b").is_some());
@@ -627,7 +575,7 @@ mod tests {
     #[test]
     fn version_and_hooks_split_to_single() {
         let g = build(&manifest(
-            "install:\n  require:\n    - \"brew-formula:git\"\n    - id: \"npm:prettier@3\"\n      hooks:\n        post-install: \"echo hi\"\n",
+            "require:\n  - \"brew-formula:git\"\n  - id: \"npm:prettier@3\"\n    hooks:\n      post-install: \"echo hi\"\n",
         ))
         .unwrap();
         // git stays batched, prettier is detailed due to version/hooks → single
