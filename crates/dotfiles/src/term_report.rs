@@ -203,7 +203,7 @@ impl Reporter for TermReporter {
             Event::Note { msg } => self.emit(msg, false),
             Event::Warn { msg } => {
                 let line = if msg.starts_with("✗") {
-                    format!("{msg}")
+                    msg.as_str()
                         .if_supports_color(ColorStream::Stderr, |t| t.red())
                         .to_string()
                 } else {
@@ -229,9 +229,6 @@ pub(crate) mod test_sink {
     use std::sync::Arc;
 
     /// A `Write` sink backed by shared memory, for asserting on rendering.
-    #[derive(Clone, Debug, Default)]
-    pub struct Shared(Vec<u8>);
-
     /// Build a reporter capturing stdout-bound lines; returns the reporter
     /// plus a reader for the captured text.
     pub fn capture() -> (TermReporter, Arc<Mutex<Vec<u8>>>) {
