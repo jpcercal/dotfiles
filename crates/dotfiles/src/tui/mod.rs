@@ -1,19 +1,23 @@
-//! Interactive docker-pull-style progress UI (ratatui, inline viewport).
+//! Interactive docker-pull-style progress UI (ratatui, fixed viewport).
 //!
 //! [`TuiReporter`] implements the exec [`Reporter`](dotfiles_exec::Reporter):
 //! scheduler threads push [`Event`](dotfiles_exec::Event)s into a channel and
 //! a single driver thread owns rendering. Mid-run the region is **strictly
-//! output-only** — no raw mode, no mouse capture, no stdin reads — so
-//! interactive children (`sudo` password prompts, confirmations) and the
-//! user's Ctrl-C/selection work on a completely normal terminal. Interactive
-//! click-to-expand review happens only after the run completes (see
-//! `review.rs`-style flow inside [`Driver::review_failed`]), when no child
-//! can contend for the tty.
+//! output-only** — no raw mode, no mouse capture, and crucially **no stdin
+//! reads of any kind** (not even ratatui's inline-viewport cursor query, so
+//! the region uses a `Fixed` viewport sized via ioctl). Interactive children
+//! (`sudo` password prompts, confirmations) and the user's Ctrl-C/selection
+//! work on a completely normal terminal. Interactive click-to-expand review
+//! happens only after the run completes (see [`Driver::review_failed`]),
+//! when no child can contend for the tty.
 //!
-//! Lifecycle: the region activates lazily on the first unit event, tears
-//! down on the next `Section` (settled rows + aggregates print as plain
-//! scrollback), and at process end prints its final settle lines. Shutdown
-//! is synchronous: `finish()` disconnects the channel and joins the driver.
+//! While the region is active, *nothing* else writes to the terminal: notes
+//! and elevation notices fold into the frame (feed/footer) instead of
+//! scrolling the region out of alignment. Lifecycle: the region activates
+//! lazily on the first unit event, tears down on the next `Section` (settled
+//! rows + aggregates print as plain scrollback), and at process end prints
+//! its final settle lines. Shutdown is synchronous: `finish()` disconnects
+//! the channel and joins the driver.
 
 pub mod model;
 pub mod render;
@@ -100,11 +104,12 @@ impl Driver {
     fn on_event(&mut self, e: Event) {
         match e {
             Event::Section { title } => {
-                // Job boundary: settle this job's region (and its plain
-                // passthrough rows) into scrollback, then start fresh.
+                // Job boundary: drop the region FIRST (printing scrolls the
+                // screen and would detach a live viewport), then settle this
+                // job into scrollback and start fresh.
                 let settle = self.model.settle_lines();
-                self.print_settled(&settle);
                 self.deactivate();
+                self.print_settled(&settle);
                 println!("▶ {title}");
                 self.finish_job(title);
                 let _ = stdout().flush();
@@ -113,12 +118,16 @@ impl Driver {
             Event::Note { msg } if self.term.is_none() => println!("{msg}"),
             Event::Warn { msg } if self.term.is_none() => eprintln!("{msg}"),
             Event::Elevate { command, reason } => {
-                // Elevation notices are always plain stderr (never inside
-                // the region): sudo may be about to prompt on the tty.
-                eprintln!("⚠ sudo: {command}");
-                eprintln!("  reason: {reason}");
+                // While the region is live, the notice folds into the frame
+                // footer — printing to stderr here would scroll the region
+                // out of alignment. Idle mode prints plain (sudo may be
+                // about to prompt on the tty, which stays fully normal).
+                if self.term.is_none() {
+                    eprintln!("⚠ sudo: {command}");
+                    eprintln!("  reason: {reason}");
+                    let _ = std::io::stderr().flush();
+                }
                 self.model.apply(Event::Elevate { command, reason });
-                let _ = std::io::stderr().flush();
             }
             Event::Subsection { .. } | Event::Note { .. } | Event::Warn { .. } => {
                 // Inside an active region: non-unit messages fold into the
@@ -144,18 +153,22 @@ impl Driver {
     }
 
     fn activate(&mut self) {
-        let (_, h) = crossterm::terminal::size().unwrap_or((80, 24));
-        if h < 10 {
-            // Degenerate height: stay in plain passthrough.
+        // Fixed viewport sized via ioctl: reserving the region must never
+        // read stdin (ratatui's inline viewport queries the cursor position
+        // over the tty, which races interactive children and hangs on bare
+        // ptys that never answer the DSR query).
+        let (w, h) = crossterm::terminal::size().unwrap_or((80, 24));
+        if h < 10 || w < 20 {
+            // Degenerate size: stay in plain passthrough.
             return;
         }
         let height = (h / 2).clamp(8, 18);
-        // Output-only inline viewport: no raw mode, no mouse capture.
+        let area = ratatui::layout::Rect::new(0, h.saturating_sub(height), w, height);
         let backend = ratatui::backend::CrosstermBackend::new(stdout());
         match ratatui::Terminal::with_options(
             backend,
             ratatui::TerminalOptions {
-                viewport: ratatui::Viewport::Inline(height),
+                viewport: ratatui::Viewport::Fixed(area),
             },
         ) {
             Ok(term) => {
