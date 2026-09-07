@@ -217,6 +217,7 @@ impl ExecEnv {
         self.report(Event::Command {
             argv: report::display_argv(program, args),
             dry_run: self.dry_run,
+            unit: self.unit.clone(),
         });
         if self.dry_run {
             return Ok(ExecOutput {
@@ -242,6 +243,7 @@ impl ExecEnv {
         self.report(Event::Command {
             argv: report::display_argv(program, args),
             dry_run: self.dry_run,
+            unit: self.unit.clone(),
         });
     }
 
@@ -516,7 +518,7 @@ mod tests {
         let events = reporter.events();
         // Exact command echo first, then the two attributed lines.
         assert!(
-            matches!(&events[0], Event::Command { argv, dry_run: false } if argv == "sh -c echo out-line; echo err-line 1>&2"),
+            matches!(&events[0], Event::Command { argv, dry_run: false, unit } if argv == "sh -c echo out-line; echo err-line 1>&2" && unit.as_deref() == Some("brew-formula:git")),
             "{events:?}"
         );
         assert!(
@@ -624,7 +626,7 @@ mod tests {
         assert_eq!(out.status, 0);
         assert!(matches!(
             &reporter.events()[..],
-            [Event::Command { argv, dry_run: true }] if argv == "false"
+            [Event::Command { argv, dry_run: true, .. }] if argv == "false"
         ));
     }
 
@@ -682,7 +684,7 @@ mod tests {
         assert_eq!(rc, 0);
         assert!(matches!(
             &reporter.events()[..],
-            [Event::Command { argv, dry_run: false }] if argv == "true"
+            [Event::Command { argv, dry_run: false, .. }] if argv == "true"
         ));
     }
 }

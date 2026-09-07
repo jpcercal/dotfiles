@@ -4,6 +4,7 @@ use crate::ctx::Ctx;
 use anyhow::Result;
 use clap::Parser;
 use dotfiles_backends::{orchestrate, BackendOutcome, Spec};
+use dotfiles_exec::{Event, ExecEnv};
 
 #[derive(Parser, Debug)]
 pub struct InstallArgs {
@@ -62,6 +63,9 @@ pub struct UpdateArgs {
 }
 
 pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
+    ctx.env.report(Event::Section {
+        title: "install".to_string(),
+    });
     let results = if args.specs.is_empty() {
         let m = ctx.manifest()?;
         let custom_count = m
@@ -71,11 +75,13 @@ pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
                 dotfiles_manifest::units::split_unit_id(e.id()).is_some_and(|(p, _)| p == "custom")
             })
             .count();
-        println!(
-            "installing manifest ({} packages, {} custom steps)",
-            m.require.len(),
-            custom_count
-        );
+        ctx.env.report(Event::Subsection {
+            title: format!(
+                "manifest ({} packages, {} custom steps)",
+                m.require.len(),
+                custom_count
+            ),
+        });
         // Hooks use $DOTFILES_DIR to resolve repo-relative symlink sources.
         let env = ctx
             .env
@@ -98,7 +104,8 @@ pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
             .collect::<Result<_, _>>()?;
         orchestrate::install_specs(&ctx.env, &specs)?
     };
-    print_outcomes(&results);
+    // Recap after the live per-unit blocks: one summary line per outcome.
+    print_outcomes(&ctx.env, &results);
     // Never fail silently: a failed unit (or a unit skipped because its
     // dependency failed) fails the command, so CI and `sync` go red. Units
     // skipped for missing tools stay non-fatal by design (mid-bootstrap
@@ -114,6 +121,9 @@ pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
 }
 
 pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
+    ctx.env.report(Event::Section {
+        title: "uninstall".to_string(),
+    });
     let mut grouped: Vec<(String, Vec<String>)> = vec![];
     let mut custom_specs: Vec<String> = vec![];
     for s in &args.specs {
@@ -131,7 +141,7 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
     for (backend, pkgs) in grouped {
         let b = dotfiles_backends::by_name(&backend).expect("Spec::parse validates backend");
         let out = b.uninstall(&ctx.env, &pkgs)?;
-        print_outcome(&out);
+        print_outcome(&ctx.env, &out);
         if !out.ok() {
             anyhow::bail!("uninstall failed");
         }
@@ -171,9 +181,13 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
                         );
                     }
                 }
-                println!("uninstalled custom:{name}");
+                ctx.env.report(Event::Note {
+                    msg: format!("uninstalled custom:{name}"),
+                });
             } else {
-                eprintln!("warning: no manifest entry for {id} — skipping");
+                ctx.env.report(Event::Warn {
+                    msg: format!("warning: no manifest entry for {id} — skipping"),
+                });
             }
         }
     }
@@ -222,12 +236,15 @@ pub fn info(ctx: &Ctx, args: InfoArgs) -> Result<()> {
 }
 
 pub fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
+    ctx.env.report(Event::Section {
+        title: "update".to_string(),
+    });
     for b in selected_backends(args.backend.as_deref())? {
         if !b.is_available(&ctx.env) {
             continue;
         }
         let out = b.update_index(&ctx.env)?;
-        print_outcome(&out);
+        print_outcome(&ctx.env, &out);
     }
     // After index refresh, run update hooks (pre-update → upgrade → post-update)
     // across the manifest graph. This fires manifest-declared update hooks like
@@ -239,7 +256,7 @@ pub fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
             .with_env("DOTFILES_DIR", &ctx.dotfiles_dir.to_string_lossy());
         let opts = orchestrate::sched_opts_from_manifest(&m);
         let results = orchestrate::update_all_with_opts(&env, &m, &opts)?;
-        print_outcomes(&results);
+        print_outcomes(&env, &results);
     }
     Ok(())
 }
@@ -259,13 +276,13 @@ fn selected_backends(
     }
 }
 
-pub fn print_outcomes(results: &[BackendOutcome]) {
+pub fn print_outcomes(env: &ExecEnv, results: &[BackendOutcome]) {
     for r in results {
-        print_outcome(r);
+        print_outcome(env, r);
     }
 }
 
-pub fn print_outcome(r: &BackendOutcome) {
+pub fn print_outcome(env: &ExecEnv, r: &BackendOutcome) {
     if r.changed.is_empty() && r.unchanged.is_empty() && r.failed.is_empty() && r.note.is_empty() {
         return;
     }
@@ -276,23 +293,30 @@ pub fn print_outcome(r: &BackendOutcome) {
     } else {
         "changed"
     };
-    println!(
-        "{:10} [{}] {} changed, {} already ok, {} failed{}{}",
-        r.backend,
-        status,
-        r.changed.len(),
-        r.unchanged.len(),
-        r.failed.len(),
-        if r.note.is_empty() { "" } else { " — " },
-        r.note
-    );
+    // Recap line (the live per-unit blocks already showed the details).
+    // Everything is listed — changed packages included — never gated behind
+    // a verbosity flag.
+    env.report(Event::Note {
+        msg: format!(
+            "{:10} [{}] {} changed, {} already ok, {} failed{}{}",
+            r.backend,
+            status,
+            r.changed.len(),
+            r.unchanged.len(),
+            r.failed.len(),
+            if r.note.is_empty() { "" } else { " — " },
+            r.note
+        ),
+    });
     for f in &r.failed {
-        println!("  ✗ {}", f);
+        env.report(Event::Note {
+            msg: format!("  ✗ {}", f),
+        });
     }
-    if std::env::var_os("DOTFILES_VERBOSE").is_some() {
-        for c in &r.changed {
-            println!("  + {}", c);
-        }
+    for c in &r.changed {
+        env.report(Event::Note {
+            msg: format!("  + {}", c),
+        });
     }
 }
 

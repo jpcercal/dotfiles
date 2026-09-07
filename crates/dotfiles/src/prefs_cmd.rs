@@ -3,6 +3,7 @@
 use crate::ctx::Ctx;
 use anyhow::Result;
 use clap::Parser;
+use dotfiles_exec::Event;
 use dotfiles_prefs::{engine, PrefStatus};
 
 #[derive(Parser, Debug)]
@@ -50,6 +51,9 @@ pub fn run(ctx: &Ctx, args: PrefsArgs) -> Result<()> {
             Ok(())
         }
         PrefsCommand::Apply => {
+            ctx.env.report(Event::Section {
+                title: "prefs".to_string(),
+            });
             // sudo keep-alive parity (support-require-sudo.sh + support-keep-alive.sh):
             // cache credentials once up front when any entry needs sudo.
             let any_sudo = file.prefs.iter().any(|e| match e {
@@ -67,18 +71,24 @@ pub fn run(ctx: &Ctx, args: PrefsArgs) -> Result<()> {
                 match status {
                     PrefStatus::Applied => {
                         applied += 1;
-                        println!("+ {}", id);
+                        ctx.env.report(Event::Note {
+                            msg: format!("+ {}", id),
+                        });
                     }
                     PrefStatus::Unchanged => unchanged += 1,
-                    PrefStatus::Failed(e) => eprintln!("✗ {}: {}", id, e),
+                    PrefStatus::Failed(e) => ctx.env.report(Event::Warn {
+                        msg: format!("✗ {}: {}", id, e),
+                    }),
                 }
             }
-            println!(
-                "prefs: {} applied, {} already set, {} failed",
-                applied,
-                unchanged,
-                report.failures().len()
-            );
+            ctx.env.report(Event::Note {
+                msg: format!(
+                    "prefs: {} applied, {} already set, {} failed",
+                    applied,
+                    unchanged,
+                    report.failures().len()
+                ),
+            });
             // Parity with apply-preferences.sh (no `set -e`): individual pref
             // failures are reported but never abort the run; `prefs diff` is
             // the drift gate.
@@ -100,22 +110,28 @@ pub fn run(ctx: &Ctx, args: PrefsArgs) -> Result<()> {
                         engine::DiffStatus::Unreadable => "?",
                     };
                     if e.status == engine::DiffStatus::Drifted {
-                        println!(
-                            "{} {} (want: {}, have: {})",
-                            mark,
-                            e.id,
-                            e.desired,
-                            e.current.as_deref().unwrap_or("<unset>")
-                        );
+                        ctx.env.report(Event::Note {
+                            msg: format!(
+                                "{} {} (want: {}, have: {})",
+                                mark,
+                                e.id,
+                                e.desired,
+                                e.current.as_deref().unwrap_or("<unset>")
+                            ),
+                        });
                     } else if std::env::var_os("DOTFILES_VERBOSE").is_some() {
-                        println!("{} {}", mark, e.id);
+                        ctx.env.report(Event::Note {
+                            msg: format!("{} {}", mark, e.id),
+                        });
                     }
                 }
-                println!(
-                    "diff: {} in sync, {} drifted",
-                    entries.len() - drifted.len(),
-                    drifted.len()
-                );
+                ctx.env.report(Event::Note {
+                    msg: format!(
+                        "diff: {} in sync, {} drifted",
+                        entries.len() - drifted.len(),
+                        drifted.len()
+                    ),
+                });
             }
             if !drifted.is_empty() {
                 anyhow::bail!("{} pref(s) drifted", drifted.len());

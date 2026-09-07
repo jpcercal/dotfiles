@@ -46,9 +46,13 @@ pub enum Event {
         detail: String,
     },
     /// An external command about to run (`$ brew install git`).
-    /// Rendered live when no unit context applies, buffered into the
-    /// unit's block otherwise.
-    Command { argv: String, dry_run: bool },
+    /// Rendered live when no unit context applies (`unit: None`), buffered
+    /// into the unit's block otherwise.
+    Command {
+        argv: String,
+        dry_run: bool,
+        unit: Option<String>,
+    },
     /// A command is about to run elevated. Emitted on **every** elevated
     /// spawn — even when sudo's timestamp cache means no password prompt
     /// appears — so the user stays conscious of sudo usage.

@@ -31,6 +31,7 @@ secrecy.workspace = true
 notify-rust.workspace = true
 ulid.workspace = true
 libc = "0.2"
+owo-colors.workspace = true
 eframe = { version = "0.32", default-features = false, features = ["default_fonts", "glow"], optional = true }
 egui = { version = "0.32", optional = true }
 dark-light = { version = "2.0", optional = true }

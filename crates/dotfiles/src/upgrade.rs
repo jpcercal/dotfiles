@@ -123,7 +123,7 @@ fn run_update_hooks() {
         .with_env("DOTFILES_DIR", &ctx.dotfiles_dir.to_string_lossy());
     let opts = dotfiles_backends::orchestrate::sched_opts_from_manifest(&m);
     match dotfiles_backends::orchestrate::update_all_with_opts(&env, &m, &opts) {
-        Ok(results) => crate::pkg::print_outcomes(&results),
+        Ok(results) => crate::pkg::print_outcomes(&env, &results),
         Err(e) => eprintln!("update hooks error: {e:#}"),
     }
 }
