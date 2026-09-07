@@ -111,14 +111,36 @@ e2e/          reduced fixture manifests for the real-machine CI E2E job
 - **Library crates never print.** All user-visible output from `exec` /
   `backends` / `prefs` flows as `report::Event`s through the `Reporter`
   carried by `ExecEnv` (`Arc`, survives clones and scheduler threads;
-  default `NoopReporter`). The CLI installs `TermReporter`; tests use
-  `RecordingReporter` or nothing.
-- **Layout contract (buffered blocks, live status):** `Section` = job
-  (`▶ install`), `Subsection` = backend group; units announce `→ id` live
-  while commands/output accumulate per unit and flush as one grouped,
-  indented block on `UnitFinished` (`✓`/`✗`). Everything is shown —
-  successful blocks included, never gated behind verbosity flags. Colors via
-  `owo-colors` (`supports-colors`), plain when piped or `NO_COLOR`.
+  default `NoopReporter`). The CLI installs `TermReporter` (plain) or
+  `TuiReporter` (interactive); tests use `RecordingReporter` or nothing.
+  `Reporter::finish()` settles the renderer once at process exit (no-op
+  except for the TUI); `main` holds a `ReportGuard` so unwinds restore the
+  terminal too.
+- **Two profiles, one event stream, docker-pull philosophy.** `UnitFinished`
+  carries a structural `UnitOutcome` (`NoOp`/`Changed`/`Failed`, derived in
+  `BackendOutcome::outcome_kind` — blocked units are `Failed`); renderers
+  hide `NoOp` and keep `Changed`/`Failed`:
+  - *Interactive* (`tui` feature, both stdio TTYs, not `--dry-run`,
+    no `--plain`): ratatui inline-viewport region (`crates/dotfiles/src/tui/`:
+    `model` = pure event fold, `render` = frame + hit-testing, driver thread
+    owns the terminal). In-flight rows show spinner + live `$ command`;
+    no-op rows vanish into per-driver aggregates (`brew-formula: 118 already
+    installed`); click / arrows+Enter toggles a row's collapsed stdout/stderr
+    block inline; wheel scrolls; `q` never aborts (no cancel semantics).
+  - *Plain* (pipes, CI, `--dry-run`, `--plain`): `TermReporter` prints
+    sections, unscoped `$` echoes, elevation notices, and one grouped block
+    per `Changed`/`Failed` unit only — no start lines, no no-op output.
+    Job recaps (`print_outcome`) keep the aggregate counts.
+- **TUI lifecycle (no CLI wiring beyond reporter choice):** the region
+  activates lazily on the first unit event and tears down on the next
+  `Section` (or at exit), printing settled rows + aggregates + sudo usage as
+  plain scrollback. Between jobs events pass through plain, so confirmations
+  and `sudo` password prompts always meet a normal terminal. Rendering is
+  event-driven (spinner moves on activity, freezes when idle) so it never
+  fights an interactive prompt; a mid-run `sudo` password prompt (rare —
+  warmups pre-cache) may overlay a static region, which redraws after.
+  `upgrade --headless`'s printer thread drains before its hooks phase, so the
+  tail renders cleanly; the egui GUI flow is untouched.
 - **Sudo is announced, every time, with reason.** `ExecEnv` sniffs `sudo`
   spawns (past sudo's own flags to the inner command) and emits
   `Event::Elevate { command, reason }`; callers that know *why* use
