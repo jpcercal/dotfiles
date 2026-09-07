@@ -54,4 +54,44 @@ impl BackendOutcome {
             error: error.into(),
         });
     }
+
+    /// One-line human summary for live `UnitFinished` events: the first
+    /// failure, `changed`, or `already ok` (with any note appended).
+    pub fn detail(&self) -> String {
+        if let Some(f) = self.failed.first() {
+            return f.to_string();
+        }
+        if !self.changed.is_empty() {
+            return "changed".to_string();
+        }
+        if self.note.is_empty() {
+            "already ok".to_string()
+        } else {
+            format!("already ok — {}", self.note)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detail_summarizes_outcome() {
+        let mut ok = BackendOutcome::empty("brew");
+        ok.unchanged.push("git".into());
+        assert_eq!(ok.detail(), "already ok");
+        let noted = BackendOutcome::unavailable("brew");
+        assert!(
+            noted.detail().contains("not available"),
+            "{}",
+            noted.detail()
+        );
+        let mut changed = BackendOutcome::empty("brew");
+        changed.changed.push("git".into());
+        assert_eq!(changed.detail(), "changed");
+        let mut failed = BackendOutcome::empty("brew");
+        failed.fail_one("git", "boom");
+        assert_eq!(failed.detail(), "git: boom");
+    }
 }
