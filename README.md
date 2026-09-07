@@ -67,11 +67,12 @@ listed, never auto-installed.
 
 ## Manifests
 
-- **`apps.yaml`** — packages via `install.require` (`brew-formula:`, `brew-cask:`,
-  `brew-tap:`, `mas:` with `label:`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`),
-  toolchains (rustup/node/python), typed bootstrap steps. Each entry may carry
+- **`apps.yaml`** — packages via `require` (`brew-formula:`, `brew-cask:`,
+  `brew-tap:`, `mas:` with `label:`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`,
+  `custom:`), language toolchains (rustup via `custom:rustup` hooks, node via
+  `fnm` post-install hook, python via `uv` post-install hook). Each entry may carry
   `requires:` edges, `version:` pins (npm/pip/gem/cargo/go), and `hooks:`
-  lifecycle snippets (`pre-install`, `post-install`, etc.) executed via `sh -c`.
+  lifecycle snippets (`pre-install`, `post-install`, `pre-update`, `pre-uninstall`, etc.) executed via `sh -c`.
   Filesystem config (dirs, symlinks, dock) is declarative `post-install` hooks
   on the owning packages (`zsh`, `git`, `nvim`, `dockutil`, casks, MAS apps).
   Validated with [# yaml-language-server](schema/apps.schema.json).

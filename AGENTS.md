@@ -7,18 +7,19 @@ Humans: see [README.md](README.md) for what this project is and how to use it.
 
 Single Rust binary (`dotfiles`) that manages a macOS machine: packages
 (Homebrew formulae/casks, MAS, gem, npm, pip/uv, cargo, go, composer),
-toolchains (rustup/node/python), filesystem config (dirs, symlinks, dock,
-shell, nvim via post-install hooks), declarative macOS preferences
-(`prefs.yaml`), atuin history
-seeding, and a gated scheduled-upgrade pipeline. Driven by two declarative
-manifests (`apps.yaml`, `prefs.yaml`) validated against generated JSON
-Schemas (`schema/`).
+language toolchains (rustup/node/python — converged via post-install hooks
+on carrier formulae and `custom:` entries), filesystem config (dirs,
+symlinks, dock, shell, nvim via post-install hooks), declarative macOS
+preferences (`prefs.yaml`), atuin history seeding, and a gated
+scheduled-upgrade pipeline. Driven by two declarative manifests
+(`apps.yaml`, `prefs.yaml`) validated against generated JSON Schemas
+(`schema/`).
 
 ## Hard rules
 
 - **No shell scripts as files.** All logic is Rust. Never add `.sh` files,
   inline shell-outs in build scripts, or shell one-liners as a substitute
-  for real implementation. The sole exception is `install.require` lifecycle
+  for real implementation. The sole exception is `require` lifecycle
   hook snippets: YAML-carried `sh -c` snippets (pre/post-install/update/uninstall)
   executed through the `dotfiles-exec` seam — reviewable, sandboxed, and stub-able
   (the `sh` stub records argv in tests/`sync --sandbox`), not committed as files.
@@ -93,7 +94,7 @@ dotfiles schema --kind prefs --write
 crates/
   exec/       execution seam (real vs sandbox env, stubs, dry-run)
   manifest/   apps.yaml + commands.yaml types, validation, JSON Schema (+ units: unit-ID namespace)
-  backends/   PackageBackend trait + brew/cask/mas/gem/npm/pip/cargo/go/composer + toolchains + bootstrap
+  backends/   PackageBackend trait + brew/cask/mas/gem/npm/pip/cargo/go/composer + custom (hook carriers)
               + graph (manifest → DAG) + schedule (parallel ready-queue executor) + orchestrate (engine wiring)
   prefs/      declarative preferences engine (defaults/exec/builtins, apply/diff)
   core/       upgrade pipeline state machine (gates, probes, steps, reports)
@@ -105,9 +106,9 @@ e2e/          reduced fixture manifests for the real-machine CI E2E job
 
 ## Install engine (dependency graph + parallel scheduler)
 
-`apps.yaml` is the source of truth for install dependencies. `install.require`
-is a flat list of `driver:name` entries; each entry is either a bare string
-(`- "brew-formula:git"`) or a detailed map
+`apps.yaml` is the source of truth for install dependencies. `require` is a
+flat list of `driver:name` entries at the root level (no `install:` wrapper);
+each entry is either a bare string (`- "brew-formula:git"`) or a detailed map
 (`- { id: "brew-formula:phpstan", requires: ["brew-formula:php"], version: "1.0", hooks: { post-install: "echo hi" } }`)
 declaring dependency-graph edges, version pins (npm/pip/gem/cargo/go only;
 `@version` sugar in the id e.g. `npm:prettier@3` is normalized to `version`;
@@ -117,26 +118,42 @@ backend's batched install into schedulable single units. Aliases
 `tap:`/`formula:`/`cask:` normalize to `brew-tap:`/`brew-formula:`/`brew-cask:`.
 Canonical unit IDs (`crates/manifest/src/units.rs`): `brew-formula:x`,
 `brew-cask:x`, `brew-tap:o/r`, `mas:<id>` (with required `label:`), `gem:`,
-`npm:`, `pip:`, `cargo:`, `go:`, `composer:`, `toolchain:rustup|node|python`,
-`bootstrap:<step>`. Implicit edges (taps → brew units, toolchains → npm/pip)
-live in `units::implicit_requires`;
-validation rejects unknown targets and cycles. Hooks (`pre-install`,
-`post-install`, `pre-update`, `post-update`, `pre-uninstall`,
-`post-uninstall`) are `sh -c` snippets executed through the exec seam.
-`post-install` hooks fire whenever the unit ends up present (newly installed
-**or** already installed, with no failures) so filesystem/dock config
+`npm:`, `pip:`, `cargo:`, `go:`, `composer:`, `custom:<step>`. Implicit edges
+(taps → brew units, npm → `brew-formula:fnm`, pip → `brew-formula:uv`) live in
+`units::implicit_requires`; validation rejects unknown targets and cycles.
+Hooks (`pre-install`, `post-install`, `pre-update`, `post-update`,
+`pre-uninstall`, `post-uninstall`) are `sh -c` snippets executed through the
+exec seam. `post-install` hooks fire whenever the unit ends up present (newly
+installed **or** already installed, with no failures) so filesystem/dock config
 converges on every run; pre hooks fire only ahead of the associated action.
-Snippets must be idempotency-preserving (e.g. `ln -sfn`, guarded `if` skips);
-never probe tool availability (`command -v`) or swallow faults (`|| true`) —
-a failing hook fails its unit with the hook's stderr, which fails install/sync.
-Multi-line snippets start with `set -e` so the first fault aborts the snippet.
-`install.execution`
-tunes the engine (`max_jobs`, per lock-class `locks`; `brew` capped at 1).
-Execution: `graph::build` → `schedule::run` (`std::thread::scope` ready-queue;
-failures block dependents as `skipped (blocked by …)`, never abort). CLI:
-`install`/`sync` accept `--jobs <N>` / `--sequential` (legacy path:
-`install_all_sequential`). `dotfiles install` specs also accept the
-`brew-formula:`/`brew-cask:` aliases.
+`pre-update`/`post-update` fire during `dotfiles update`/`upgrade`;
+`pre-uninstall`/`post-uninstall` fire during `dotfiles uninstall` (for
+`custom:` specs, the hooks ARE the action). Snippets must be
+idempotency-preserving (e.g. `ln -sfn`, guarded `if` skips); never probe tool
+availability (`command -v`) or swallow faults (`|| true`) — a failing hook
+fails its unit with the hook's stderr, which fails install/sync. Multi-line
+snippets start with `set -e` so the first fault aborts the snippet.
+`execution` tunes the engine (`max_jobs`, per lock-class `locks`; `brew`
+capped at 1). Execution: `graph::build` → `schedule::run`
+(`std::thread::scope` ready-queue; failures block dependents as `skipped
+(blocked by …)`, never abort). CLI: `install`/`sync` accept `--jobs <N>` /
+`--sequential` (legacy path: `install_all_sequential`). `dotfiles install`
+specs also accept the `brew-formula:`/`brew-cask:` aliases.
+
+Language toolchains converge via hooks rather than a typed `toolchain:`
+section: node LTS via the `brew-formula:fnm` post-install hook (`fnm install
+--lts` + `fnm default lts-latest`), python via the `brew-formula:uv`
+post-install hook (`uv python install`), and rustup via `custom:rustup` (curl
+`sh.rustup.rs` installer in `post-install`, `rustup update` in `pre-update`,
+`rustup self uninstall -y` in `pre-uninstall`). Implicit edges point `npm:*`
+→ `brew-formula:fnm` and `pip:*` → `brew-formula:uv` directly.
+
+The gated upgrade pipeline (`crates/core`) runs hardcoded ecosystem upgrades
+(brew, mas, cargo, fnm, uv, etc.), then the CLI wrapper fires
+`update_all_with_opts` — manifest-declared update hooks across the graph
+(pre-update → action → post-update). This gives `custom:rustup`'s
+`rustup update` a firing point in the agent-tick flow without any core↔manifest
+coupling.
 
 ## CLI surface (orientation)
 
