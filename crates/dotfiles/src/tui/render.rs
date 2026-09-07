@@ -32,6 +32,9 @@ pub struct UiState {
     pub viewport_h: u16,
     pub frame: u64,
     pub color: bool,
+    /// Post-run reviewer mode: footer shows input hints. Mid-run output-only
+    /// regions leave this false (no input exists to hint at).
+    pub interactive: bool,
 }
 
 impl UiState {
@@ -44,6 +47,7 @@ impl UiState {
             viewport_h: 0,
             frame: 0,
             color: std::env::var_os("NO_COLOR").is_none(),
+            interactive: false,
         }
     }
 
@@ -231,16 +235,18 @@ pub fn draw_frame(frame: &mut Frame, model: &Model, ui: &mut UiState) {
             &mut row_map,
         );
     }
-    push_line(
-        Line::from(vec![styled(
-            "  click/Enter expand · ↑↓ select · wheel scroll",
-            dim,
-            color,
-        )]),
-        None,
-        &mut lines,
-        &mut row_map,
-    );
+    if ui.interactive {
+        push_line(
+            Line::from(vec![styled(
+                "  click/Space expand · ↑↓ select · wheel scroll · q exit",
+                dim,
+                color,
+            )]),
+            None,
+            &mut lines,
+            &mut row_map,
+        );
+    }
 
     // Clamp scroll into the visible window, then draw scrolled.
     let visible = (area.height as usize).max(1);
@@ -378,8 +384,9 @@ mod tests {
             reason: "cask warmup".into(),
         });
         let mut ui = UiState::new();
+        ui.interactive = true;
         let out = render_text(&m, &mut ui, 70, 20);
         assert!(out.contains("⚠ sudo: sudo -v"), "{out}");
-        assert!(out.contains("click/Enter expand"), "{out}");
+        assert!(out.contains("click/Space expand"), "{out}");
     }
 }

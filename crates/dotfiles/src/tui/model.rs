@@ -46,7 +46,7 @@ pub struct SettleLine {
     pub text: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnitRow {
     pub id: String,
     pub driver: String,
@@ -264,6 +264,66 @@ impl Model {
         }
     }
 
+    /// No-op row ordering for the reviewer: failed first, then changed,
+    /// then in-flight (reviewer never has in-flight rows in practice).
+    fn review_rank(state: RowState) -> u8 {
+        match state {
+            RowState::Failed => 0,
+            RowState::Changed => 1,
+            RowState::InFlight => 2,
+        }
+    }
+
+    /// Merge every job's model into a single reviewer model: all visible
+    /// rows (failed first), all aggregates, and a `review` section title
+    /// summarizing what went wrong.
+    pub fn merged_for_review(models: &[&Model]) -> Model {
+        let mut merged = Model::new();
+        merged.section = "review".to_string();
+        // Dedup FIRST, in job order (latest job wins on cross-job id
+        // collisions, e.g. taps in bootstrap & install), then sort failed
+        // first for display.
+        let mut by_id: std::collections::BTreeMap<String, UnitRow> = Default::default();
+        let mut fresh_order: Vec<String> = vec![];
+        for row in models
+            .iter()
+            .flat_map(|m| m.order.iter().filter_map(|id| m.rows.get(id)).cloned())
+        {
+            match by_id.entry(row.id.clone()) {
+                std::collections::btree_map::Entry::Vacant(v) => {
+                    fresh_order.push(row.id.clone());
+                    v.insert(row);
+                }
+                std::collections::btree_map::Entry::Occupied(mut o) => {
+                    let _ = o.insert(row);
+                }
+            }
+        }
+        let mut final_rows: Vec<UnitRow> = fresh_order
+            .into_iter()
+            .map(|id| by_id.remove(&id).expect("survivor"))
+            .collect();
+        final_rows.sort_by_key(|r| Self::review_rank(r.state));
+        for row in final_rows {
+            merged.order.push(row.id.clone());
+            merged.rows.insert(row.id.clone(), row);
+        }
+        for m in models {
+            for (driver, n) in &m.aggregates {
+                *merged.aggregates.entry(driver.clone()).or_insert(0) += n;
+            }
+            merged.started += m.started;
+            merged.finished += m.finished;
+            merged.changed += m.changed;
+            merged.failed += m.failed;
+            merged.elevate_count += m.elevate_count;
+            if m.last_elevate.is_some() {
+                merged.last_elevate = m.last_elevate.clone();
+            }
+        }
+        merged
+    }
+
     /// Defensive: events for a row we never saw `UnitStarted` for (e.g. a
     /// blocked unit, which only emits `UnitFinished`) still get a row so
     /// nothing user-relevant is dropped.
@@ -449,5 +509,56 @@ mod tests {
         assert_eq!(driver_of("mas:123"), "mas");
         assert_eq!(driver_of("brew"), "brew");
         assert_eq!(driver_of("custom:rustup"), "custom");
+    }
+
+    #[test]
+    fn merged_review_has_failed_first_and_all_aggregates() {
+        let mut job1 = Model::new();
+        job1.apply(Event::Section {
+            title: "install".into(),
+        });
+        job1.apply(started("brew-formula:ok"));
+        job1.apply(finished("brew-formula:ok", UnitOutcome::Changed));
+        job1.apply(started("mas:1"));
+        job1.apply(finished("mas:1", UnitOutcome::Failed));
+        job1.apply(started("brew-formula:gone"));
+        job1.apply(finished("brew-formula:gone", UnitOutcome::NoOp));
+
+        let mut job2 = Model::new();
+        job2.apply(Event::Section {
+            title: "prefs".into(),
+        });
+        job2.apply(started("custom:x"));
+        job2.apply(finished("custom:x", UnitOutcome::Failed));
+
+        let refs: Vec<&Model> = vec![&job1, &job2];
+        let merged = Model::merged_for_review(&refs);
+        // No-op rows stay hidden; failed first, then changed.
+        assert_eq!(merged.order, vec!["mas:1", "custom:x", "brew-formula:ok"]);
+        assert_eq!(merged.rows["mas:1"].state, RowState::Failed);
+        assert_eq!(merged.aggregates.get("brew-formula"), Some(&1));
+        assert_eq!(merged.failed, 2);
+        assert_eq!(merged.changed, 1);
+    }
+
+    #[test]
+    fn merged_review_resolves_cross_job_id_collisions() {
+        let mut a = Model::new();
+        a.apply(started("brew-taps"));
+        a.apply(finished("brew-taps", UnitOutcome::Changed));
+        let mut b = Model::new();
+        b.apply(started("brew-taps"));
+        b.apply(finished("brew-taps", UnitOutcome::Failed));
+        assert_eq!(b.rows["brew-taps"].state, RowState::Failed);
+        let merged = Model::merged_for_review(&[&a, &b]);
+        assert_eq!(merged.order, vec!["brew-taps"]);
+        assert_eq!(
+            merged.rows["brew-taps"].state,
+            RowState::Failed,
+            "{:?}",
+            merged.rows["brew-taps"]
+        );
+        // Rows map and order must agree on size.
+        assert_eq!(merged.rows.len(), merged.order.len());
     }
 }
