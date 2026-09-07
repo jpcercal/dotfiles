@@ -1,11 +1,11 @@
 //! Pure state machine behind the interactive progress UI.
 //!
 //! The [`Model`] folds the [`Event`](dotfiles_exec::Event) stream into
-//! docker-pull-style display state: in-flight rows show their live command,
-//! finished no-op rows vanish into per-driver aggregates, and changed/failed
-//! rows keep a settled final line with a collapsed (expandable) detail block.
-//! No terminal I/O here — rendering lives in `render.rs`, so this is fully
-//! unit-testable.
+//! docker-pull-style display state: every unit keeps a row — settled rows
+//! (already-installed no-ops, changed, failed) listed above, in-flight rows
+//! below showing the live command. Detail blocks stay collapsed and expand
+//! on toggle. No terminal I/O here — rendering lives in `render.rs`, so
+//! this is fully unit-testable.
 
 use dotfiles_exec::{Event, Stream, UnitOutcome};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -18,10 +18,19 @@ const FEED_CAP: usize = 4;
 pub enum RowState {
     /// Running: shows a spinner plus the current `$ command`.
     InFlight,
+    /// Already in the desired state: dim settled `✓` line.
+    NoOp,
     /// Finished with changes: settled `✓` line, block expandable.
     Changed,
     /// Failed (or blocked): settled `✗` line, block expandable.
     Failed,
+}
+
+impl RowState {
+    /// Finished (any state) rows sort above in-flight rows.
+    pub fn settled(self) -> bool {
+        !matches!(self, RowState::InFlight)
+    }
 }
 
 /// One buffered line inside a unit's collapsed detail block.
@@ -49,18 +58,11 @@ pub struct SettleLine {
 #[derive(Debug, Clone)]
 pub struct UnitRow {
     pub id: String,
-    pub driver: String,
     pub state: RowState,
     pub current_cmd: Option<String>,
     pub detail: String,
     pub block: Vec<BlockLine>,
     pub expanded: bool,
-}
-
-/// Driver namespace of a unit id (`brew-formula:git` → `brew-formula`;
-/// sequential chunk ids like `brew` stay whole).
-pub fn driver_of(id: &str) -> &str {
-    id.split_once(':').map(|(d, _)| d).unwrap_or(id)
 }
 
 #[derive(Debug, Default)]
@@ -70,8 +72,6 @@ pub struct Model {
     /// Visible row ids, in arrival order.
     pub order: Vec<String>,
     pub rows: BTreeMap<String, UnitRow>,
-    /// Hidden no-op finishes per driver (`brew-formula` → 118).
-    pub aggregates: BTreeMap<String, usize>,
     /// In-flight units that may open an interactive tty prompt (mas/cask
     /// installers, sudo-carrying hooks). Non-empty ⇒ live regions suspend.
     pub prompt_risk: BTreeSet<String>,
@@ -112,7 +112,6 @@ impl Model {
                         id.clone(),
                         UnitRow {
                             id: id.clone(),
-                            driver: driver_of(&id).to_string(),
                             state: RowState::InFlight,
                             current_cmd: None,
                             detail: String::new(),
@@ -166,17 +165,13 @@ impl Model {
                 self.prompt_risk.remove(&id);
                 match outcome {
                     UnitOutcome::NoOp => {
-                        // Vanish into the aggregate (docker's "Already exists"
-                        // silence): no row, no block, just a counter.
-                        if let Some(row) = self.rows.remove(&id) {
-                            *self.aggregates.entry(row.driver).or_insert(0) += 1;
-                        } else {
-                            *self
-                                .aggregates
-                                .entry(driver_of(&id).to_string())
-                                .or_insert(0) += 1;
-                        }
-                        self.order.retain(|r| r != &id);
+                        // Already installed: keep a settled dim row — every
+                        // installed app stays visible in the list, above the
+                        // units still being installed.
+                        let row = self.row_or_placeholder(&id);
+                        row.state = RowState::NoOp;
+                        row.detail = detail;
+                        row.current_cmd = None;
                     }
                     UnitOutcome::Changed => {
                         self.changed += 1;
@@ -223,32 +218,26 @@ impl Model {
     }
 
     /// Scrollback summary for a job boundary (new `Section`, teardown):
-    /// settled row lines, per-driver no-op aggregates, sudo usage.
+    /// every unit row once once settled lines, plus sudo usage.
     pub fn settle_lines(&self) -> Vec<SettleLine> {
         let mut out = vec![];
         for id in &self.order {
             if let Some(row) = self.rows.get(id) {
-                let (mark, stderr) = match row.state {
+                let mark = match row.state {
                     RowState::InFlight => ("→", false),
+                    RowState::NoOp => ("✓", false),
                     RowState::Changed => ("✓", false),
                     RowState::Failed => ("✗", true),
                 };
-                // In-flight rows have no detail yet: settle them bare.
-                let text = if row.detail.is_empty() {
-                    format!("{mark} {}", row.id)
-                } else {
-                    format!("{mark} {} ({})", row.id, row.detail)
-                };
-                out.push(SettleLine { stderr, text });
+                out.push(SettleLine {
+                    stderr: mark.1,
+                    text: if row.detail.is_empty() {
+                        format!("{} {}", mark.0, row.id)
+                    } else {
+                        format!("{} {} ({})", mark.0, row.id, row.detail)
+                    },
+                });
             }
-        }
-        let mut drivers: Vec<(&String, &usize)> = self.aggregates.iter().collect();
-        drivers.sort();
-        for (driver, n) in drivers {
-            out.push(SettleLine {
-                stderr: false,
-                text: format!("· {driver}: {n} already installed"),
-            });
         }
         if self.elevate_count > 0 {
             let last = self
@@ -283,12 +272,13 @@ impl Model {
     }
 
     /// No-op row ordering for the reviewer: failed first, then changed,
-    /// then in-flight (reviewer never has in-flight rows in practice).
+    /// then in-flight, no-ops last.
     fn review_rank(state: RowState) -> u8 {
         match state {
             RowState::Failed => 0,
             RowState::Changed => 1,
             RowState::InFlight => 2,
+            RowState::NoOp => 3,
         }
     }
 
@@ -337,9 +327,6 @@ impl Model {
             merged.rows.insert(row.id.clone(), row);
         }
         for m in models {
-            for (driver, n) in &m.aggregates {
-                *merged.aggregates.entry(driver.clone()).or_insert(0) += n;
-            }
             merged.started += m.started;
             merged.finished += m.finished;
             merged.changed += m.changed;
@@ -362,7 +349,6 @@ impl Model {
                 id.to_string(),
                 UnitRow {
                     id: id.to_string(),
-                    driver: driver_of(id).to_string(),
                     state: RowState::InFlight,
                     current_cmd: None,
                     detail: String::new(),
@@ -423,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn noop_finish_removes_row_into_aggregate() {
+    fn noop_finish_keeps_settled_row_visible() {
         let mut m = Model::new();
         m.apply(started("brew-formula:git"));
         m.apply(Event::UnitLog {
@@ -432,10 +418,12 @@ mod tests {
             line: "already there".into(),
         });
         m.apply(finished("brew-formula:git", UnitOutcome::NoOp));
-        assert!(!m.rows.contains_key("brew-formula:git"));
-        assert!(m.order.is_empty());
-        assert_eq!(m.aggregates.get("brew-formula"), Some(&1));
+        let row = &m.rows["brew-formula:git"];
+        assert_eq!(row.state, RowState::NoOp);
+        assert_eq!(row.detail, "already ok");
+        assert_eq!(m.order, vec!["brew-formula:git"]);
         assert_eq!(m.finished, 1);
+        assert!(m.changed == 0 && m.failed == 0);
     }
 
     #[test]
@@ -487,13 +475,13 @@ mod tests {
             title: "prefs".into(),
         });
         assert_eq!(m.section, "prefs");
-        assert!(m.rows.is_empty() && m.aggregates.is_empty());
+        assert!(m.rows.is_empty());
         assert_eq!(m.elevate_count, 1);
         assert!(m.last_elevate.is_some());
     }
 
     #[test]
-    fn settle_lines_cover_rows_aggregates_and_sudo() {
+    fn settle_lines_cover_all_rows_and_sudo() {
         let mut m = Model::new();
         m.apply(started("brew-formula:git"));
         m.apply(finished("brew-formula:git", UnitOutcome::Changed));
@@ -508,16 +496,12 @@ mod tests {
             texts.iter().any(|t| t == "✓ brew-formula:git (changed)"),
             "{texts:?}"
         );
+        // Already-installed units settle as rows too (never hidden).
         assert!(
-            texts.iter().any(|t| t == "· cask: 1 already installed"),
+            texts.iter().any(|t| t == "✓ cask:docker (already ok)"),
             "{texts:?}"
         );
         assert!(texts.iter().any(|t| t.contains("⚠ sudo ×1")), "{texts:?}");
-        // No-op rows never appear as row lines.
-        assert!(
-            !texts.iter().any(|t| t.contains("cask:docker (")),
-            "{texts:?}"
-        );
     }
 
     #[test]
@@ -539,15 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn driver_of_handles_bare_and_namespaced_ids() {
-        assert_eq!(driver_of("brew-formula:git"), "brew-formula");
-        assert_eq!(driver_of("mas:123"), "mas");
-        assert_eq!(driver_of("brew"), "brew");
-        assert_eq!(driver_of("custom:rustup"), "custom");
-    }
-
-    #[test]
-    fn merged_review_has_failed_first_and_all_aggregates() {
+    fn merged_review_orders_failed_changed_then_noop() {
         let mut job1 = Model::new();
         job1.apply(Event::Section {
             title: "install".into(),
@@ -568,10 +544,13 @@ mod tests {
 
         let refs: Vec<&Model> = vec![&job1, &job2];
         let merged = Model::merged_for_review(&refs);
-        // No-op rows stay hidden; failed first, then changed.
-        assert_eq!(merged.order, vec!["mas:1", "custom:x", "brew-formula:ok"]);
+        // Every row is kept; failed first, then changed, no-ops last.
+        assert_eq!(
+            merged.order,
+            vec!["mas:1", "custom:x", "brew-formula:ok", "brew-formula:gone"]
+        );
         assert_eq!(merged.rows["mas:1"].state, RowState::Failed);
-        assert_eq!(merged.aggregates.get("brew-formula"), Some(&1));
+        assert_eq!(merged.rows["brew-formula:gone"].state, RowState::NoOp);
         assert_eq!(merged.failed, 2);
         assert_eq!(merged.changed, 1);
     }

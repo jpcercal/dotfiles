@@ -125,12 +125,13 @@ e2e/          reduced fixture manifests for the real-machine CI E2E job
   `BackendOutcome::outcome_kind` — blocked units are `Failed`); renderers
   hide `NoOp` and keep `Changed`/`Failed`:
   - *Interactive* (`tui` feature, both stdio TTYs, not `--dry-run`,
-    no `--plain`): ratatui inline-viewport region (`crates/dotfiles/src/tui/`:
-    `model` = pure event fold, `render` = frame + hit-testing, driver thread
-    owns the terminal). In-flight rows show spinner + live `$ command`;
-    no-op rows vanish into per-driver aggregates (`brew-formula: 118 already
-    installed`); click / arrows+Enter toggles a row's collapsed stdout/stderr
-    block inline; wheel scrolls; `q` never aborts (no cancel semantics).
+    no `--plain`): diffed ANSI region (`crates/dotfiles/src/tui/`:
+    `model` = pure event fold, `render` = pure styled-line renderer + diff
+    painter, driver thread in mod.rs owns the terminal). Settled rows —
+    no-ops ("already ok") included — stack above; in-flight rows sit below
+    with spinner + live `$ command`; click / arrows+Enter toggles a row's
+    collapsed stdout/stderr block inline; wheel scrolls; `q` never aborts
+    (no cancel semantics).
   - *Plain* (pipes, CI, `--dry-run`, `--plain`): `TermReporter` prints
     sections, unscoped `$` echoes, elevation notices, and one grouped block
     per `Changed`/`Failed` unit only — no start lines, no no-op output.

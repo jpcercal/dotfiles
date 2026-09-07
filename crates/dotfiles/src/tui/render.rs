@@ -125,8 +125,26 @@ pub fn render_lines(model: &Model, ui: &mut UiState, height: usize) -> Vec<(Stri
     }
     push(head, None);
 
-    // Unit rows (+ inline-expanded blocks).
-    for (idx, id) in model.order.iter().enumerate() {
+    // Unit rows (+ inline-expanded blocks): settled rows (already
+    // installed, changed, failed) first, then units installing right now.
+    // Arrival order is kept within each group, so the list reads as
+    // "everything done so far" above "real progress happening now".
+    let settled: Vec<usize> = model
+        .order
+        .iter()
+        .enumerate()
+        .filter(|(_, id)| model.rows.get(*id).is_some_and(|r| r.state.settled()))
+        .map(|(i, _)| i)
+        .collect();
+    let flying: Vec<usize> = model
+        .order
+        .iter()
+        .enumerate()
+        .filter(|(_, id)| model.rows.get(*id).is_some_and(|r| !r.state.settled()))
+        .map(|(i, _)| i)
+        .collect();
+    for idx in settled.into_iter().chain(flying) {
+        let id = &model.order[idx];
         let Some(row) = model.rows.get(id) else {
             continue;
         };
@@ -141,6 +159,14 @@ pub fn render_lines(model: &Model, ui: &mut UiState, height: usize) -> Vec<(Stri
                     styled(caret, DIM, color),
                     row.id,
                     cmd
+                )
+            }
+            RowState::NoOp => {
+                // Already installed: present in the list, de-emphasized.
+                styled(
+                    &format!("✓ {} {} ({})", caret, row.id, row.detail),
+                    DIM,
+                    color,
                 )
             }
             RowState::Changed => format!(
@@ -177,18 +203,6 @@ pub fn render_lines(model: &Model, ui: &mut UiState, height: usize) -> Vec<(Stri
                 push(text, Some(idx));
             }
         }
-    }
-
-    // Aggregate line for hidden no-op units.
-    if !model.aggregates.is_empty() {
-        let mut parts: Vec<(&String, &usize)> = model.aggregates.iter().collect();
-        parts.sort();
-        let text = parts
-            .into_iter()
-            .map(|(d, n)| format!("{d}: {n} already installed"))
-            .collect::<Vec<_>>()
-            .join(" · ");
-        push(styled(&format!("  · {text}"), DIM, color), None);
     }
 
     // Recent feed (unscoped commands, notes, recap lines).
@@ -330,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn settled_rows_show_but_noop_rows_vanish() {
+    fn settled_and_noop_rows_all_stay_visible() {
         let m = model_with_rows();
         let mut ui = UiState::new();
         let out = render_plain(&m, &mut ui, 20);
@@ -338,12 +352,57 @@ mod tests {
         // Settled changed + failed rows are visible …
         assert!(text.contains("✓ ▸ brew-formula:git (changed)"), "{text}");
         assert!(text.contains("✗ ▸ mas:123 (exit 1)"), "{text}");
-        // … but the no-op row is gone, counted only in the aggregate …
-        assert!(!text.contains("brew-formula:fd"), "{text}");
-        assert!(text.contains("brew-formula: 1 already installed"), "{text}");
+        // … and the already-installed unit stays in the list too (never
+        // hidden behind an aggregate line).
+        assert!(text.contains("✓ ▸ brew-formula:fd (already ok)"), "{text}");
+        assert!(!text.contains("already installed"), "{text}");
         // … collapsed blocks stay hidden, and the header carries counters.
         assert!(!text.contains("pouring git"), "{text}");
         assert!(text.contains("3/3 done · 0 running · ✗ 1 failed"), "{text}");
+    }
+
+    #[test]
+    fn settled_rows_stack_above_in_flight_rows() {
+        let mut m = Model::new();
+        // In-flight unit arrives first, settled units after.
+        m.apply(Event::UnitStarted {
+            id: "installing".into(),
+            prompt_capable: false,
+        });
+        m.apply(Event::UnitStarted {
+            id: "done-a".into(),
+            prompt_capable: false,
+        });
+        m.apply(Event::UnitFinished {
+            id: "done-a".into(),
+            ok: true,
+            detail: "already ok".into(),
+            outcome: UnitOutcome::NoOp,
+        });
+        m.apply(Event::UnitStarted {
+            id: "done-b".into(),
+            prompt_capable: false,
+        });
+        m.apply(Event::UnitFinished {
+            id: "done-b".into(),
+            ok: true,
+            detail: "changed".into(),
+            outcome: UnitOutcome::Changed,
+        });
+        let mut ui = UiState::new();
+        let out = render_plain(&m, &mut ui, 20);
+        let row_at = |needle: &str| {
+            out.iter()
+                .position(|l| l.contains(needle))
+                .unwrap_or(usize::MAX)
+        };
+        let (a, b, installing) = (row_at("done-a"), row_at("done-b"), row_at("installing"));
+        assert!(a < installing && b < installing, "{out:?}");
+        // In-flight row keeps its live command below the settled block.
+        assert!(
+            out[installing].contains("$") || out[installing].contains("…"),
+            "{out:?}"
+        );
     }
 
     #[test]
