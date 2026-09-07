@@ -4,7 +4,7 @@
 //! - one unit per tap (`brew-tap:<tap>`), one unit per MAS app (`mas:<id>`),
 //!   one unit per Go module (`go:<module>`), one unit per custom step;
 //! - formulas / casks / gems / npm / pip / cargo / composer packages **without** explicit
-//!   `requires:`/`lock:`/`version`/`hooks`/`label` coalesce into one batch unit per backend
+//!   `requires:`/`lock:`/`version`/`hooks` coalesce into one batch unit per backend
 //!   (`brew-formula:batch`, …) so today's single batched tool invocation is
 //!   preserved;
 //! - any package **referenced** by another unit's requirements (explicit or
@@ -170,11 +170,8 @@ pub fn build(m: &Manifest) -> Result<Graph> {
             continue;
         }
         let norm_id = format!("{prefix}:{bare_name}");
-        let is_detailed = e.is_detailed()
-            || e.has_hooks()
-            || e.is_pinned()
-            || e.label().is_some()
-            || referenced.contains(&norm_id);
+        let is_detailed =
+            e.is_detailed() || e.has_hooks() || e.is_pinned() || referenced.contains(&norm_id);
         if is_detailed {
             let backend = backend_for_prefix(&prefix);
             graph.units.push(Unit {
@@ -473,7 +470,7 @@ mod tests {
     #[test]
     fn mas_and_go_become_single_units() {
         let g = build(&manifest(
-            "require:\n  - \"go:example.com/x/tool@latest\"\n  - id: \"mas:123\"\n    label: \"Foo\"\n  - id: \"mas:456\"\n    label: \"Bar\"\n",
+            "require:\n  - \"go:example.com/x/tool@latest\"\n  - id: \"mas:123\"\n  - id: \"mas:456\"\n",
         ))
         .unwrap();
         assert!(
@@ -552,7 +549,6 @@ mod tests {
         m.require
             .push(RequireEntry::Detailed(dotfiles_manifest::RequireDetail {
                 id: "brew-formula:x".into(),
-                label: None,
                 requires: vec!["brew-formula:ghost".into()],
                 lock: None,
                 version: None,

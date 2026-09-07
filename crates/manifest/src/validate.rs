@@ -53,13 +53,13 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
         }
 
         // MAS specific
-        if prefix == "mas" {
-            if bare_name.is_empty() || !bare_name.chars().all(|c| c.is_ascii_digit()) {
-                errors.push(format!(
-                    "require: mas id '{}' is not a numeric App Store id",
-                    bare_name
-                ));
-            }
+        if prefix == "mas"
+            && (bare_name.is_empty() || !bare_name.chars().all(|c| c.is_ascii_digit()))
+        {
+            errors.push(format!(
+                "require: mas id '{}' is not a numeric App Store id",
+                bare_name
+            ));
         }
 
         // brew-tap shape

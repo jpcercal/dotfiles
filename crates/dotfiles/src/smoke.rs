@@ -455,7 +455,7 @@ mod tests {
         let t = TestEnv::new();
         let ctx = ctx_with_manifest(
             &t,
-            "require:\n    - \"brew-formula:jq\"\n    - \"brew-cask:caffeine\"\n    - \"gem:neovim\"\n    - \"npm:prettier\"\n    - \"pip:pynvim\"\n    - \"go:example.com/x/tool@latest\"\n    - id: \"mas:1\"\n      label: \"A\"\n    - id: \"custom:rustup\"\n      hooks:\n        post-install: \"echo hi\"\n    - \"brew-formula:fnm\"\n    - \"brew-formula:uv\"\n",
+            "require:\n    - \"brew-formula:jq\"\n    - \"brew-cask:caffeine\"\n    - \"gem:neovim\"\n    - \"npm:prettier\"\n    - \"pip:pynvim\"\n    - \"go:example.com/x/tool@latest\"\n    - id: \"mas:1\"\n    - id: \"custom:rustup\"\n      hooks:\n        post-install: \"echo hi\"\n    - \"brew-formula:fnm\"\n    - \"brew-formula:uv\"\n",
         );
         let checks = collect(&ctx);
         assert!(!checks.is_empty());

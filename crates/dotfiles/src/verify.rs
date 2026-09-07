@@ -347,7 +347,7 @@ mod tests {
         // No tools stubbed: everything skips, nothing is missing.
         let ctx = ctx_with_manifest(
             &t,
-            "require:\n    - \"brew-formula:git\"\n    - \"brew-tap:a/b\"\n    - id: \"mas:1\"\n      label: \"A\"\n",
+            "require:\n    - \"brew-formula:git\"\n    - \"brew-tap:a/b\"\n    - id: \"mas:1\"\n",
         );
         let checks = collect(&ctx).unwrap();
         assert!(!checks.is_empty());
@@ -370,7 +370,7 @@ mod tests {
         );
         let ctx = ctx_with_manifest(
             &t,
-            "require:\n    - \"brew-formula:git\"\n    - \"brew-formula:ghost-pkg\"\n    - id: \"mas:1\"\n      label: \"A\"\n    - id: \"mas:2\"\n      label: \"B\"\n",
+            "require:\n    - \"brew-formula:git\"\n    - \"brew-formula:ghost-pkg\"\n    - id: \"mas:1\"\n    - id: \"mas:2\"\n",
         );
         let checks = collect(&ctx).unwrap();
         let status = |id: &str| {
