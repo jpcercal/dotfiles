@@ -18,12 +18,17 @@
 //! | Cargo         | `cargo:ripgrep`                                    | `cargo`    |
 //! | Go module     | `go:github.com/oklog/ulid/v2/cmd/ulid@latest`      | `go`       |
 //! | Composer      | `composer:vendor/pkg`                              | `composer` |
-//! | Toolchain     | `toolchain:rustup` / `node` / `python`             | `toolchain`|
-//! | Bootstrap     | `bootstrap:opencode`                               | `bootstrap`|
+//! | Custom        | `custom:rustup`                                    | `custom`   |
 //!
 //! All Homebrew traffic shares the `brew` lock class (limit 1 — concurrent
 //! `brew` invocations are unsupported by Homebrew); every other prefix is its
 //! own lock class, so cross-ecosystem installs run in parallel.
+//!
+//! Language toolchains converge via hooks rather than a typed `toolchain:`
+//! section: node LTS via the `brew-formula:fnm` post-install hook, python via
+//! the `brew-formula:uv` post-install hook, and rustup via the `custom:rustup`
+//! entry's hooks. Implicit edges therefore point `npm:` → `brew-formula:fnm`
+//! and `pip:` → `brew-formula:uv` directly.
 
 use crate::apps::Manifest;
 use std::collections::BTreeSet;
@@ -40,11 +45,10 @@ pub const UNIT_PREFIXES: &[&str] = &[
     "cargo",
     "go",
     "composer",
-    "toolchain",
-    "bootstrap",
+    "custom",
 ];
 
-/// Lock (resource) classes addressable from `install.execution.locks`.
+/// Lock (resource) classes addressable from `execution.locks`.
 pub const LOCK_CLASSES: &[&str] = &[
     "brew",
     "mas",
@@ -54,8 +58,7 @@ pub const LOCK_CLASSES: &[&str] = &[
     "cargo",
     "go",
     "composer",
-    "toolchain",
-    "bootstrap",
+    "custom",
 ];
 
 /// Whether this prefix supports `@version` pinning in the id sugar.
@@ -194,13 +197,12 @@ pub fn lock_class_for(prefix: &str) -> &'static str {
         "cargo" => "cargo",
         "go" => "go",
         "composer" => "composer",
-        "toolchain" => "toolchain",
-        "bootstrap" => "bootstrap",
+        "custom" => "custom",
         _ => "default",
     }
 }
 
-/// Custom lock-class names (`RequireDetail.lock`, `install.execution.locks` keys)
+/// Custom lock-class names (`RequireDetail.lock`, `execution.locks` keys)
 /// must be lowercase slug-shaped.
 pub fn is_valid_lock_name(s: &str) -> bool {
     !s.is_empty()
@@ -213,7 +215,7 @@ pub fn is_valid_lock_name(s: &str) -> bool {
 /// `dotfiles-backends::graph`).
 pub fn unit_ids(m: &Manifest) -> BTreeSet<String> {
     let mut ids = BTreeSet::new();
-    for e in &m.install.require {
+    for e in &m.require {
         if let Some(norm) = normalize_unit_id(e.id()) {
             ids.insert(norm);
         } else {
@@ -227,18 +229,6 @@ pub fn unit_ids(m: &Manifest) -> BTreeSet<String> {
             }
         }
     }
-    if m.install.toolchains.rustup.is_some() {
-        ids.insert("toolchain:rustup".to_string());
-    }
-    if m.install.toolchains.node.is_some() {
-        ids.insert("toolchain:node".to_string());
-    }
-    if m.install.toolchains.python.is_some() {
-        ids.insert("toolchain:python".to_string());
-    }
-    for entry in &m.install.bootstrap {
-        ids.insert(format!("bootstrap:{}", entry.id()));
-    }
     ids
 }
 
@@ -246,7 +236,7 @@ pub fn unit_ids(m: &Manifest) -> BTreeSet<String> {
 /// Sources are validated to be declared units by the caller.
 pub fn explicit_edges(m: &Manifest) -> Vec<(String, String)> {
     let mut edges = vec![];
-    for e in &m.install.require {
+    for e in &m.require {
         let source = match normalize_unit_id(e.id()) {
             Some(n) => n,
             None => {
@@ -274,7 +264,7 @@ pub fn explicit_edges(m: &Manifest) -> Vec<(String, String)> {
 }
 
 fn has_formula(m: &Manifest, name: &str) -> bool {
-    m.install.require.iter().any(|e| {
+    m.require.iter().any(|e| {
         if let Some((p, n)) = split_unit_id(e.id()) {
             p == "brew-formula" && n == name
         } else {
@@ -284,13 +274,12 @@ fn has_formula(m: &Manifest, name: &str) -> bool {
 }
 
 /// Implicit (built-in) requirements for a unit ID, derived from tool
-/// realities (fnm/uv/fzf/git/rtk ship via brew, npm needs node, pip needs the
-/// uv python, …). Only references *declared* units — anything undeclared is a
-/// runtime concern (today's bail/skip behavior), never a graph edge.
+/// realities (fnm/uv ship via brew, npm needs node, pip needs the uv python, …).
+/// Only references *declared* units — anything undeclared is a runtime concern
+/// (today's bail/skip behavior), never a graph edge.
 /// Explicit `requires:` are unioned with these by callers.
 pub fn implicit_requires(id: &str, m: &Manifest) -> Vec<String> {
     let taps: Vec<String> = m
-        .install
         .require
         .iter()
         .filter_map(|e| {
@@ -302,23 +291,23 @@ pub fn implicit_requires(id: &str, m: &Manifest) -> Vec<String> {
             }
         })
         .collect();
-    let Some((prefix, name)) = split_unit_id(id) else {
+    let Some((prefix, _name)) = split_unit_id(id) else {
         return vec![];
     };
-    let prefix_str = prefix.as_str();
-    let name_str = name.as_str();
-    match prefix_str {
+    match prefix.as_str() {
         "brew-formula" | "brew-cask" => taps,
         "npm" => {
-            if m.install.toolchains.node.is_some() {
-                vec!["toolchain:node".to_string()]
+            // npm needs node; node converges via the fnm post-install hook.
+            if has_formula(m, "fnm") {
+                vec!["brew-formula:fnm".to_string()]
             } else {
                 vec![]
             }
         }
         "pip" => {
-            if m.install.toolchains.python.is_some() {
-                vec!["toolchain:python".to_string()]
+            // pip needs python; python converges via the uv post-install hook.
+            if has_formula(m, "uv") {
+                vec!["brew-formula:uv".to_string()]
             } else {
                 vec![]
             }
@@ -330,28 +319,8 @@ pub fn implicit_requires(id: &str, m: &Manifest) -> Vec<String> {
                 vec![]
             }
         }
-        "toolchain" => match name_str {
-            // fnm / uv ship via Homebrew; rustup self-downloads.
-            "node" => {
-                if has_formula(m, "fnm") {
-                    vec!["brew-formula:fnm".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "python" => {
-                if has_formula(m, "uv") {
-                    vec!["brew-formula:uv".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            _ => vec![],
-        },
-        // Only opencode remains a typed step (remote installer); everything
-        // else moved to post-install hooks, so bootstrap units take no
-        // implicit edges.
-        "bootstrap" => vec![],
+        // Custom units are pure hook carriers; they take no implicit edges.
+        "custom" => vec![],
         _ => vec![],
     }
 }

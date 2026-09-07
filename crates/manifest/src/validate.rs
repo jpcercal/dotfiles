@@ -10,10 +10,10 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
 
     // --- require list validation ---
     let mut seen_ids = BTreeSet::new();
-    for entry in &m.install.require {
+    for entry in &m.require {
         let raw_id = entry.id();
         if raw_id.trim().is_empty() {
-            errors.push("install.require: empty id".to_string());
+            errors.push("require: empty id".to_string());
             continue;
         }
         // Parse and canonicalize; check prefix validity
@@ -22,7 +22,7 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
             // Try to give better error: check if colon missing vs unknown prefix
             if !raw_id.contains(':') {
                 errors.push(format!(
-                    "install.require: '{}' is not a valid unit ID (expected 'prefix:name')",
+                    "require: '{}' is not a valid unit ID (expected 'prefix:name')",
                     raw_id
                 ));
             } else {
@@ -30,14 +30,14 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
                 let canon = units::canonical_prefix(pref);
                 if !units::UNIT_PREFIXES.contains(&canon) {
                     errors.push(format!(
-                        "install.require: '{}' has unknown unit prefix '{}' (known: {})",
+                        "require: '{}' has unknown unit prefix '{}' (known: {})",
                         raw_id,
                         pref,
                         units::UNIT_PREFIXES.join(", ")
                     ));
                 } else {
                     errors.push(format!(
-                        "install.require: '{}' is not a valid unit ID",
+                        "require: '{}' is not a valid unit ID",
                         raw_id
                     ));
                 }
@@ -47,26 +47,26 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
         let (prefix, bare_name) = parsed.unwrap();
         // bare_name checks
         if bare_name.trim().is_empty() {
-            errors.push(format!("install.require: '{}' has empty name", raw_id));
+            errors.push(format!("require: '{}' has empty name", raw_id));
         }
         // Normalized duplicate check
         let norm = units::normalize_unit_id(raw_id).unwrap_or_else(|| raw_id.to_string());
         if !seen_ids.insert(norm.clone()) {
-            errors.push(format!("install.require: duplicate entry '{}'", norm));
+            errors.push(format!("require: duplicate entry '{}'", norm));
         }
 
         // MAS specific
         if prefix == "mas" {
             if bare_name.is_empty() || !bare_name.chars().all(|c| c.is_ascii_digit()) {
                 errors.push(format!(
-                    "install.require: mas id '{}' is not a numeric App Store id",
+                    "require: mas id '{}' is not a numeric App Store id",
                     bare_name
                 ));
             }
             match entry.label() {
                 Some(l) if !l.trim().is_empty() => {}
                 _ => errors.push(format!(
-                    "install.require: mas:{} missing non-empty 'label'",
+                    "require: mas:{} missing non-empty 'label'",
                     bare_name
                 )),
             }
@@ -74,7 +74,7 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
         // Label if present must be non-empty (allowed on any entry)
         if let Some(l) = entry.label() {
             if l.trim().is_empty() {
-                errors.push(format!("install.require: '{}' has empty label", raw_id));
+                errors.push(format!("require: '{}' has empty label", raw_id));
             }
         }
 
@@ -89,7 +89,7 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
                 });
             if !well_formed {
                 errors.push(format!(
-                    "install.require: tap '{}' is not in owner/repo form",
+                    "require: tap '{}' is not in owner/repo form",
                     bare_name
                 ));
             }
@@ -101,62 +101,42 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
             prefix.as_str(),
             "npm" | "pip" | "gem" | "cargo" | "go" | "composer"
         );
-        // brew-formula/cask/mas/brew-tap/toolchain/bootstrap must not be pinned.
+        // brew-formula/cask/mas/brew-tap/custom must not be pinned.
         // For brew-formula, `name@version` containing @ is actually part of name (e.g. node@20)
         // — our parse treats brew-formula as not pin-capable, so extract_version returns None.
         // But explicit `version:` field must still be rejected.
         if entry.version().is_some() && !pin_capable {
             errors.push(format!(
-                "install.require: '{}' has a 'version' pin but '{}' does not support version pinning (supported: npm, pip, gem, cargo, go)",
+                "require: '{}' has a 'version' pin but '{}' does not support version pinning (supported: npm, pip, gem, cargo, go)",
                 raw_id, prefix
             ));
         } else if is_pinned && !pin_capable {
             // This would be via @ suffix sugar; for non-pin-capable we already treat @ as part of name,
             // so is_pinned will be false. But keep check for explicit mapping.
             errors.push(format!(
-                "install.require: '{}' is version-pinned but '{}' does not support pinning",
+                "require: '{}' is version-pinned but '{}' does not support pinning",
                 raw_id, prefix
             ));
         }
         // For pin-capable, also validate version string shape not empty
         if let Some(v) = entry.version() {
             if v.trim().is_empty() {
-                errors.push(format!("install.require: '{}' has empty version", raw_id));
+                errors.push(format!("require: '{}' has empty version", raw_id));
             }
         }
-        // Hooks only on package entries, not taps/toolchains
-        if entry.has_hooks() && matches!(prefix.as_str(), "brew-tap" | "toolchain") {
+        // Hooks only on package entries, not taps
+        if entry.has_hooks() && prefix == "brew-tap" {
             errors.push(format!(
-                "install.require: '{}' has 'hooks' but '{}' entries do not support hooks",
+                "require: '{}' has 'hooks' but '{}' entries do not support hooks",
                 raw_id, prefix
             ));
         }
-    }
-
-    for entry in &m.install.bootstrap {
-        // Bootstrap steps carry no built-in logic — a hookless entry would
+        // Custom steps carry no built-in logic — a hookless entry would
         // silently do nothing, so hooks are required.
-        if !entry.has_hooks() {
+        if prefix == "custom" && !entry.has_hooks() {
             errors.push(format!(
-                "install.bootstrap: step '{}' carries no hooks (bootstrap steps have no built-in install logic; attach hooks or remove the entry)",
-                entry.id()
-            ));
-        }
-    }
-
-    if let Some(node) = &m.install.toolchains.node {
-        if node.ensure != "lts" {
-            errors.push(format!(
-                "install.toolchains.node.ensure: unsupported value '{}' (supported: lts)",
-                node.ensure
-            ));
-        }
-    }
-    if let Some(python) = &m.install.toolchains.python {
-        if python.provider != "uv" {
-            errors.push(format!(
-                "install.toolchains.python.provider: unsupported value '{}' (supported: uv)",
-                python.provider
+                "require: custom step '{}' carries no hooks (custom steps have no built-in install logic; attach hooks or remove the entry)",
+                bare_name
             ));
         }
     }
@@ -172,7 +152,7 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
 
 /// Dependency-graph validation for the parallel execution engine:
 /// `requires:` targets must resolve to declared units, the combined
-/// explicit+implicit edge set must be acyclic, and `install.execution.locks`
+/// explicit+implicit edge set must be acyclic, and `execution.locks`
 /// must be well-formed (`brew` is capped at 1 — concurrent `brew`
 /// invocations are unsupported by Homebrew).
 fn validate_graph(m: &Manifest, errors: &mut Vec<String>) {
@@ -247,22 +227,22 @@ fn validate_graph(m: &Manifest, errors: &mut Vec<String>) {
         }
     }
 
-    for (class, limit) in &m.install.execution.locks {
+    for (class, limit) in &m.execution.locks {
         if !units::is_valid_lock_name(class) {
             errors.push(format!(
-                "install.execution.locks: '{}' is not a valid lock-class name",
+                "execution.locks: '{}' is not a valid lock-class name",
                 class
             ));
         }
         if class == "brew" && *limit > 1 {
             errors.push(
-                "install.execution.locks: 'brew' is capped at 1 (concurrent `brew` invocations are unsupported)"
+                "execution.locks: 'brew' is capped at 1 (concurrent `brew` invocations are unsupported)"
                     .to_string(),
             );
         }
     }
 
-    for e in &m.install.require {
+    for e in &m.require {
         if let Some(lock) = e.lock() {
             if !units::is_valid_lock_name(lock) {
                 errors.push(format!(
