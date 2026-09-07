@@ -57,6 +57,10 @@ impl Check {
     pub fn is_missing(&self) -> bool {
         matches!(self.status, CheckStatus::Missing(_))
     }
+
+    pub fn is_ok(&self) -> bool {
+        matches!(self.status, CheckStatus::Ok)
+    }
 }
 
 pub fn run(ctx: &Ctx, _args: VerifyArgs) -> Result<()> {
@@ -187,7 +191,7 @@ fn tool_probe(env: &ExecEnv, id: &str, tool: &str, args: &[&str]) -> Check {
 
 fn run_probe(env: &ExecEnv, id: &str, probe: &ProbeKind) -> Check {
     match probe {
-        ProbeKind::BrewFormula(name) => tool_probe(env, id, "brew", &["info", "--formula", name]),
+        ProbeKind::BrewFormula(name) => probe_brew_formula(env, id, name),
         ProbeKind::BrewCask(name) => tool_probe(env, id, "brew", &["info", "--cask", name]),
         ProbeKind::BrewTap(tap) => probe_tap(env, id, tap),
         ProbeKind::Mas(app_id) => tool_probe(env, id, "mas", &["info", app_id]),
@@ -208,6 +212,25 @@ fn run_probe(env: &ExecEnv, id: &str, probe: &ProbeKind) -> Check {
         }
         ProbeKind::Go(spec) => probe_go(env, id, spec),
     }
+}
+
+/// Probe a brew formula. For fully-qualified names (`owner/repo/formula`),
+/// `brew info` requires the tap to be installed locally — on a fresh CI
+/// runner it isn't. Fall back to checking the formula file on GitHub.
+fn probe_brew_formula(env: &ExecEnv, id: &str, name: &str) -> Check {
+    let direct = tool_probe(env, id, "brew", &["info", "--formula", name]);
+    if direct.is_ok() {
+        return direct;
+    }
+    // Fully-qualified name from a third-party tap (e.g. "anomalyco/tap/opencode"):
+    // the tap isn't tapped, so brew info fails. Check the formula file upstream.
+    if let Some((tap, formula)) = name.rsplit_once('/') {
+        if let Some(repo) = tap_github_repo(tap) {
+            let url = format!("https://raw.githubusercontent.com/{repo}/HEAD/{formula}.rb");
+            return tool_probe(env, id, "curl", &["-fsSL", "--max-time", "20", &url]);
+        }
+    }
+    direct
 }
 
 /// `brew tap-info` only knows locally installed taps, so an untapped-but-valid
