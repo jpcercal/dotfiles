@@ -17,6 +17,8 @@ mod smoke;
 mod software_update;
 mod sync;
 mod term_report;
+#[cfg(feature = "tui")]
+mod tui;
 #[cfg(feature = "gui")]
 mod ui_egui;
 #[cfg(feature = "gui")]
@@ -34,6 +36,10 @@ struct Cli {
     /// Print what would run without changing anything
     #[arg(long, global = true)]
     dry_run: bool,
+
+    /// Force plain line output (no interactive progress UI)
+    #[arg(long, global = true)]
+    plain: bool,
 
     #[command(subcommand)]
     command: Commands,
@@ -86,7 +92,17 @@ enum Commands {
 fn main() -> anyhow::Result<()> {
     ensure_path();
     let cli = Cli::parse();
-    let ctx = ctx::Ctx::real(cli.dry_run);
+    let mut ctx = ctx::Ctx::real(cli.dry_run);
+    if cli.plain {
+        // Escape hatch: same events, plain line renderer.
+        ctx.env = ctx
+            .env
+            .clone()
+            .with_reporter(std::sync::Arc::new(term_report::TermReporter::new()));
+    }
+    // Settles the reporter on every exit path (normal return and unwind):
+    // the progress region becomes scrollback, the terminal is restored.
+    let _report_guard = ctx.report_guard();
     match cli.command {
         Commands::Install(args) => pkg::install(&ctx, args),
         Commands::Uninstall(args) => pkg::uninstall(&ctx, args),

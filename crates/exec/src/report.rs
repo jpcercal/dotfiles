@@ -83,6 +83,11 @@ pub enum Event {
 /// thread-safe: events arrive from parallel scheduler workers.
 pub trait Reporter: Send + Sync + fmt::Debug {
     fn report(&self, event: Event);
+
+    /// End-of-process settle: flush summaries, restore the terminal.
+    /// Called once via the CLI's exit guard; default is a no-op (plain and
+    /// recording reporters need nothing). Idempotent by contract.
+    fn finish(&self) {}
 }
 
 /// The default reporter: drops every event. Used when no renderer is
