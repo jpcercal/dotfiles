@@ -26,7 +26,7 @@ pub fn parse_manifest(raw: &str) -> Result<Manifest, ManifestError> {
         detail: e.to_string(),
     })?;
     if m.schema_version == 0 {
-        m.schema_version = 1;
+        m.schema_version = 2;
     }
     validate::validate(&m)?;
     Ok(m)

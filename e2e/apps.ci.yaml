@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=../schema/apps.schema.json
 ---
 # Reduced manifest for the real-machine CI E2E job (`e2e-machine`). Mirrors
-# the production structure (batches, implicit toolchain edges, bootstrap
-# steps, symlinks) at a fraction of the wall-clock cost. Selected via
+# the production structure (batches, implicit tool edges, install hooks,
+# symlinks) at a fraction of the wall-clock cost. Selected via
 # DOTFILES_MANIFEST=e2e/apps.ci.yaml (with DOTFILES_DIR set to the repo root
 # so symlink sources resolve).
 #
@@ -11,72 +11,92 @@
 # sign-in is unavailable on CI runners (the mas *type* is still covered via
 # the `mas` CLI formula + `mas --help` smoke; app references are covered by
 # `dotfiles verify` instead).
-schema_version: 1
-install:
-  execution:
-    max_jobs: 0
-    locks:
-      go: 2
-  brew:
-    formulas:
-      - "jq"
-      - "fd"
-      - "fzf"
-      - "fnm"
-      - "uv"
-      - "go"
-      - "dockutil"
-      - "mas"
-      - "neovim"
-      - "ruby"
-    casks:
-      - "caffeine"
-  gem:
-    rubygems:
-      # Explicit edge: no implicit gem→ruby ordering exists, so pin the gem
-      # behind the ruby formula (same pattern as the php tools in apps.yaml).
-      - name: "neovim"
-        requires: ["brew-formula:ruby"]
-  npm:
-    global:
-      packages:
-        - "prettier"
-  pip:
-    packages:
-      - "pynvim"
-  go:
-    packages:
-      - "github.com/oklog/ulid/v2/cmd/ulid@latest"
-  toolchains:
-    rustup:
-      channel: "stable"
-    node:
-      ensure: "lts"
-    python:
-      provider: "uv"
-  bootstrap:
-    - "fzf-keybindings"
-    - "python-links"
-    - "nvim-plug"
-config:
-  mkdir:
-    - ~/.config/nvim/
-    - ~/.config/tmux/
-  symbolic_links:
-    - from:
-        relative_path: "e2e/vimrc.ci"
-      to:
-        absolute_path: "~/.config/nvim/init.vim"
-    - from:
-        relative_path: ".editorconfig"
-      to:
-        absolute_path: "~/.editorconfig"
-    - from:
-        relative_path: "starship.toml"
-      to:
-        absolute_path: "~/.config/starship.toml"
-  dockutil:
-    _before:
-      reset: false
-      removeAll: false
-    add: []
+schema_version: 2
+require:
+- id: "brew-formula:jq"
+  label: "jq"
+- id: "brew-formula:fd"
+  label: "fd"
+- id: "brew-formula:fzf"
+  label: "fzf"
+  hooks:
+    post-install: |
+      set -e
+      if [ ! -e "$HOME/.fzf.zsh" ]; then
+        prefix="$(brew --prefix)"
+        { echo y; echo y; echo y; } | "$prefix/opt/fzf/install" --no-update-rc >/dev/null
+      fi
+- id: "brew-formula:fnm"
+  label: "fnm"
+  hooks:
+    post-install: |
+      set -e
+      fnm install --lts >/dev/null
+      fnm default lts-latest >/dev/null
+- id: "brew-formula:uv"
+  label: "uv"
+  hooks:
+    post-install: |
+      set -e
+      uv python install >/dev/null
+      py="$(uv python find)"
+      [ -n "$py" ] || exit 1
+      d="$(dirname "$py")"
+      mkdir -p "$HOME/.local/bin"
+      ln -sfn "$d/python3" "$HOME/.local/bin/python"
+      ln -sfn "$d/python3" "$HOME/.local/bin/python3"
+      if [ -e "$d/pip3" ]; then
+        ln -sfn "$d/pip3" "$HOME/.local/bin/pip"
+        ln -sfn "$d/pip3" "$HOME/.local/bin/pip3"
+      fi
+- id: "brew-formula:go"
+  label: "go"
+- id: "brew-formula:dockutil"
+  label: "dockutil"
+- id: "brew-formula:mas"
+  label: "mas"
+- id: "brew-formula:neovim"
+  label: "neovim"
+  hooks:
+    post-install: |
+      set -e
+      mkdir -p "$HOME/.config/nvim"
+      ln -sfn "$DOTFILES_DIR/e2e/vimrc.ci" "$HOME/.config/nvim/init.vim"
+      ln -sfn "$DOTFILES_DIR/.editorconfig" "$HOME/.editorconfig"
+      mkdir -p "$HOME/.config"
+      ln -sfn "$DOTFILES_DIR/starship.toml" "$HOME/.config/starship.toml"
+      plug="$HOME/.local/share/nvim/site/autoload/plug.vim"
+      if [ ! -e "$plug" ]; then
+        mkdir -p "$(dirname "$plug")"
+        curl -fsSLo "$plug" https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim >/dev/null
+      fi
+      nvim --headless '+PlugInstall --sync' +qa >/dev/null
+- id: "custom:rustup"
+  hooks:
+    post-install: |
+      set -e
+      if [ ! -x "$HOME/.cargo/bin/rustup" ]; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile default >/dev/null
+      fi
+    pre-update: |
+      rustup update
+    pre-uninstall: |
+      rustup self uninstall -y
+- id: "brew-formula:ruby"
+  label: "ruby"
+- id: "brew-cask:caffeine"
+  label: "caffeine"
+- id: "pip:pynvim"
+  label: "pynvim"
+- id: "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
+  label: "github.com/oklog/ulid/v2/cmd/ulid"
+- id: "gem:neovim"
+  label: "neovim"
+  requires:
+  - "brew-formula:ruby"
+- id: "npm:prettier"
+  label: "prettier"
+execution:
+  max_jobs: 0
+  locks:
+    go: 2

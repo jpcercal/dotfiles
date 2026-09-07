@@ -28,7 +28,7 @@ fn sync_sandbox_completes_all_jobs() {
     );
     assert!(stdout.contains("sync: done"), "{}", stdout);
     // All default jobs ran, in order
-    let positions: Vec<Option<usize>> = ["bootstrap", "install", "apply", "prefs", "history"]
+    let positions: Vec<Option<usize>> = ["bootstrap", "install", "prefs", "history"]
         .iter()
         .map(|j| stdout.find(j))
         .collect();
@@ -43,12 +43,50 @@ fn sync_sandbox_completes_all_jobs() {
         "jobs out of order: {}",
         stdout
     );
+    // Every post-install hook in apps.yaml must have executed (recorded as
+    // `sh -c <snippet>` in the sandbox calls log) — full-manifest wiring
+    // proof through the real binary: no hook silently dropped by the graph.
+    let root = stdout
+        .lines()
+        .find_map(|l| l.strip_prefix("sandbox root: "))
+        .expect("sandbox root in output");
+    let log =
+        std::fs::read_to_string(std::path::Path::new(root).join("calls.log")).expect("calls.log");
+    let apps = std::fs::read_to_string(repo_root().join("apps.yaml")).expect("read apps.yaml");
+    let manifest = dotfiles_manifest::parse_manifest(&apps).expect("parse apps.yaml");
+    let mut hooks = vec![];
+    for e in &manifest.require {
+        if let Some(h) = e.hooks() {
+            if let Some(s) = &h.post_install {
+                hooks.push((e.id().to_string(), s.clone()));
+            }
+        }
+    }
+    assert!(!hooks.is_empty(), "no hooks found in apps.yaml");
+    // Line-set matching, not verbatim substrings: the parallel scheduler
+    // runs hooks concurrently and their multi-line `sh -c` records interleave
+    // in the log. Interleaving scrambles line order, never line content, so
+    // every non-empty snippet line must appear as a full log line (minus the
+    // `sh -c ` prefix the stub prepends to each invocation's first line).
+    let log_lines: std::collections::HashSet<&str> = log
+        .lines()
+        .map(str::trim_end)
+        .map(|l| l.strip_prefix("sh -c ").unwrap_or(l))
+        .collect();
+    for (id, snippet) in &hooks {
+        for line in snippet.lines().map(str::trim_end).filter(|l| !l.is_empty()) {
+            assert!(
+                log_lines.contains(line),
+                "hook line for {id} never executed in sandbox sync: {line}"
+            );
+        }
+    }
 }
 
 #[test]
 fn sync_sandbox_skip_honored() {
     let out = Command::new(env!("CARGO_BIN_EXE_dotfiles"))
-        .args(["sync", "--sandbox", "--skip", "install,apply,prefs"])
+        .args(["sync", "--sandbox", "--skip", "install,prefs"])
         .env("DOTFILES_DIR", repo_root())
         .env("ATUIN_SESSION", "e2e-test")
         .output()
@@ -76,8 +114,8 @@ fn doctor_is_non_fatal_output() {
 /// The zero-shell gate: after the migration the repository must contain no
 /// shell/JXA automation scripts and no Makefile. Shell scripts generated at
 /// runtime (test stubs, askpass wrapper) live outside the repo and are exempt.
-/// Dotfile *configs* (.zshrc, .zshenv, .zprofile) are data synced by `apply`,
-/// not automation, and are exempt too.
+/// Dotfile *configs* (.zshrc, .zshenv, .zprofile) are data consumed by
+/// install hooks, not automation, and are exempt too.
 #[test]
 fn repo_contains_no_shell_scripts_or_makefile() {
     let out = Command::new("git")

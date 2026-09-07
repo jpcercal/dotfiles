@@ -18,17 +18,22 @@
 //! | Cargo         | `cargo:ripgrep`                                    | `cargo`    |
 //! | Go module     | `go:github.com/oklog/ulid/v2/cmd/ulid@latest`      | `go`       |
 //! | Composer      | `composer:vendor/pkg`                              | `composer` |
-//! | Toolchain     | `toolchain:rustup` / `node` / `python`             | `toolchain`|
-//! | Bootstrap     | `bootstrap:nvim-plug`                              | `bootstrap`|
+//! | Custom        | `custom:rustup`                                    | `custom`   |
 //!
 //! All Homebrew traffic shares the `brew` lock class (limit 1 — concurrent
 //! `brew` invocations are unsupported by Homebrew); every other prefix is its
 //! own lock class, so cross-ecosystem installs run in parallel.
+//!
+//! Language toolchains converge via hooks rather than a typed `toolchain:`
+//! section: node LTS via the `brew-formula:fnm` post-install hook, python via
+//! the `brew-formula:uv` post-install hook, and rustup via the `custom:rustup`
+//! entry's hooks. Implicit edges therefore point `npm:` → `brew-formula:fnm`
+//! and `pip:` → `brew-formula:uv` directly.
 
 use crate::apps::Manifest;
 use std::collections::BTreeSet;
 
-/// Every known unit-ID prefix.
+/// Every known unit-ID prefix (canonical forms).
 pub const UNIT_PREFIXES: &[&str] = &[
     "brew-formula",
     "brew-cask",
@@ -40,27 +45,115 @@ pub const UNIT_PREFIXES: &[&str] = &[
     "cargo",
     "go",
     "composer",
-    "toolchain",
-    "bootstrap",
+    "custom",
 ];
 
-/// Lock (resource) classes addressable from `install.execution.locks`.
+/// Lock (resource) classes addressable from `execution.locks`.
 pub const LOCK_CLASSES: &[&str] = &[
-    "brew",
-    "mas",
-    "gem",
-    "npm",
-    "pip",
-    "cargo",
-    "go",
-    "composer",
-    "toolchain",
-    "bootstrap",
+    "brew", "mas", "gem", "npm", "pip", "cargo", "go", "composer", "custom",
 ];
 
-/// Split `prefix:name` on the first colon. Returns `None` for malformed IDs
-/// or unknown prefixes.
-pub fn split_unit_id(id: &str) -> Option<(&str, &str)> {
+/// Whether this prefix supports `@version` pinning in the id sugar.
+fn is_pin_capable(prefix: &str) -> bool {
+    matches!(prefix, "npm" | "pip" | "gem" | "cargo" | "go" | "composer")
+}
+
+/// Canonicalize a prefix alias to its canonical form.
+pub fn canonical_prefix(prefix: &str) -> &str {
+    let lower = prefix.trim().to_ascii_lowercase();
+    match lower.as_str() {
+        "tap" => "brew-tap",
+        "formula" | "brew" | "homebrew" => "brew-formula",
+        "cask" => "brew-cask",
+        _ => {
+            // Return original if it matches canonical case-insensitively, else raw
+            for &canon in UNIT_PREFIXES {
+                if canon.eq_ignore_ascii_case(&lower) {
+                    return canon;
+                }
+            }
+            // Unknown — return as-is, validation will reject it
+            // Use leaked static? Instead return input's lower? But we need &'static.
+            // Fallback: treat as-is (store lower). We handle via owned string helpers.
+            // For split_unit_id we return owned canonical via helper below.
+            // This function is only used for canonical constants; unknown stays.
+            // We can't return dynamic &str as &'static, so we return input prefix
+            // when unknown. Caller must map via owned string variant.
+            // For simplicity, return the original prefix (unknown case).
+            // This arm only hit for known prefixes; unknown returned as original.
+            prefix
+        }
+    }
+}
+
+/// Owned canonical prefix — handles the static/dynamic mismatch.
+fn canonical_prefix_owned(prefix: &str) -> String {
+    let lower = prefix.trim().to_ascii_lowercase();
+    match lower.as_str() {
+        "tap" => "brew-tap".to_string(),
+        "formula" | "brew" | "homebrew" => "brew-formula".to_string(),
+        "cask" => "brew-cask".to_string(),
+        _ => {
+            for &canon in UNIT_PREFIXES {
+                if canon.eq_ignore_ascii_case(&lower) {
+                    return canon.to_string();
+                }
+            }
+            prefix.to_string()
+        }
+    }
+}
+
+/// Parse an id into (canonical_prefix, bare_name_without_version, Option<version>).
+/// For pin-capable drivers the trailing `@version` is stripped (`latest` treated as no pin).
+fn parse_id(id: &str) -> Option<(String, String, Option<String>)> {
+    let (raw_prefix, raw_name) = id.split_once(':')?;
+    if raw_prefix.is_empty() || raw_name.is_empty() {
+        return None;
+    }
+    let prefix = canonical_prefix_owned(raw_prefix);
+    if !UNIT_PREFIXES.contains(&prefix.as_str()) {
+        return None;
+    }
+    if raw_name.is_empty() {
+        return None;
+    }
+    if is_pin_capable(&prefix) {
+        // Split at last '@' for version sugar.
+        if let Some(at) = raw_name.rfind('@') {
+            let ver = &raw_name[at + 1..];
+            let base = &raw_name[..at];
+            if !base.is_empty() && !ver.is_empty() && ver != "latest" {
+                return Some((prefix, base.to_string(), Some(ver.to_string())));
+            } else if ver == "latest" {
+                // `latest` is not a pin; keep bare base for unit identity
+                if !base.is_empty() {
+                    return Some((prefix, base.to_string(), None));
+                }
+            }
+            // If base empty (e.g. "@scope/pkg" scoped npm) then '@' at 0 is part of name,
+            // not a version separator — fall through to no-version.
+            if base.is_empty() {
+                // e.g. id "npm:@scope/pkg@1.0" -> raw_name "@scope/pkg@1.0"
+                // rfind gives at=10? Actually "@scope/pkg@1.0": last @ at 10, base "@scope/pkg", ver "1.0"
+                // That's valid: base is "@scope/pkg" not empty, so we handled above.
+                // Only case where base empty is id like "npm:@1.0" which is invalid name anyway.
+            }
+        }
+    }
+    Some((prefix, raw_name.to_string(), None))
+}
+
+/// Split `prefix:name` on the first colon, canonicalizing prefix aliases.
+/// Returns `None` for malformed IDs or unknown prefixes.
+/// The returned name is bare (version suffix stripped for pin-capable drivers).
+pub fn split_unit_id(id: &str) -> Option<(String, String)> {
+    parse_id(id).map(|(p, n, _)| (p, n))
+}
+
+/// Backward compat for previous API returning &str; prefer `split_unit_id` which now returns owned strings.
+/// This wrapper keeps old call sites that matched on &str working via owned conversion.
+pub fn split_unit_id_legacy(id: &str) -> Option<(&str, &str)> {
     let (prefix, name) = id.split_once(':')?;
     if prefix.is_empty() || name.is_empty() {
         return None;
@@ -68,9 +161,26 @@ pub fn split_unit_id(id: &str) -> Option<(&str, &str)> {
     UNIT_PREFIXES.contains(&prefix).then_some((prefix, name))
 }
 
+/// Extract version suffix from an id if present (pin-capable drivers only).
+/// Handles both `id: "npm:prettier@3"` sugar and explicit `version:` field via caller.
+pub fn extract_version_from_id(id: &str) -> Option<String> {
+    parse_id(id).and_then(|(_, _, v)| v)
+}
+
+/// Normalized unit ID (canonical prefix + bare name, no version).
+pub fn normalize_unit_id(id: &str) -> Option<String> {
+    parse_id(id).map(|(p, n, _)| format!("{p}:{n}"))
+}
+
+/// Bare name without version and prefix.
+pub fn bare_name_from_id(id: &str) -> Option<String> {
+    parse_id(id).map(|(_, n, _)| n)
+}
+
 /// Lock (resource) class for a unit prefix.
 pub fn lock_class_for(prefix: &str) -> &'static str {
-    match prefix {
+    let canon = canonical_prefix(prefix);
+    match canon {
         "brew-formula" | "brew-cask" | "brew-tap" => "brew",
         "mas" => "mas",
         "gem" => "gem",
@@ -79,13 +189,12 @@ pub fn lock_class_for(prefix: &str) -> &'static str {
         "cargo" => "cargo",
         "go" => "go",
         "composer" => "composer",
-        "toolchain" => "toolchain",
-        "bootstrap" => "bootstrap",
+        "custom" => "custom",
         _ => "default",
     }
 }
 
-/// Custom lock-class names (`PkgDetail.lock`, `install.execution.locks` keys)
+/// Custom lock-class names (`RequireDetail.lock`, `execution.locks` keys)
 /// must be lowercase slug-shaped.
 pub fn is_valid_lock_name(s: &str) -> bool {
     !s.is_empty()
@@ -98,41 +207,19 @@ pub fn is_valid_lock_name(s: &str) -> bool {
 /// `dotfiles-backends::graph`).
 pub fn unit_ids(m: &Manifest) -> BTreeSet<String> {
     let mut ids = BTreeSet::new();
-    for tap in &m.install.brew.taps {
-        ids.insert(format!("brew-tap:{tap}"));
-    }
-    for f in &m.install.brew.formulas {
-        ids.insert(format!("brew-formula:{}", f.name()));
-    }
-    for c in &m.install.brew.casks {
-        ids.insert(format!("brew-cask:{}", c.name()));
-    }
-    for g in &m.install.gem.rubygems {
-        ids.insert(format!("gem:{}", g.name()));
-    }
-    for p in &m.install.npm.global.packages {
-        ids.insert(format!("npm:{}", p.name()));
-    }
-    for p in &m.install.pip.packages {
-        ids.insert(format!("pip:{}", p.name()));
-    }
-    for p in &m.install.go.packages {
-        ids.insert(format!("go:{}", p.name()));
-    }
-    for a in &m.install.mas.apps {
-        ids.insert(format!("mas:{}", a.id));
-    }
-    if m.install.toolchains.rustup.is_some() {
-        ids.insert("toolchain:rustup".to_string());
-    }
-    if m.install.toolchains.node.is_some() {
-        ids.insert("toolchain:node".to_string());
-    }
-    if m.install.toolchains.python.is_some() {
-        ids.insert("toolchain:python".to_string());
-    }
-    for step in &m.install.bootstrap {
-        ids.insert(format!("bootstrap:{step}"));
+    for e in &m.require {
+        if let Some(norm) = normalize_unit_id(e.id()) {
+            ids.insert(norm);
+        } else {
+            // If normalization fails (invalid prefix), insert raw canonical attempt
+            // so validation can report it; but still insert something.
+            // Actually for unknown prefix we want validation to catch it, but we
+            // still need deterministic set for graph validation. Use raw id.
+            if let Some((p, n)) = e.id().split_once(':') {
+                let canon = canonical_prefix_owned(p);
+                ids.insert(format!("{canon}:{n}"));
+            }
+        }
     }
     ids
 }
@@ -141,67 +228,78 @@ pub fn unit_ids(m: &Manifest) -> BTreeSet<String> {
 /// Sources are validated to be declared units by the caller.
 pub fn explicit_edges(m: &Manifest) -> Vec<(String, String)> {
     let mut edges = vec![];
-    let mut push = |source: String, reqs: &[String]| {
-        for target in reqs {
-            edges.push((source.clone(), target.clone()));
+    for e in &m.require {
+        let source = match normalize_unit_id(e.id()) {
+            Some(n) => n,
+            None => {
+                // Fallback raw with alias canonicalization for validation path
+                if let Some((p, n)) = e.id().split_once(':') {
+                    format!("{}:{}", canonical_prefix_owned(p), n)
+                } else {
+                    e.id().to_string()
+                }
+            }
+        };
+        for target in e.requires() {
+            // Normalize target aliases as well (requires may use aliases)
+            let norm_target = normalize_unit_id(target).unwrap_or_else(|| {
+                if let Some((p, n)) = target.split_once(':') {
+                    format!("{}:{}", canonical_prefix_owned(p), n)
+                } else {
+                    target.clone()
+                }
+            });
+            edges.push((source.clone(), norm_target));
         }
-    };
-    for f in &m.install.brew.formulas {
-        push(format!("brew-formula:{}", f.name()), f.requires());
-    }
-    for c in &m.install.brew.casks {
-        push(format!("brew-cask:{}", c.name()), c.requires());
-    }
-    for g in &m.install.gem.rubygems {
-        push(format!("gem:{}", g.name()), g.requires());
-    }
-    for p in &m.install.npm.global.packages {
-        push(format!("npm:{}", p.name()), p.requires());
-    }
-    for p in &m.install.pip.packages {
-        push(format!("pip:{}", p.name()), p.requires());
-    }
-    for p in &m.install.go.packages {
-        push(format!("go:{}", p.name()), p.requires());
-    }
-    for a in &m.install.mas.apps {
-        push(format!("mas:{}", a.id), &a.requires);
     }
     edges
 }
 
 fn has_formula(m: &Manifest, name: &str) -> bool {
-    m.install.brew.formulas.iter().any(|f| f.name() == name)
+    m.require.iter().any(|e| {
+        if let Some((p, n)) = split_unit_id(e.id()) {
+            p == "brew-formula" && n == name
+        } else {
+            false
+        }
+    })
 }
 
 /// Implicit (built-in) requirements for a unit ID, derived from tool
-/// realities (fnm/uv/fzf/git/rtk ship via brew, npm needs node, pip needs the
-/// uv python, …). Only references *declared* units — anything undeclared is a
-/// runtime concern (today's bail/skip behavior), never a graph edge.
+/// realities (fnm/uv ship via brew, npm needs node, pip needs the uv python, …).
+/// Only references *declared* units — anything undeclared is a runtime concern
+/// (today's bail/skip behavior), never a graph edge.
 /// Explicit `requires:` are unioned with these by callers.
 pub fn implicit_requires(id: &str, m: &Manifest) -> Vec<String> {
     let taps: Vec<String> = m
-        .install
-        .brew
-        .taps
+        .require
         .iter()
-        .map(|t| format!("brew-tap:{t}"))
+        .filter_map(|e| {
+            let (p, n) = split_unit_id(e.id())?;
+            if p == "brew-tap" {
+                Some(format!("brew-tap:{n}"))
+            } else {
+                None
+            }
+        })
         .collect();
-    let Some((prefix, name)) = split_unit_id(id) else {
+    let Some((prefix, _name)) = split_unit_id(id) else {
         return vec![];
     };
-    match prefix {
+    match prefix.as_str() {
         "brew-formula" | "brew-cask" => taps,
         "npm" => {
-            if m.install.toolchains.node.is_some() {
-                vec!["toolchain:node".to_string()]
+            // npm needs node; node converges via the fnm post-install hook.
+            if has_formula(m, "fnm") {
+                vec!["brew-formula:fnm".to_string()]
             } else {
                 vec![]
             }
         }
         "pip" => {
-            if m.install.toolchains.python.is_some() {
-                vec!["toolchain:python".to_string()]
+            // pip needs python; python converges via the uv post-install hook.
+            if has_formula(m, "uv") {
+                vec!["brew-formula:uv".to_string()]
             } else {
                 vec![]
             }
@@ -213,63 +311,8 @@ pub fn implicit_requires(id: &str, m: &Manifest) -> Vec<String> {
                 vec![]
             }
         }
-        "toolchain" => match name {
-            // fnm / uv ship via Homebrew; rustup self-downloads.
-            "node" => {
-                if has_formula(m, "fnm") {
-                    vec!["brew-formula:fnm".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "python" => {
-                if has_formula(m, "uv") {
-                    vec!["brew-formula:uv".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            _ => vec![],
-        },
-        "bootstrap" => match name {
-            "fzf-keybindings" => {
-                if has_formula(m, "fzf") {
-                    vec!["brew-formula:fzf".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "git-lfs" => {
-                if has_formula(m, "git") {
-                    vec!["brew-formula:git".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "python-links" => {
-                if m.install.toolchains.python.is_some() {
-                    vec!["toolchain:python".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "rtk-patch" => {
-                if has_formula(m, "rtk") {
-                    vec!["brew-formula:rtk".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            "claude-mem" => {
-                if m.install.toolchains.node.is_some() {
-                    vec!["toolchain:node".to_string()]
-                } else {
-                    vec![]
-                }
-            }
-            // nvim-plug (curl) and opencode (remote installer) need no tools.
-            _ => vec![],
-        },
+        // Custom units are pure hook carriers; they take no implicit edges.
+        "custom" => vec![],
         _ => vec![],
     }
 }

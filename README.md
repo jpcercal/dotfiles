@@ -1,11 +1,12 @@
 # dotfiles
 
 A universal **macOS** package & configuration manager — one Rust binary that
-plays the role of `apt`, `brew`, `mas`, `composer`, `cargo`, `npm`, `pip`,
-`go install`, Ansible-style configuration, and macOS preference management in
-a single, idempotent, testable tool. No shell scripts anywhere: everything is
-Rust, driven by two declarative manifests (`apps.yaml`, `prefs.yaml`) validated
-against generated JSON Schemas (`schema/`).
+ plays the role of `apt`, `brew`, `mas`, `composer`, `cargo`, `npm`, `pip`,
+ `go install`, Ansible-style configuration, and macOS preference management in
+ a single, idempotent, testable tool. No shell scripts as files: everything is
+ Rust, driven by two declarative manifests (`apps.yaml`, `prefs.yaml`) validated
+ against generated JSON Schemas (`schema/`). Lifecycle hook snippets are `sh -c`
+ through the exec seam.
 
 ## Install the binary
 
@@ -22,7 +23,7 @@ dotfiles info brew:ripgrep         # package info (brew:/cask:/mas:/gem:/npm:/pi
 dotfiles list --installed          # per backend; or --outdated
 dotfiles install                   # everything declared in apps.yaml (parallel DAG engine; --jobs N/--sequential)
 dotfiles install cask:iterm2 mas:1352778147
-dotfiles remove brew:git
+dotfiles uninstall brew:git
 dotfiles update                    # refresh indexes (brew update, …)
 dotfiles upgrade                   # upgrade all backends (has --gate/--headless/--dry-run/GUI)
 ```
@@ -30,9 +31,9 @@ dotfiles upgrade                   # upgrade all backends (has --gate/--headless
 ## The full pipeline (used to be `make`)
 
 ```bash
-dotfiles sync                      # bootstrap → install → apply → prefs → history
+dotfiles sync                      # bootstrap → install → prefs → history
 dotfiles sync --skip prefs,history
-dotfiles sync --only apply
+dotfiles sync --only install
 dotfiles sync --sandbox            # full E2E + stub tools + temp HOME (zero real effects)
 ```
 
@@ -40,8 +41,7 @@ Individual jobs are also commands:
 
 ```bash
 dotfiles bootstrap                 # install Homebrew + taps
-dotfiles install                   # apps from apps.yaml (idempotent)
-dotfiles apply                     # dirs, symlinks (.bkp backups), dock, shell, nvim plugins
+dotfiles install                   # apps from apps.yaml (idempotent; runs config hooks)
 dotfiles prefs apply|diff|validate # ~190 declarative macOS preferences (defaults/pmset/dock/login items)
 dotfiles history seed              # seed atuin history from commands.yaml
 dotfiles software-update           # macOS updates (manual only, reboots!)
@@ -67,11 +67,14 @@ listed, never auto-installed.
 
 ## Manifests
 
-- **`apps.yaml`** — packages (brew taps/formulas/casks, gem, npm, pip/uv, go,
-  mas), toolchains (rustup/node/python), typed bootstrap steps, plus config
-  (`mkdir`, `symbolic_links`, `dockutil`). Package entries may declare
-  `requires:` dependency edges (`brew-formula:php` style unit IDs) executed by
-  the parallel install engine (`install.execution` tunes workers/locks).
+- **`apps.yaml`** — packages via `require` (`brew-formula:`, `brew-cask:`,
+  `brew-tap:`, `mas:` with `label:`, `gem:`, `npm:`, `pip:`, `cargo:`, `go:`,
+  `custom:`), language toolchains (rustup via `custom:rustup` hooks, node via
+  `fnm` post-install hook, python via `uv` post-install hook). Each entry may carry
+  `requires:` edges, `version:` pins (npm/pip/gem/cargo/go), and `hooks:`
+  lifecycle snippets (`pre-install`, `post-install`, `pre-update`, `pre-uninstall`, etc.) executed via `sh -c`.
+  Filesystem config (dirs, symlinks, dock) is declarative `post-install` hooks
+  on the owning packages (`zsh`, `git`, `nvim`, `dockutil`, casks, MAS apps).
   Validated with [# yaml-language-server](schema/apps.schema.json).
 - **`prefs.yaml`** — ~190 declarative macOS preferences: typed `defaults`
   entries (bool/int/float/string/array/dict, `current_host`, `sudo`,

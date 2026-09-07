@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn seed_skips_when_db_absent() {
         let t = dotfiles_testkit::TestEnv::new();
-        t.write("dotfiles/apps.yaml", "install: {}\n");
+        t.write("dotfiles/apps.yaml", "---\n");
         t.write("dotfiles/commands.yaml", "git:\n  description: git\n  commands:\n    - { description: d, command: git status }\n");
         let ctx = Ctx::sandbox(t.root(), false).unwrap();
         seed(&ctx).unwrap(); // no sqlite3 call, no error
@@ -130,7 +130,7 @@ mod tests {
     #[test]
     fn seed_writes_normalized_commands_via_sqlite3() {
         let t = dotfiles_testkit::TestEnv::new();
-        t.write("dotfiles/apps.yaml", "install: {}\n");
+        t.write("dotfiles/apps.yaml", "---\n");
         t.write("dotfiles/commands.yaml", "git:\n  description: git\n  commands:\n    - description: d\n      command: |\n        git   log\n          --oneline\n");
         t.write("home/.local/share/atuin/history.db", "");
         // capture stdin

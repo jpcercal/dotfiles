@@ -1,391 +1,540 @@
 # yaml-language-server: $schema=./schema/apps.schema.json
 ---
-schema_version: 1
-install:
-  # Parallel execution tuning for the dependency-graph engine: worker count
-  # (0 = number of CPUs) + per lock-class concurrency. `brew` is capped at 1
-  # (concurrent `brew` invocations are unsupported by Homebrew); every other
-  # ecosystem installs in parallel with it.
-  execution:
-    max_jobs: 0
-    locks:
-      brew: 1
-      mas: 4
-      go: 4
-  brew:
-    taps:
-      - "anomalyco/tap"
-      - "aws/tap"
-      - "hashicorp/tap"
-    formulas:
-      - "act"
-      - "aircrack-ng"
-      - "asciinema"
-      - "atuin"
-      - "automake"
-      - "awscli"
-      - "bash-completion"
-      - "bash"
-      - "bat"
-      - "composer"
-      - "coreutils"
-      - "dockutil"
-      - "doctl"
-      - "eza"
-      - "fd"
-      - "fdupes"
-      - "ffmpeg"
-      - "findutils"
-      - "fnm"
-      - "fswatch"
-      - "fzf"
-      - "gdrive"
-      - "gh"
-      - "git-delta"
-      - "git-lfs"
-      - "git"
-      - "gmp"
-      - "gnu-sed"
-      - "golangci-lint"
-      - "httpie"
-      - "exiftool"
-      - "go"
-      - "nmap"
-      - "terraform"
-      - "howdoi"
-      - "hr"
-      - "htmlq"
-      - "htop"
-      - "imagemagick"
-      - "jq"
-      - "kubectx"
-      - "links"
-      - "lynx"
-      - "mas"
-      - "moreutils"
-      - "neovim"
-      - "openssh"
-      - "php"
-      # Detailed entries declare dependency-graph edges: these tools run on
-      # the Homebrew php, so they install only after `brew-formula:php`.
-      - name: "php-code-sniffer"
-        requires: ["brew-formula:php"]
-      - name: "php-cs-fixer"
-        requires: ["brew-formula:php"]
-      - name: "phpstan"
-        requires: ["brew-formula:php"]
-      - "rclone"
-      - "ripgrep"
-      - "rsync"
-      - "rtk"
-      - "screen"
-      - "sops"
-      - "starship"
-      - "taskwarrior-tui"
-      - "terminal-notifier"
-      - "tealdeer"
-      - "tmux"
-      - "tpm"
-      - "tree"
-      - "trivy"
-      - "unison"
-      - "universal-ctags"
-      - "uv"
-      - "vim"
-      - "watch"
-      - "watchexec"
-      - "watchman"
-      - "wget"
-      - "yarn"
-      - "you-get"
-      - "yq"
-      - "zsh-autosuggestions"
-      - "zsh-completions"
-      - "zsh-syntax-highlighting"
-      - "zsh"
-    casks: 
-      - "alfred"
-      - "appcleaner"
-      - "brave-browser"
-      - "caffeine"
-      - "discord"
-      - "displaylink"
-      - "docker-desktop"
-      - "firefox"
-      - "font-3270-nerd-font"
-      - "font-agave-nerd-font"
-      - "font-anonymice-nerd-font"
-      - "font-arimo-nerd-font"
-      - "font-aurulent-sans-mono-nerd-font"
-      - "font-bigblue-terminal-nerd-font"
-      - "font-bitstream-vera-sans-mono-nerd-font"
-      - "font-blex-mono-nerd-font"
-      - "font-caskaydia-cove-nerd-font"
-      - "font-code-new-roman-nerd-font"
-      - "font-cousine-nerd-font"
-      - "font-daddy-time-mono-nerd-font"
-      - "font-dejavu-sans-mono-nerd-font"
-      - "font-droid-sans-mono-nerd-font"
-      - "font-fantasque-sans-mono-nerd-font"
-      - "font-fira-code-nerd-font"
-      - "font-fira-mono-nerd-font"
-      - "font-go-mono-nerd-font"
-      - "font-gohufont-nerd-font"
-      - "font-hack-nerd-font"
-      - "font-hasklug-nerd-font"
-      - "font-heavy-data-nerd-font"
-      - "font-hurmit-nerd-font"
-      - "font-im-writing-nerd-font"
-      - "font-inconsolata-go-nerd-font"
-      - "font-inconsolata-lgc-nerd-font"
-      - "font-inconsolata-nerd-font"
-      - "font-iosevka-nerd-font"
-      - "font-jetbrains-mono-nerd-font"
-      - "font-lekton-nerd-font"
-      - "font-liberation-nerd-font"
-      - "font-meslo-lg-nerd-font"
-      - "font-monofur-nerd-font"
-      - "font-monoid-nerd-font"
-      - "font-mononoki-nerd-font"
-      - "font-noto-nerd-font"
-      - "font-opendyslexic-nerd-font"
-      - "font-overpass-nerd-font"
-      - "font-profont-nerd-font"
-      - "font-proggy-clean-tt-nerd-font"
-      - "font-roboto-mono-nerd-font"
-      - "font-sauce-code-pro-nerd-font"
-      - "font-shure-tech-mono-nerd-font"
-      - "font-space-mono-nerd-font"
-      - "font-terminess-ttf-nerd-font"
-      - "font-tinos-nerd-font"
-      - "font-ubuntu-mono-nerd-font"
-      - "font-ubuntu-nerd-font"
-      - "font-victor-mono-nerd-font"
-      - "google-chrome"
-      - "hoppscotch"
-      - "iterm2"
-      - "jetbrains-toolbox"
-      - "microsoft-teams"
-      - "mysqlworkbench"
-      - "nordvpn"
-      - "oracle-jdk"
-      - "pocket-casts"
-      - "shottr"
-      - "slack"
-      - "steam"
-      - "sublime-text"
-      - "teamviewer"
-      - "visual-studio-code"
-      - "vlc"
-      - "whatsapp"
-      - "zoom"
-  pip:
-    packages:
-      - "pynvim"
-      - "neovim"
-  go:
-    packages:
-      - "github.com/oklog/ulid/v2/cmd/ulid@latest"
-  toolchains:
-    rustup:
-      channel: "stable"
-    node:
-      ensure: "lts"
-    python:
-      provider: "uv"
-  bootstrap:
-    - "fzf-keybindings"
-    - "git-lfs"
-    - "python-links"
-    - "nvim-plug"
-    - "opencode"
-    - "rtk-patch"
-    - "claude-mem"
-  gem:
-    rubygems:
-      - "neovim"
-  npm:
-    global:
-      packages:
-        - "neovim"
-        - "prettier"
-  mas:
-    apps:    
-      - id: "1018301773"
-        name: "AdBlock Pro" 
-      - id: "918858936" 
-        name: "Airmail" 
-      - id: "1352778147"
-        name: "Bitwarden" 
-      - id: "935235287" 
-        name: "Encrypto" 
-      - id: "975937182" 
-        name: "Fantastical 2" 
-      - id: "682658836" 
-        name: "GarageBand" 
-      - id: "668208984" 
-        name: "Giphy Capture" 
-      - id: "775737590" 
-        name: "iA Writer" 
-      - id: "408981434" 
-        name: "iMovie" 
-      - id: "361285480" 
-        name: "Keynote" 
-      - id: "302584613"
-        name: "Kindle"
-      - id: "441258766" 
-        name: "Magnet" 
-      - id: "1575588022"
-        name: "MenubarX" 
-      - id: "1295203466"
-        name: "Microsoft Remote Desktop" 
-      - id: "361304891" 
-        name: "Numbers" 
-      - id: "361309726" 
-        name: "Pages" 
-      - id: "1153157709"
-        name: "Speedtest" 
-      - id: "1278508951"
-        name: "Trello" 
-      - id: "1607635845"
-        name: "Velja"
-      - id: "533696630" 
-        name: "Webcam Settings" 
-config:
-  mkdir: 
-    - ~/.config/
-    - ~/.config/nvim/
-    - ~/.config/tmux/
-    - ~/.config/opencode/
-    - ~/.config/opencode/skills/
-    - ~/Library/Application Support/rtk/
-  symbolic_links:  
-    - from: 
-        relative_path: ".curlrc"
-      to: 
-        absolute_path: "~/.curlrc"
-
-    - from: 
-        relative_path: ".editorconfig"
-      to: 
-        absolute_path: "~/.editorconfig"
-
-    - from: 
-        relative_path: ".gitconfig"
-      to: 
-        absolute_path: "~/.gitconfig"
-
-    - from: 
-        relative_path: ".gitignore_global"
-      to: 
-        absolute_path: "~/.gitignore_global"
-
-    - from: 
-        relative_path: ".netrc"
-      to: 
-        absolute_path: "~/.netrc"
-
-    - from: 
-        relative_path: ".vimrc"
-      to: 
-        absolute_path: "~/.config/nvim/init.vim"
-
-    - from: 
-        relative_path: ".vimrc"
-      to: 
-        absolute_path: "~/.vimrc"
-
-    - from: 
-        relative_path: ".zshrc"
-      to: 
-        absolute_path: "~/.zshrc"
-
-    - from: 
-        relative_path: ".zprofile"
-      to: 
-        absolute_path: "~/.zprofile"
-
-    - from: 
-        relative_path: ".zshenv"
-      to: 
-        absolute_path: "~/.zshenv"
-
-    - from: 
-        relative_path: "opencode/AGENTS.md"
-      to: 
-        absolute_path: "~/.config/opencode/AGENTS.md"
-
-    - from: 
-        relative_path: "opencode/opencode.json"
-      to: 
-        absolute_path: "~/.config/opencode/opencode.json"
-
-    - from: 
-        relative_path: "opencode/opencode.jsonc"
-      to: 
-        absolute_path: "~/.config/opencode/opencode.jsonc"
-
-    - from: 
-        relative_path: "opencode/skills/builder"
-      to: 
-        absolute_path: "~/.config/opencode/skills/builder"
-
-    - from: 
-        relative_path: "rtk/config.toml"
-      to: 
-        absolute_path: "~/Library/Application Support/rtk/config.toml"
-
-    - from: 
-        relative_path: "rtk/filters.toml"
-      to: 
-        absolute_path: "~/Library/Application Support/rtk/filters.toml"
-
-    - from: 
-        relative_path: "starship.toml"
-      to: 
-        absolute_path: "~/.config/starship.toml"
-
-    - from: 
-        relative_path: "tmux.conf"
-      to: 
-        absolute_path: "~/.config/tmux/tmux.conf"
-  dockutil:
-    _before:
-      reset: true
-      removeAll: true
-    add:
-      - app: "/System/Applications/Launchpad.app"   
-        after: "Finder"
-
-      - app: "/Applications/Brave Browser.app"      
-        after: "Finder"
-
-      - app: "/Applications/Airmail.app"      
-        after: "Finder"
-
-      - app: "/System/Applications/Reminders.app"   
-        after: "Finder"
-
-      - app: "/System/Applications/Music.app"       
-        after: "Finder"
-
-      - app: "/Applications/iTerm.app"              
-        after: "Finder"
-
-      - app: "/Applications/Visual Studio Code.app" 
-        after: "Finder"
-
-      - app: "/Applications/iA Writer.app"          
-        after: "Finder"
-
-      - app: "/Applications/Trello.app"             
-        after: "Finder"
-
-      - app: "/Applications/Fantastical.app"        
-        after: "Finder"
-
-      - app: "/Applications/Slack.app"              
-        after: "Finder"
-
-      - app: "/Applications/WhatsApp.app"           
-        after: "Finder"
+schema_version: 2
+require:
+- id: "brew-tap:anomalyco/tap"
+  label: "anomalyco/tap"
+- id: "brew-tap:aws/tap"
+  label: "aws/tap"
+- id: "brew-tap:hashicorp/tap"
+  label: "hashicorp/tap"
+- id: "custom:rustup"
+  hooks:
+    post-install: |
+      set -e
+      if [ ! -x "$HOME/.cargo/bin/rustup" ]; then
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile default >/dev/null
+      fi
+    pre-update: |
+      rustup update
+    pre-uninstall: |
+      rustup self uninstall -y
+- id: "brew-formula:act"
+  label: "act"
+- id: "brew-formula:aircrack-ng"
+  label: "aircrack-ng"
+- id: "brew-formula:asciinema"
+  label: "asciinema"
+- id: "brew-formula:atuin"
+  label: "atuin"
+- id: "brew-formula:automake"
+  label: "automake"
+- id: "brew-formula:awscli"
+  label: "awscli"
+- id: "brew-formula:bash-completion"
+  label: "bash-completion"
+- id: "brew-formula:bash"
+  label: "bash"
+- id: "brew-formula:bat"
+  label: "bat"
+- id: "brew-formula:composer"
+  label: "composer"
+- id: "brew-formula:coreutils"
+  label: "coreutils"
+- id: "brew-formula:dockutil"
+  label: "dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/System/Applications/Launchpad.app" --after Finder >/dev/null
+      dockutil --add "/System/Applications/Reminders.app" --after Finder >/dev/null
+      dockutil --add "/System/Applications/Music.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "brew-formula:doctl"
+  label: "doctl"
+- id: "brew-formula:eza"
+  label: "eza"
+- id: "brew-formula:fd"
+  label: "fd"
+- id: "brew-formula:fdupes"
+  label: "fdupes"
+- id: "brew-formula:ffmpeg"
+  label: "ffmpeg"
+- id: "brew-formula:findutils"
+  label: "findutils"
+- id: "brew-formula:fnm"
+  label: "fnm"
+  hooks:
+    post-install: |
+      set -e
+      fnm install --lts >/dev/null
+      fnm default lts-latest >/dev/null
+      npx claude-mem install --ide opencode --provider openrouter >/dev/null
+- id: "brew-formula:fswatch"
+  label: "fswatch"
+- id: "brew-formula:fzf"
+  label: "fzf"
+  hooks:
+    post-install: |
+      set -e
+      if [ ! -e "$HOME/.fzf.zsh" ]; then
+        prefix="$(brew --prefix)"
+        { echo y; echo y; echo y; } | "$prefix/opt/fzf/install" --no-update-rc >/dev/null
+      fi
+- id: "brew-formula:gdrive"
+  label: "gdrive"
+- id: "brew-formula:gh"
+  label: "gh"
+- id: "brew-formula:git-delta"
+  label: "git-delta"
+- id: "brew-formula:git-lfs"
+  label: "git-lfs"
+  requires:
+  - "brew-formula:git"
+  hooks:
+    post-install: |
+      git lfs install >/dev/null
+- id: "brew-formula:git"
+  label: "git"
+  hooks:
+    post-install: |
+      set -e
+      ln -sfn "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+      ln -sfn "$DOTFILES_DIR/.gitignore_global" "$HOME/.gitignore_global"
+      ln -sfn "$DOTFILES_DIR/.editorconfig" "$HOME/.editorconfig"
+- id: "brew-formula:gmp"
+  label: "gmp"
+- id: "brew-formula:gnu-sed"
+  label: "gnu-sed"
+- id: "brew-formula:golangci-lint"
+  label: "golangci-lint"
+- id: "brew-formula:httpie"
+  label: "httpie"
+- id: "brew-formula:exiftool"
+  label: "exiftool"
+- id: "brew-formula:go"
+  label: "go"
+- id: "brew-formula:nmap"
+  label: "nmap"
+- id: "brew-formula:terraform"
+  label: "terraform"
+- id: "brew-formula:howdoi"
+  label: "howdoi"
+- id: "brew-formula:hr"
+  label: "hr"
+- id: "brew-formula:htmlq"
+  label: "htmlq"
+- id: "brew-formula:htop"
+  label: "htop"
+- id: "brew-formula:imagemagick"
+  label: "imagemagick"
+- id: "brew-formula:jq"
+  label: "jq"
+- id: "brew-formula:kubectx"
+  label: "kubectx"
+- id: "brew-formula:links"
+  label: "links"
+- id: "brew-formula:lynx"
+  label: "lynx"
+- id: "brew-formula:mas"
+  label: "mas"
+- id: "brew-formula:moreutils"
+  label: "moreutils"
+- id: "brew-formula:neovim"
+  label: "neovim"
+  hooks:
+    post-install: |
+      set -e
+      mkdir -p "$HOME/.config/nvim"
+      ln -sfn "$DOTFILES_DIR/.vimrc" "$HOME/.config/nvim/init.vim"
+      plug="$HOME/.local/share/nvim/site/autoload/plug.vim"
+      if [ ! -e "$plug" ]; then
+        mkdir -p "$(dirname "$plug")"
+        curl -fsSLo "$plug" https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim >/dev/null
+      fi
+      nvim --headless '+PlugInstall --sync' +qa >/dev/null
+- id: "brew-formula:anomalyco/tap/opencode"
+  label: "opencode"
+  hooks:
+    post-install: |
+      set -e
+      mkdir -p "$HOME/.config/opencode/skills"
+      ln -sfn "$DOTFILES_DIR/opencode/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
+      ln -sfn "$DOTFILES_DIR/opencode/opencode.json" "$HOME/.config/opencode/opencode.json"
+      ln -sfn "$DOTFILES_DIR/opencode/opencode.jsonc" "$HOME/.config/opencode/opencode.jsonc"
+      ln -sfn "$DOTFILES_DIR/opencode/skills/builder" "$HOME/.config/opencode/skills/builder"
+- id: "brew-formula:openssh"
+  label: "openssh"
+- id: "brew-formula:php"
+  label: "php"
+- id: "brew-formula:rclone"
+  label: "rclone"
+- id: "brew-formula:ripgrep"
+  label: "ripgrep"
+- id: "brew-formula:rsync"
+  label: "rsync"
+- id: "brew-formula:rtk"
+  label: "rtk"
+  hooks:
+    post-install: |
+      set -e
+      mkdir -p "$HOME/Library/Application Support/rtk"
+      ln -sfn "$DOTFILES_DIR/rtk/config.toml" "$HOME/Library/Application Support/rtk/config.toml"
+      ln -sfn "$DOTFILES_DIR/rtk/filters.toml" "$HOME/Library/Application Support/rtk/filters.toml"
+      rtk init -g --opencode --auto-patch >/dev/null
+- id: "brew-formula:screen"
+  label: "screen"
+- id: "brew-formula:sops"
+  label: "sops"
+- id: "brew-formula:starship"
+  label: "starship"
+  hooks:
+    post-install: |
+      set -e
+      mkdir -p "$HOME/.config"
+      ln -sfn "$DOTFILES_DIR/starship.toml" "$HOME/.config/starship.toml"
+- id: "brew-formula:taskwarrior-tui"
+  label: "taskwarrior-tui"
+- id: "brew-formula:terminal-notifier"
+  label: "terminal-notifier"
+- id: "brew-formula:tealdeer"
+  label: "tealdeer"
+- id: "brew-formula:tmux"
+  label: "tmux"
+  hooks:
+    post-install: |
+      set -e
+      mkdir -p "$HOME/.config/tmux"
+      ln -sfn "$DOTFILES_DIR/tmux.conf" "$HOME/.config/tmux/tmux.conf"
+- id: "brew-formula:tpm"
+  label: "tpm"
+- id: "brew-formula:tree"
+  label: "tree"
+- id: "brew-formula:trivy"
+  label: "trivy"
+- id: "brew-formula:unison"
+  label: "unison"
+- id: "brew-formula:universal-ctags"
+  label: "universal-ctags"
+- id: "brew-formula:uv"
+  label: "uv"
+  hooks:
+    post-install: |
+      set -e
+      uv python install >/dev/null
+      py="$(uv python find)"
+      [ -n "$py" ] || exit 1
+      d="$(dirname "$py")"
+      mkdir -p "$HOME/.local/bin"
+      ln -sfn "$d/python3" "$HOME/.local/bin/python"
+      ln -sfn "$d/python3" "$HOME/.local/bin/python3"
+      if [ -e "$d/pip3" ]; then
+        ln -sfn "$d/pip3" "$HOME/.local/bin/pip"
+        ln -sfn "$d/pip3" "$HOME/.local/bin/pip3"
+      fi
+- id: "brew-formula:vim"
+  label: "vim"
+  hooks:
+    post-install: |
+      ln -sfn "$DOTFILES_DIR/.vimrc" "$HOME/.vimrc"
+- id: "brew-formula:watch"
+  label: "watch"
+- id: "brew-formula:watchexec"
+  label: "watchexec"
+- id: "brew-formula:watchman"
+  label: "watchman"
+- id: "brew-formula:wget"
+  label: "wget"
+- id: "brew-formula:yarn"
+  label: "yarn"
+- id: "brew-formula:you-get"
+  label: "you-get"
+- id: "brew-formula:yq"
+  label: "yq"
+- id: "brew-formula:zsh-autosuggestions"
+  label: "zsh-autosuggestions"
+- id: "brew-formula:zsh-completions"
+  label: "zsh-completions"
+- id: "brew-formula:zsh-syntax-highlighting"
+  label: "zsh-syntax-highlighting"
+- id: "brew-formula:zsh"
+  label: "zsh"
+  hooks:
+    post-install: |
+      set -e
+      mkdir -p "$HOME/.config"
+      ln -sfn "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
+      ln -sfn "$DOTFILES_DIR/.zprofile" "$HOME/.zprofile"
+      ln -sfn "$DOTFILES_DIR/.zshenv" "$HOME/.zshenv"
+      ln -sfn "$DOTFILES_DIR/.curlrc" "$HOME/.curlrc"
+      ln -sfn "$DOTFILES_DIR/.netrc" "$HOME/.netrc"
+      prefix="$(brew --prefix)"
+      current="$(dscl . -read "/Users/$USER" UserShell | awk '{print $2}')"
+      if [ "$current" != "$prefix/bin/zsh" ]; then sudo dscl . -create "/Users/$USER" UserShell "$prefix/bin/zsh"; fi
+- id: "brew-cask:alfred"
+  label: "alfred"
+- id: "brew-cask:appcleaner"
+  label: "appcleaner"
+- id: "brew-cask:brave-browser"
+  label: "brave-browser"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/Brave Browser.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "brew-cask:caffeine"
+  label: "caffeine"
+- id: "brew-cask:discord"
+  label: "discord"
+- id: "brew-cask:displaylink"
+  label: "displaylink"
+- id: "brew-cask:docker-desktop"
+  label: "docker-desktop"
+- id: "brew-cask:firefox"
+  label: "firefox"
+- id: "brew-cask:font-3270-nerd-font"
+  label: "font-3270-nerd-font"
+- id: "brew-cask:font-agave-nerd-font"
+  label: "font-agave-nerd-font"
+- id: "brew-cask:font-anonymice-nerd-font"
+  label: "font-anonymice-nerd-font"
+- id: "brew-cask:font-arimo-nerd-font"
+  label: "font-arimo-nerd-font"
+- id: "brew-cask:font-aurulent-sans-mono-nerd-font"
+  label: "font-aurulent-sans-mono-nerd-font"
+- id: "brew-cask:font-bigblue-terminal-nerd-font"
+  label: "font-bigblue-terminal-nerd-font"
+- id: "brew-cask:font-bitstream-vera-sans-mono-nerd-font"
+  label: "font-bitstream-vera-sans-mono-nerd-font"
+- id: "brew-cask:font-blex-mono-nerd-font"
+  label: "font-blex-mono-nerd-font"
+- id: "brew-cask:font-caskaydia-cove-nerd-font"
+  label: "font-caskaydia-cove-nerd-font"
+- id: "brew-cask:font-code-new-roman-nerd-font"
+  label: "font-code-new-roman-nerd-font"
+- id: "brew-cask:font-cousine-nerd-font"
+  label: "font-cousine-nerd-font"
+- id: "brew-cask:font-daddy-time-mono-nerd-font"
+  label: "font-daddy-time-mono-nerd-font"
+- id: "brew-cask:font-dejavu-sans-mono-nerd-font"
+  label: "font-dejavu-sans-mono-nerd-font"
+- id: "brew-cask:font-droid-sans-mono-nerd-font"
+  label: "font-droid-sans-mono-nerd-font"
+- id: "brew-cask:font-fantasque-sans-mono-nerd-font"
+  label: "font-fantasque-sans-mono-nerd-font"
+- id: "brew-cask:font-fira-code-nerd-font"
+  label: "font-fira-code-nerd-font"
+- id: "brew-cask:font-fira-mono-nerd-font"
+  label: "font-fira-mono-nerd-font"
+- id: "brew-cask:font-go-mono-nerd-font"
+  label: "font-go-mono-nerd-font"
+- id: "brew-cask:font-gohufont-nerd-font"
+  label: "font-gohufont-nerd-font"
+- id: "brew-cask:font-hack-nerd-font"
+  label: "font-hack-nerd-font"
+- id: "brew-cask:font-hasklug-nerd-font"
+  label: "font-hasklug-nerd-font"
+- id: "brew-cask:font-heavy-data-nerd-font"
+  label: "font-heavy-data-nerd-font"
+- id: "brew-cask:font-hurmit-nerd-font"
+  label: "font-hurmit-nerd-font"
+- id: "brew-cask:font-im-writing-nerd-font"
+  label: "font-im-writing-nerd-font"
+- id: "brew-cask:font-inconsolata-go-nerd-font"
+  label: "font-inconsolata-go-nerd-font"
+- id: "brew-cask:font-inconsolata-lgc-nerd-font"
+  label: "font-inconsolata-lgc-nerd-font"
+- id: "brew-cask:font-inconsolata-nerd-font"
+  label: "font-inconsolata-nerd-font"
+- id: "brew-cask:font-iosevka-nerd-font"
+  label: "font-iosevka-nerd-font"
+- id: "brew-cask:font-jetbrains-mono-nerd-font"
+  label: "font-jetbrains-mono-nerd-font"
+- id: "brew-cask:font-lekton-nerd-font"
+  label: "font-lekton-nerd-font"
+- id: "brew-cask:font-liberation-nerd-font"
+  label: "font-liberation-nerd-font"
+- id: "brew-cask:font-meslo-lg-nerd-font"
+  label: "font-meslo-lg-nerd-font"
+- id: "brew-cask:font-monofur-nerd-font"
+  label: "font-monofur-nerd-font"
+- id: "brew-cask:font-monoid-nerd-font"
+  label: "font-monoid-nerd-font"
+- id: "brew-cask:font-mononoki-nerd-font"
+  label: "font-mononoki-nerd-font"
+- id: "brew-cask:font-noto-nerd-font"
+  label: "font-noto-nerd-font"
+- id: "brew-cask:font-opendyslexic-nerd-font"
+  label: "font-opendyslexic-nerd-font"
+- id: "brew-cask:font-overpass-nerd-font"
+  label: "font-overpass-nerd-font"
+- id: "brew-cask:font-profont-nerd-font"
+  label: "font-profont-nerd-font"
+- id: "brew-cask:font-proggy-clean-tt-nerd-font"
+  label: "font-proggy-clean-tt-nerd-font"
+- id: "brew-cask:font-roboto-mono-nerd-font"
+  label: "font-roboto-mono-nerd-font"
+- id: "brew-cask:font-sauce-code-pro-nerd-font"
+  label: "font-sauce-code-pro-nerd-font"
+- id: "brew-cask:font-shure-tech-mono-nerd-font"
+  label: "font-shure-tech-mono-nerd-font"
+- id: "brew-cask:font-space-mono-nerd-font"
+  label: "font-space-mono-nerd-font"
+- id: "brew-cask:font-terminess-ttf-nerd-font"
+  label: "font-terminess-ttf-nerd-font"
+- id: "brew-cask:font-tinos-nerd-font"
+  label: "font-tinos-nerd-font"
+- id: "brew-cask:font-ubuntu-mono-nerd-font"
+  label: "font-ubuntu-mono-nerd-font"
+- id: "brew-cask:font-ubuntu-nerd-font"
+  label: "font-ubuntu-nerd-font"
+- id: "brew-cask:font-victor-mono-nerd-font"
+  label: "font-victor-mono-nerd-font"
+- id: "brew-cask:google-chrome"
+  label: "google-chrome"
+- id: "brew-cask:hoppscotch"
+  label: "hoppscotch"
+- id: "brew-cask:iterm2"
+  label: "iterm2"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/iTerm.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "brew-cask:jetbrains-toolbox"
+  label: "jetbrains-toolbox"
+- id: "brew-cask:microsoft-teams"
+  label: "microsoft-teams"
+- id: "brew-cask:mysqlworkbench"
+  label: "mysqlworkbench"
+- id: "brew-cask:nordvpn"
+  label: "nordvpn"
+- id: "brew-cask:opencode-desktop"
+  label: "opencode-desktop"
+- id: "brew-cask:oracle-jdk"
+  label: "oracle-jdk"
+- id: "brew-cask:pocket-casts"
+  label: "pocket-casts"
+- id: "brew-cask:shottr"
+  label: "shottr"
+- id: "brew-cask:slack"
+  label: "slack"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/Slack.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "brew-cask:steam"
+  label: "steam"
+- id: "brew-cask:sublime-text"
+  label: "sublime-text"
+- id: "brew-cask:teamviewer"
+  label: "teamviewer"
+- id: "brew-cask:visual-studio-code"
+  label: "visual-studio-code"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/Visual Studio Code.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "brew-cask:vlc"
+  label: "vlc"
+- id: "brew-cask:whatsapp"
+  label: "whatsapp"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/WhatsApp.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "brew-cask:zoom"
+  label: "zoom"
+- id: "pip:pynvim"
+  label: "pynvim"
+- id: "go:github.com/oklog/ulid/v2/cmd/ulid@latest"
+  label: "github.com/oklog/ulid/v2/cmd/ulid"
+- id: "npm:prettier"
+  label: "prettier"
+- id: "mas:1018301773"
+  label: "AdBlock Pro"
+- id: "mas:918858936"
+  label: "Airmail"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/Airmail.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "mas:1352778147"
+  label: "Bitwarden"
+- id: "mas:935235287"
+  label: "Encrypto"
+- id: "mas:975937182"
+  label: "Fantastical 2"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/Fantastical.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "mas:682658836"
+  label: "GarageBand"
+- id: "mas:668208984"
+  label: "Giphy Capture"
+- id: "mas:775737590"
+  label: "iA Writer"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/iA Writer.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "mas:408981434"
+  label: "iMovie"
+- id: "mas:361285480"
+  label: "Keynote"
+- id: "mas:302584613"
+  label: "Kindle"
+- id: "mas:441258766"
+  label: "Magnet"
+- id: "mas:1575588022"
+  label: "MenubarX"
+- id: "mas:1295203466"
+  label: "Microsoft Remote Desktop"
+- id: "mas:361304891"
+  label: "Numbers"
+- id: "mas:361309726"
+  label: "Pages"
+- id: "mas:1153157709"
+  label: "Speedtest"
+- id: "mas:1278508951"
+  label: "Trello"
+  requires:
+  - "brew-formula:dockutil"
+  hooks:
+    post-install: |
+      set -e
+      dockutil --add "/Applications/Trello.app" --after Finder >/dev/null
+      killall Dock >/dev/null
+- id: "mas:1607635845"
+  label: "Velja"
+- id: "mas:533696630"
+  label: "Webcam Settings"
+execution:
+  max_jobs: 0
+  locks:
+    brew: 1
+    mas: 4
+    go: 4

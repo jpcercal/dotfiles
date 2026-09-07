@@ -40,7 +40,7 @@ impl PackageBackend for Npm {
         Ok(out)
     }
 
-    fn remove(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
+    fn uninstall(&self, env: &ExecEnv, pkgs: &[String]) -> Result<BackendOutcome> {
         let installed = self.list_installed(env)?;
         let (todo, absent) = util::filter_absent(&installed, pkgs);
         let mut out = util::run_batch(env, "npm", "uninstall", &["-g"], &todo, "npm")?;
@@ -149,7 +149,7 @@ mod tests {
         );
         let env = t.exec().clone();
         let out = Npm
-            .remove(&env, &["neovim".into(), "prettier".into()])
+            .uninstall(&env, &["neovim".into(), "prettier".into()])
             .unwrap();
         assert_eq!(out.changed, vec!["neovim"]);
         assert_eq!(out.unchanged, vec!["prettier"]);

@@ -171,7 +171,7 @@ mod tests {
             "dotfiles/launchd/com.jpcercal.dotfiles.updater.rust.plist",
             "<string>__HOME__/.local/bin/dotfiles</string>",
         );
-        t.write("dotfiles/apps.yaml", "install: {}\n");
+        t.write("dotfiles/apps.yaml", "---\n");
         t.stub_ok("launchctl", "");
         let ctx = Ctx::sandbox(t.root(), false).unwrap();
         install(&ctx).unwrap();

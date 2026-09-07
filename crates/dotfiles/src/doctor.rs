@@ -65,13 +65,18 @@ fn run_diagnosis(ctx: &Ctx) -> Result<()> {
         critical: true,
         status: if manifest.is_ok() { "ok" } else { "fail" },
         detail: match &manifest {
-            Ok(m) => format!(
-                "{} formulas, {} casks, {} mas apps, {} links",
-                m.install.brew.formulas.len(),
-                m.install.brew.casks.len(),
-                m.install.mas.apps.len(),
-                m.config.symbolic_links.len()
-            ),
+            Ok(m) => {
+                let total = m.require.len();
+                let custom_count = m
+                    .require
+                    .iter()
+                    .filter(|e| {
+                        dotfiles_manifest::units::split_unit_id(e.id())
+                            .is_some_and(|(p, _)| p == "custom")
+                    })
+                    .count();
+                format!("{} packages, {} custom steps", total, custom_count)
+            }
             Err(e) => e.to_string(),
         },
     });
@@ -84,7 +89,7 @@ fn run_diagnosis(ctx: &Ctx) -> Result<()> {
         detail: if local_bin.is_dir() {
             "exists".into()
         } else {
-            "missing — will be created by `dotfiles apply`".into()
+            "missing — will be created by install hooks".into()
         },
     });
 

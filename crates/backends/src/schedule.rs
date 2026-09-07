@@ -13,7 +13,7 @@ use dotfiles_exec::ExecEnv;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Condvar, Mutex};
 
-/// Scheduler tuning (defaults come from `install.execution` in apps.yaml;
+/// Scheduler tuning (defaults come from `execution` in apps.yaml;
 /// `--jobs` / `--sequential` override on the CLI).
 #[derive(Debug, Clone, Default)]
 pub struct SchedOpts {
@@ -36,7 +36,7 @@ pub fn effective_jobs(opts: &SchedOpts) -> usize {
 
 /// Concurrency limit for a lock class. `brew` is hard-capped at 1
 /// (concurrent `brew` invocations are unsupported by Homebrew); everything
-/// else defaults to 1 and is tunable via `install.execution.locks`.
+/// else defaults to 1 and is tunable via `execution.locks`.
 pub fn lock_limit(opts: &SchedOpts, class: &str) -> usize {
     if class == "brew" {
         return 1;
@@ -209,6 +209,8 @@ mod tests {
             packages: vec![id.into()],
             requires: requires.iter().map(|s| s.to_string()).collect(),
             lock: lock.into(),
+            version: None,
+            hooks: None,
         }
     }
 

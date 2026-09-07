@@ -22,7 +22,19 @@ pub fn run(ctx: &Ctx, args: BootstrapArgs) -> Result<()> {
         brew_update_with_retries(ctx)?;
     }
     let m = ctx.manifest()?;
-    let outcome = ensure_taps(&ctx.env, &m.install.brew.taps)?;
+    let taps: Vec<String> = m
+        .require
+        .iter()
+        .filter_map(|e| {
+            let (p, n) = dotfiles_manifest::units::split_unit_id(e.id())?;
+            if p == "brew-tap" {
+                Some(n)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let outcome = ensure_taps(&ctx.env, &taps)?;
     crate::pkg::print_outcome(&outcome);
     if !outcome.ok() {
         anyhow::bail!("tap setup failed");

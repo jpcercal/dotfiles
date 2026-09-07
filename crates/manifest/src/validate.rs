@@ -8,116 +8,133 @@ use std::collections::{BTreeMap, BTreeSet};
 pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
     let mut errors: Vec<String> = vec![];
 
-    dup_check_entries(
-        "install.brew.formulas",
-        &m.install.brew.formulas,
-        &mut errors,
-    );
-    dup_check_entries("install.brew.casks", &m.install.brew.casks, &mut errors);
-    dup_check("install.brew.taps", &m.install.brew.taps, &mut errors);
-    dup_check_entries("install.gem.rubygems", &m.install.gem.rubygems, &mut errors);
-    dup_check_entries(
-        "install.npm.global.packages",
-        &m.install.npm.global.packages,
-        &mut errors,
-    );
-    dup_check_entries("install.pip.packages", &m.install.pip.packages, &mut errors);
-    dup_check_entries("install.go.packages", &m.install.go.packages, &mut errors);
-
-    for step in &m.install.bootstrap {
-        if !crate::apps::KNOWN_BOOTSTRAP_STEPS.contains(&step.as_str()) {
-            errors.push(format!(
-                "install.bootstrap: unknown step '{}' (known: {})",
-                step,
-                crate::apps::KNOWN_BOOTSTRAP_STEPS.join(", ")
-            ));
+    // --- require list validation ---
+    let mut seen_ids = BTreeSet::new();
+    for entry in &m.require {
+        let raw_id = entry.id();
+        if raw_id.trim().is_empty() {
+            errors.push("require: empty id".to_string());
+            continue;
         }
-    }
-
-    if let Some(node) = &m.install.toolchains.node {
-        if node.ensure != "lts" {
-            errors.push(format!(
-                "install.toolchains.node.ensure: unsupported value '{}' (supported: lts)",
-                node.ensure
-            ));
-        }
-    }
-    if let Some(python) = &m.install.toolchains.python {
-        if python.provider != "uv" {
-            errors.push(format!(
-                "install.toolchains.python.provider: unsupported value '{}' (supported: uv)",
-                python.provider
-            ));
-        }
-    }
-
-    for tap in &m.install.brew.taps {
-        let parts: Vec<&str> = tap.split('/').collect();
-        let well_formed = parts.len() == 2
-            && parts.iter().all(|p| {
-                !p.is_empty()
-                    && p.chars()
-                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-            });
-        if !well_formed {
-            errors.push(format!(
-                "install.brew.taps: '{}' is not in owner/repo form",
-                tap
-            ));
-        }
-    }
-
-    let mut mas_ids = BTreeSet::new();
-    for app in &m.install.mas.apps {
-        if app.id.is_empty() || !app.id.chars().all(|c| c.is_ascii_digit()) {
-            errors.push(format!(
-                "install.mas.apps: id '{}' is not a numeric App Store id",
-                app.id
-            ));
-        }
-        if !mas_ids.insert(app.id.clone()) {
-            errors.push(format!("install.mas.apps: duplicate id {}", app.id));
-        }
-        if app.name.trim().is_empty() {
-            errors.push(format!("install.mas.apps: id {} has an empty name", app.id));
-        }
-    }
-
-    for cmd in &m.install.brew.custom_commands {
-        if cmd.trim().is_empty() {
-            errors.push("install.brew.customCommands: empty command".to_string());
-        }
-    }
-
-    for link in &m.config.symbolic_links {
-        if link.from.relative_path.trim().is_empty() {
-            errors.push("config.symbolic_links: empty from.relative_path".to_string());
-        }
-        if link.from.relative_path.starts_with('/') {
-            errors.push(format!(
-                "config.symbolic_links: from.relative_path '{}' must be relative",
-                link.from.relative_path
-            ));
-        }
-        if link.to.absolute_path.trim().is_empty() {
-            errors.push("config.symbolic_links: empty to.absolute_path".to_string());
-        }
-    }
-
-    for entry in &m.config.dockutil.add {
-        if !entry.app.starts_with('/') || !entry.app.ends_with(".app") {
-            errors.push(format!(
-                "config.dockutil.add: app '{}' must be an absolute .app path",
-                entry.app
-            ));
-        }
-        if let Some(after) = &entry.after {
-            if after.trim().is_empty() {
+        // Parse and canonicalize; check prefix validity
+        let parsed = units::split_unit_id(raw_id);
+        if parsed.is_none() {
+            // Try to give better error: check if colon missing vs unknown prefix
+            if !raw_id.contains(':') {
                 errors.push(format!(
-                    "config.dockutil.add: entry '{}' has an empty 'after'",
-                    entry.app
+                    "require: '{}' is not a valid unit ID (expected 'prefix:name')",
+                    raw_id
+                ));
+            } else {
+                let (pref, _) = raw_id.split_once(':').unwrap();
+                let canon = units::canonical_prefix(pref);
+                if !units::UNIT_PREFIXES.contains(&canon) {
+                    errors.push(format!(
+                        "require: '{}' has unknown unit prefix '{}' (known: {})",
+                        raw_id,
+                        pref,
+                        units::UNIT_PREFIXES.join(", ")
+                    ));
+                } else {
+                    errors.push(format!("require: '{}' is not a valid unit ID", raw_id));
+                }
+            }
+            continue;
+        }
+        let (prefix, bare_name) = parsed.unwrap();
+        // bare_name checks
+        if bare_name.trim().is_empty() {
+            errors.push(format!("require: '{}' has empty name", raw_id));
+        }
+        // Normalized duplicate check
+        let norm = units::normalize_unit_id(raw_id).unwrap_or_else(|| raw_id.to_string());
+        if !seen_ids.insert(norm.clone()) {
+            errors.push(format!("require: duplicate entry '{}'", norm));
+        }
+
+        // MAS specific
+        if prefix == "mas" {
+            if bare_name.is_empty() || !bare_name.chars().all(|c| c.is_ascii_digit()) {
+                errors.push(format!(
+                    "require: mas id '{}' is not a numeric App Store id",
+                    bare_name
                 ));
             }
+            match entry.label() {
+                Some(l) if !l.trim().is_empty() => {}
+                _ => errors.push(format!(
+                    "require: mas:{} missing non-empty 'label'",
+                    bare_name
+                )),
+            }
+        }
+        // Label if present must be non-empty (allowed on any entry)
+        if let Some(l) = entry.label() {
+            if l.trim().is_empty() {
+                errors.push(format!("require: '{}' has empty label", raw_id));
+            }
+        }
+
+        // brew-tap shape
+        if prefix == "brew-tap" {
+            let parts: Vec<&str> = bare_name.split('/').collect();
+            let well_formed = parts.len() == 2
+                && parts.iter().all(|p| {
+                    !p.is_empty()
+                        && p.chars()
+                            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+                });
+            if !well_formed {
+                errors.push(format!(
+                    "require: tap '{}' is not in owner/repo form",
+                    bare_name
+                ));
+            }
+        }
+
+        // Version pin validation: hard error for non-pin-capable prefixes
+        let is_pinned = entry.is_pinned();
+        let pin_capable = matches!(
+            prefix.as_str(),
+            "npm" | "pip" | "gem" | "cargo" | "go" | "composer"
+        );
+        // brew-formula/cask/mas/brew-tap/custom must not be pinned.
+        // For brew-formula, `name@version` containing @ is actually part of name (e.g. node@20)
+        // — our parse treats brew-formula as not pin-capable, so extract_version returns None.
+        // But explicit `version:` field must still be rejected.
+        if entry.version().is_some() && !pin_capable {
+            errors.push(format!(
+                "require: '{}' has a 'version' pin but '{}' does not support version pinning (supported: npm, pip, gem, cargo, go)",
+                raw_id, prefix
+            ));
+        } else if is_pinned && !pin_capable {
+            // This would be via @ suffix sugar; for non-pin-capable we already treat @ as part of name,
+            // so is_pinned will be false. But keep check for explicit mapping.
+            errors.push(format!(
+                "require: '{}' is version-pinned but '{}' does not support pinning",
+                raw_id, prefix
+            ));
+        }
+        // For pin-capable, also validate version string shape not empty
+        if let Some(v) = entry.version() {
+            if v.trim().is_empty() {
+                errors.push(format!("require: '{}' has empty version", raw_id));
+            }
+        }
+        // Hooks only on package entries, not taps
+        if entry.has_hooks() && prefix == "brew-tap" {
+            errors.push(format!(
+                "require: '{}' has 'hooks' but '{}' entries do not support hooks",
+                raw_id, prefix
+            ));
+        }
+        // Custom steps carry no built-in logic — a hookless entry would
+        // silently do nothing, so hooks are required.
+        if prefix == "custom" && !entry.has_hooks() {
+            errors.push(format!(
+                "require: custom step '{}' carries no hooks (custom steps have no built-in install logic; attach hooks or remove the entry)",
+                bare_name
+            ));
         }
     }
 
@@ -132,13 +149,14 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
 
 /// Dependency-graph validation for the parallel execution engine:
 /// `requires:` targets must resolve to declared units, the combined
-/// explicit+implicit edge set must be acyclic, and `install.execution.locks`
+/// explicit+implicit edge set must be acyclic, and `execution.locks`
 /// must be well-formed (`brew` is capped at 1 — concurrent `brew`
 /// invocations are unsupported by Homebrew).
 fn validate_graph(m: &Manifest, errors: &mut Vec<String>) {
     let universe = units::unit_ids(m);
 
     for (source, target) in units::explicit_edges(m) {
+        // Normalize target for display? Keep as stored.
         match units::split_unit_id(&target) {
             None => errors.push(format!(
                 "graph: '{}' requires '{}': unknown unit prefix (known: {})",
@@ -206,67 +224,35 @@ fn validate_graph(m: &Manifest, errors: &mut Vec<String>) {
         }
     }
 
-    for (class, limit) in &m.install.execution.locks {
+    for (class, limit) in &m.execution.locks {
         if !units::is_valid_lock_name(class) {
             errors.push(format!(
-                "install.execution.locks: '{}' is not a valid lock-class name",
+                "execution.locks: '{}' is not a valid lock-class name",
                 class
             ));
         }
         if class == "brew" && *limit > 1 {
             errors.push(
-                "install.execution.locks: 'brew' is capped at 1 (concurrent `brew` invocations are unsupported)"
+                "execution.locks: 'brew' is capped at 1 (concurrent `brew` invocations are unsupported)"
                     .to_string(),
             );
         }
     }
 
-    for entries in [
-        &m.install.brew.formulas,
-        &m.install.brew.casks,
-        &m.install.gem.rubygems,
-        &m.install.npm.global.packages,
-        &m.install.pip.packages,
-        &m.install.go.packages,
-    ] {
-        for e in entries {
-            if let Some(lock) = e.lock() {
-                if !units::is_valid_lock_name(lock) {
-                    errors.push(format!(
-                        "graph: '{}' has an invalid lock name '{}'",
-                        e.name(),
-                        lock
-                    ));
-                }
-            }
-            for req in e.requires() {
-                if req.trim().is_empty() {
-                    errors.push(format!("graph: '{}' has an empty requires entry", e.name()));
-                }
+    for e in &m.require {
+        if let Some(lock) = e.lock() {
+            if !units::is_valid_lock_name(lock) {
+                errors.push(format!(
+                    "graph: '{}' has an invalid lock name '{}'",
+                    e.id(),
+                    lock
+                ));
             }
         }
-    }
-    for app in &m.install.mas.apps {
-        for req in &app.requires {
+        for req in e.requires() {
             if req.trim().is_empty() {
-                errors.push(format!("graph: mas:{} has an empty requires entry", app.id));
+                errors.push(format!("graph: '{}' has an empty requires entry", e.id()));
             }
-        }
-    }
-}
-
-fn dup_check_entries(field: &str, items: &[crate::apps::PkgEntry], errors: &mut Vec<String>) {
-    let names: Vec<String> = items.iter().map(|e| e.name().to_string()).collect();
-    dup_check(field, &names, errors);
-}
-
-fn dup_check(field: &str, items: &[String], errors: &mut Vec<String>) {
-    let mut seen = BTreeSet::new();
-    for item in items {
-        if item.trim().is_empty() {
-            errors.push(format!("{}: empty entry", field));
-        } else if !seen.insert(item.clone()) {
-            errors.push(format!("{}: duplicate entry '{}'", field, item));
         }
     }
 }

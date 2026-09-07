@@ -1,72 +1,32 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Manifest",
-  "description": "Root of `apps.yaml` — the declarative installation + configuration manifest.",
+  "description": "Root of `apps.yaml` — the declarative installation + configuration manifest.\n\n`require` and `execution` live at the root level (no `install:` wrapper). Language toolchains (rustup/node/python) converge via `post-install` hooks on their carrier formulae (`fnm`, `uv`) or `custom:` entries (`rustup`).",
   "type": "object",
   "properties": {
-    "config": {
+    "execution": {
+      "description": "Parallel execution tuning for the install phase (the DAG engine).",
       "default": {
-        "dockutil": {
-          "_before": {
-            "removeAll": false,
-            "reset": false
-          },
-          "add": []
-        },
-        "mkdir": [],
-        "symbolic_links": []
+        "locks": {},
+        "max_jobs": 0
       },
       "allOf": [
         {
-          "$ref": "#/definitions/Config"
+          "$ref": "#/definitions/Execution"
         }
       ]
     },
-    "install": {
-      "default": {
-        "bootstrap": [],
-        "brew": {
-          "casks": [],
-          "customCommands": [],
-          "formulas": [],
-          "taps": []
-        },
-        "execution": {
-          "locks": {},
-          "max_jobs": 0
-        },
-        "gem": {
-          "rubygems": []
-        },
-        "go": {
-          "packages": []
-        },
-        "mas": {
-          "apps": []
-        },
-        "npm": {
-          "global": {
-            "packages": []
-          }
-        },
-        "pip": {
-          "packages": []
-        },
-        "toolchains": {
-          "node": null,
-          "python": null,
-          "rustup": null
-        }
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/Install"
-        }
-      ]
+    "require": {
+      "description": "Unified package list: every installable item as `driver:name` with optional version, label, requires, lock, and lifecycle hooks.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RequireEntry"
+      }
     },
     "schema_version": {
       "description": "Manifest format version; bump + migrate on breaking changes.",
-      "default": 1,
+      "default": 2,
       "type": "integer",
       "format": "uint32",
       "minimum": 1.0
@@ -74,145 +34,12 @@
   },
   "additionalProperties": false,
   "definitions": {
-    "Brew": {
-      "type": "object",
-      "properties": {
-        "casks": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        },
-        "customCommands": {
-          "description": "DEPRECATED: transitional escape hatch for shell one-liners. Entries are migrated to typed backend/toolchain entries over time.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "formulas": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        },
-        "taps": {
-          "description": "Third-party taps in `owner/repo` form. Trusted automatically unless `homebrew/*`.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "minItems": 0
-        }
-      },
-      "additionalProperties": false
-    },
-    "Config": {
-      "type": "object",
-      "properties": {
-        "dockutil": {
-          "default": {
-            "_before": {
-              "removeAll": false,
-              "reset": false
-            },
-            "add": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Dockutil"
-            }
-          ]
-        },
-        "mkdir": {
-          "description": "Directories to create (supports `~`/`$HOME`).",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "symbolic_links": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/SymLink"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "DockBefore": {
-      "type": "object",
-      "properties": {
-        "removeAll": {
-          "description": "`dockutil --remove all` before adding.",
-          "default": false,
-          "type": "boolean"
-        },
-        "reset": {
-          "description": "`defaults delete com.apple.dock && killall Dock` before rebuilding.",
-          "default": false,
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "DockEntry": {
-      "type": "object",
-      "required": [
-        "app"
-      ],
-      "properties": {
-        "after": {
-          "description": "Dock item to position this entry after (e.g. \"Finder\").",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "app": {
-          "description": "Absolute path of the .app bundle.",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "Dockutil": {
-      "type": "object",
-      "properties": {
-        "_before": {
-          "description": "Destructive pre-steps applied before adding entries.",
-          "default": {
-            "removeAll": false,
-            "reset": false
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/DockBefore"
-            }
-          ]
-        },
-        "add": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/DockEntry"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
     "Execution": {
       "description": "Parallel execution tuning for the install phase. `apps.yaml` is the source of truth for the dependency graph; this section tunes the engine that executes it (worker count + per lock-class concurrency).",
       "type": "object",
       "properties": {
         "locks": {
-          "description": "Per lock-class concurrency overrides, e.g. `{ mas: 4, go: 4 }`. Keys are lock classes (`brew`, `mas`, `gem`, `npm`, `pip`, `cargo`, `go`, `composer`, `toolchain`, `bootstrap`); `brew` is capped at 1 (concurrent `brew` invocations are unsupported by Homebrew).",
+          "description": "Per lock-class concurrency overrides, e.g. `{ mas: 4, go: 4 }`. Keys are lock classes (`brew`, `mas`, `gem`, `npm`, `pip`, `cargo`, `go`, `composer`, `custom`); `brew` is capped at 1 (concurrent `brew` invocations are unsupported by Homebrew).",
           "default": {},
           "type": "object",
           "additionalProperties": {
@@ -231,261 +58,77 @@
       },
       "additionalProperties": false
     },
-    "Gem": {
+    "Hooks": {
+      "description": "Lifecycle hook snippets run via `sh -c` through the exec seam. Each field is a shell snippet (may be multi-line). `post-install` fires whenever the unit ends up present (newly installed or already installed, no failures) so config converges; pre hooks fire ahead of their action. `pre-update`/`post-update` fire during `dotfiles update`/`upgrade`; `pre-uninstall`/`post-uninstall` fire during `dotfiles uninstall`. Snippets must be idempotency-preserving.",
       "type": "object",
       "properties": {
-        "rubygems": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "GoPackages": {
-      "type": "object",
-      "properties": {
-        "packages": {
-          "description": "Module paths with version suffix, e.g. `github.com/oklog/ulid/v2/cmd/ulid@latest`.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "Install": {
-      "type": "object",
-      "properties": {
-        "bootstrap": {
-          "description": "Typed, idempotent setup steps (replacements for customCommands).",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "brew": {
-          "default": {
-            "casks": [],
-            "customCommands": [],
-            "formulas": [],
-            "taps": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Brew"
-            }
+        "post-install": {
+          "type": [
+            "string",
+            "null"
           ]
         },
-        "execution": {
-          "description": "Parallel execution tuning for the install phase (the DAG engine).",
-          "default": {
-            "locks": {},
-            "max_jobs": 0
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Execution"
-            }
+        "post-uninstall": {
+          "type": [
+            "string",
+            "null"
           ]
         },
-        "gem": {
-          "default": {
-            "rubygems": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Gem"
-            }
+        "post-update": {
+          "type": [
+            "string",
+            "null"
           ]
         },
-        "go": {
-          "default": {
-            "packages": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/GoPackages"
-            }
+        "pre-install": {
+          "type": [
+            "string",
+            "null"
           ]
         },
-        "mas": {
-          "default": {
-            "apps": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Mas"
-            }
+        "pre-uninstall": {
+          "type": [
+            "string",
+            "null"
           ]
         },
-        "npm": {
-          "default": {
-            "global": {
-              "packages": []
-            }
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Npm"
-            }
-          ]
-        },
-        "pip": {
-          "default": {
-            "packages": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Pip"
-            }
-          ]
-        },
-        "toolchains": {
-          "description": "Language toolchains to ensure (rustup/node/python).",
-          "default": {
-            "node": null,
-            "python": null,
-            "rustup": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Toolchains"
-            }
+        "pre-update": {
+          "type": [
+            "string",
+            "null"
           ]
         }
       },
       "additionalProperties": false
     },
-    "LinkFrom": {
+    "RequireDetail": {
       "type": "object",
       "required": [
-        "relative_path"
+        "id"
       ],
       "properties": {
-        "relative_path": {
-          "description": "Path relative to the dotfiles repo root.",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "LinkTo": {
-      "type": "object",
-      "required": [
-        "absolute_path"
-      ],
-      "properties": {
-        "absolute_path": {
-          "description": "Destination path (supports `~`/`$HOME`).",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "Mas": {
-      "type": "object",
-      "properties": {
-        "apps": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/MasApp"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "MasApp": {
-      "type": "object",
-      "required": [
-        "id",
-        "name"
-      ],
-      "properties": {
+        "hooks": {
+          "description": "Lifecycle hook snippets executed via `sh -c` through the exec seam.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Hooks"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "id": {
-          "description": "Numeric App Store product id (as string, mas takes strings).",
+          "description": "Canonical unit ID, e.g. `brew-formula:git`, `mas:1352778147`, `npm:prettier@3` (version suffix is sugar for the `version` field), `custom:rustup` (custom install hook carrier).",
           "type": "string"
         },
-        "name": {
-          "type": "string"
-        },
-        "requires": {
-          "description": "Unit IDs that must complete first, e.g. `[\"brew-formula:git\"]`. See `crate::units` for the canonical `<prefix>:<name>` namespace.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "NodeToolchain": {
-      "type": "object",
-      "properties": {
-        "ensure": {
-          "description": "Currently only `lts` (via fnm).",
-          "default": "lts",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "Npm": {
-      "type": "object",
-      "properties": {
-        "global": {
-          "default": {
-            "packages": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/NpmGlobal"
-            }
+        "label": {
+          "description": "Human label, required for `mas:` entries (App Store display name).",
+          "type": [
+            "string",
+            "null"
           ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "NpmGlobal": {
-      "type": "object",
-      "properties": {
-        "packages": {
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "Pip": {
-      "type": "object",
-      "properties": {
-        "packages": {
-          "description": "Packages installed into the uv-managed python.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/PkgEntry"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "PkgDetail": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
+        },
         "lock": {
           "description": "Resource-class override (default = the backend's own lock class).",
           "type": [
@@ -494,9 +137,6 @@
           ],
           "pattern": "^[a-z][a-z0-9-]*$"
         },
-        "name": {
-          "type": "string"
-        },
         "requires": {
           "description": "Unit IDs that must complete first, e.g. `[\"brew-formula:php\"]`. See `crate::units` for the canonical `<prefix>:<name>` namespace.",
           "default": [],
@@ -504,96 +144,27 @@
           "items": {
             "type": "string"
           }
+        },
+        "version": {
+          "description": "Explicit version pin (e.g. `\"3\"` for npm, `\"1.9.0\"` for gem). For `npm:`/`pip:`/`go:` the same pin can be written as `id: \"npm:prettier@3\"`.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
     },
-    "PkgEntry": {
-      "description": "A package list entry: either a bare name (`- \"git\"`) or a detailed form (`- { name: \"phpstan\", requires: [\"brew-formula:php\"] }`) that declares dependency-graph edges for the parallel execution engine. The detailed form splits the package out of its backend's batched install into its own schedulable unit.",
+    "RequireEntry": {
+      "description": "A single entry in `require`: either a bare unit ID string (`\"brew-formula:git\"`) or a detailed map with version / hooks / edges.",
       "anyOf": [
         {
           "type": "string"
         },
         {
-          "$ref": "#/definitions/PkgDetail"
+          "$ref": "#/definitions/RequireDetail"
         }
       ]
-    },
-    "PythonToolchain": {
-      "type": "object",
-      "properties": {
-        "provider": {
-          "description": "Currently only `uv`.",
-          "default": "uv",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "RustupToolchain": {
-      "type": "object",
-      "properties": {
-        "channel": {
-          "default": "stable",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "SymLink": {
-      "type": "object",
-      "required": [
-        "from",
-        "to"
-      ],
-      "properties": {
-        "from": {
-          "$ref": "#/definitions/LinkFrom"
-        },
-        "to": {
-          "$ref": "#/definitions/LinkTo"
-        }
-      },
-      "additionalProperties": false
-    },
-    "Toolchains": {
-      "type": "object",
-      "properties": {
-        "node": {
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/NodeToolchain"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "python": {
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PythonToolchain"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "rustup": {
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/RustupToolchain"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
     }
   }
 }

@@ -148,7 +148,7 @@ pub fn run_pipeline(paths: &Paths, opts: PipelineOptions) -> anyhow::Result<(Rep
 
     let mut steps: Vec<StepReport> = vec![];
 
-    let total_steps = 12;
+    let total_steps = 11;
 
     // helper to send StepStarted
     let send_started = |name: &str, idx: usize| {
@@ -578,101 +578,81 @@ pub fn run_pipeline(paths: &Paths, opts: PipelineOptions) -> anyhow::Result<(Rep
             &run_id,
         )
     } else {
-        let o = steps::run_step(
-            "rust",
-            "rustup",
-            &["update"],
-            &paths.log_dir,
-            &run_id,
-            &combined_log,
-            opts.event_tx.clone(),
-            opts.sudo_askpass.as_deref(),
-        );
-        if o.exit_code != 0 {
-            emit_step(
-                "rust",
-                "failed",
-                o.report.duration_seconds,
-                Value::Array(vec![]),
-                Value::Array(vec![]),
-                &format!("rustup exited {}", o.exit_code),
-                &run_id,
-            )
-        } else {
-            // check cargo install-update
-            let has_cargo_update = Command::new("cargo")
-                .args(["install-update", "--list"])
-                .output()
-                .map(|out| out.status.success())
-                .unwrap_or(false);
-            if has_cargo_update {
-                let cargo_log = paths.log_dir.join(format!("{}.rust-cargo.log", run_id));
-                let start = std::time::Instant::now();
-                let cargo_out = Command::new("cargo")
-                    .args(["install-update", "-a"])
-                    .output();
-                let dur = start.elapsed().as_secs() as i64;
-                match cargo_out {
-                    Ok(out) if out.status.success() => {
-                        let s = String::from_utf8_lossy(&out.stdout).to_string()
-                            + &String::from_utf8_lossy(&out.stderr);
-                        let _ = std::fs::write(&cargo_log, &s);
-                        let updated: Vec<Value> = s
-                            .lines()
-                            .filter(|l| l.contains("Updating "))
-                            .map(|l| {
-                                let name = l.split_whitespace().nth(1).unwrap_or("").to_string();
-                                serde_json::json!({"name": name})
-                            })
-                            .collect();
-                        emit_step(
-                            "rust",
-                            "success",
-                            dur,
-                            Value::Array(updated),
-                            Value::Array(vec![]),
-                            "",
-                            &run_id,
-                        )
-                    }
-                    Ok(out) => {
-                        let s = String::from_utf8_lossy(&out.stdout).to_string()
-                            + &String::from_utf8_lossy(&out.stderr);
-                        let _ = std::fs::write(&cargo_log, s);
-                        emit_step(
-                            "rust",
-                            "failed",
-                            dur,
-                            Value::Array(vec![]),
-                            Value::Array(vec![]),
-                            &format!(
-                                "cargo install-update exited {}",
-                                out.status.code().unwrap_or(1)
-                            ),
-                            &run_id,
-                        )
-                    }
-                    Err(e) => emit_step(
+        // rustup update is now handled by the `custom:rustup` pre-update hook
+        // fired by `dotfiles upgrade`'s update-hooks pass. Here we only handle
+        // cargo global installs.
+        let has_cargo_update = Command::new("cargo")
+            .args(["install-update", "--list"])
+            .output()
+            .map(|out| out.status.success())
+            .unwrap_or(false);
+        if has_cargo_update {
+            let cargo_log = paths.log_dir.join(format!("{}.rust-cargo.log", run_id));
+            let start = std::time::Instant::now();
+            let cargo_out = Command::new("cargo")
+                .args(["install-update", "-a"])
+                .output();
+            let dur = start.elapsed().as_secs() as i64;
+            match cargo_out {
+                Ok(out) if out.status.success() => {
+                    let s = String::from_utf8_lossy(&out.stdout).to_string()
+                        + &String::from_utf8_lossy(&out.stderr);
+                    let _ = std::fs::write(&cargo_log, &s);
+                    let updated: Vec<Value> = s
+                        .lines()
+                        .filter(|l| l.contains("Updating "))
+                        .map(|l| {
+                            let name = l.split_whitespace().nth(1).unwrap_or("").to_string();
+                            serde_json::json!({"name": name})
+                        })
+                        .collect();
+                    emit_step(
+                        "rust",
+                        "success",
+                        dur,
+                        Value::Array(updated),
+                        Value::Array(vec![]),
+                        "",
+                        &run_id,
+                    )
+                }
+                Ok(out) => {
+                    let s = String::from_utf8_lossy(&out.stdout).to_string()
+                        + &String::from_utf8_lossy(&out.stderr);
+                    let _ = std::fs::write(&cargo_log, s);
+                    emit_step(
                         "rust",
                         "failed",
-                        0,
+                        dur,
                         Value::Array(vec![]),
                         Value::Array(vec![]),
-                        &format!("cargo install-update failed: {}", e),
+                        &format!(
+                            "cargo install-update exited {}",
+                            out.status.code().unwrap_or(1)
+                        ),
                         &run_id,
-                    ),
+                    )
                 }
-            } else {
-                emit_step(
+                Err(e) => emit_step(
                     "rust",
-                    "success",
-                    o.report.duration_seconds,
+                    "failed",
+                    0,
                     Value::Array(vec![]),
                     Value::Array(vec![]),
-                    "cargo-update not installed, cargo globals skipped",
+                    &format!("cargo install-update failed: {}", e),
                     &run_id,
-                )
+                ),
             }
+        } else {
+            emit_step(
+                "rust",
+                "success",
+                0,
+                Value::Array(vec![]),
+                Value::Array(vec![]),
+                "cargo-update not installed, cargo globals skipped",
+                &run_id,
+            )
         }
     };
     send_finished(rust_report.clone());
@@ -1016,81 +996,8 @@ pub fn run_pipeline(paths: &Paths, opts: PipelineOptions) -> anyhow::Result<(Rep
     send_finished(py_report.clone());
     steps.push(py_report);
 
-    // 8 opencode
-    send_started("opencode", 8);
-    let opencode_report = if !has_command("opencode") {
-        let note = "opencode not installed";
-        write_skipped_log(
-            "opencode",
-            &run_id,
-            &paths.log_dir,
-            &combined_log,
-            &opts.event_tx,
-            note,
-        );
-        emit_step(
-            "opencode",
-            "skipped",
-            0,
-            Value::Array(vec![]),
-            Value::Array(vec![]),
-            note,
-            &run_id,
-        )
-    } else {
-        let o = steps::run_step(
-            "opencode",
-            "opencode",
-            &["upgrade"],
-            &paths.log_dir,
-            &run_id,
-            &combined_log,
-            opts.event_tx.clone(),
-            opts.sudo_askpass.as_deref(),
-        );
-        let log_content =
-            std::fs::read_to_string(paths.log_dir.join(format!("{}.opencode.log", run_id)))
-                .unwrap_or_default();
-        let lower = log_content.to_lowercase();
-        let is_already = lower.contains("up to date") || lower.contains("already");
-        let is_rate_limited = log_content.contains("403")
-            || lower.contains("rate limit")
-            || lower.contains("unexpected error");
-        let updated = if o.exit_code == 0 && is_already {
-            Value::Array(vec![])
-        } else if o.exit_code == 0 {
-            serde_json::json!([{"name":"opencode"}])
-        } else {
-            Value::Array(vec![])
-        };
-        let (status, note) = if o.exit_code == 0 {
-            ("success", String::new())
-        } else if is_rate_limited {
-            (
-                "success",
-                "GitHub API rate limited — opencode already at latest or try again later"
-                    .to_string(),
-            )
-        } else if is_already {
-            ("success", String::new())
-        } else {
-            ("failed", format!("opencode upgrade exited {}", o.exit_code))
-        };
-        emit_step(
-            "opencode",
-            status,
-            o.report.duration_seconds,
-            updated,
-            Value::Array(vec![]),
-            &note,
-            &run_id,
-        )
-    };
-    send_finished(opencode_report.clone());
-    steps.push(opencode_report);
-
-    // 9 neovim-plugins
-    send_started("neovim-plugins", 9);
+    // 8 neovim-plugins
+    send_started("neovim-plugins", 8);
     let nvim_report = if !has_command("nvim") {
         let note = "nvim not installed";
         write_skipped_log(
@@ -1145,7 +1052,7 @@ pub fn run_pipeline(paths: &Paths, opts: PipelineOptions) -> anyhow::Result<(Rep
     steps.push(nvim_report);
 
     // 10 gem
-    send_started("gem", 10);
+    send_started("gem", 9);
     let gem_report = if !has_command("gem") {
         let note = "gem not installed";
         write_skipped_log(
@@ -1200,7 +1107,7 @@ pub fn run_pipeline(paths: &Paths, opts: PipelineOptions) -> anyhow::Result<(Rep
     steps.push(gem_report);
 
     // 11 tmux-tpm
-    send_started("tmux-tpm", 11);
+    send_started("tmux-tpm", 10);
     let tpm_bin = PathBuf::from("/opt/homebrew/opt/tpm/share/tpm/bin/update_plugins");
     let tpm_report = if !tpm_bin.exists() {
         let note = "TPM not present (not installed via brew)";
@@ -1277,7 +1184,7 @@ pub fn run_pipeline(paths: &Paths, opts: PipelineOptions) -> anyhow::Result<(Rep
     steps.push(tpm_report);
 
     // 12 macos
-    send_started("macos", 12);
+    send_started("macos", 11);
     let sw_out = Command::new("softwareupdate")
         .arg("--list")
         .output()
