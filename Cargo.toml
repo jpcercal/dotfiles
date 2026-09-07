@@ -32,3 +32,5 @@ serde_yaml = "0.9"
 schemars = "0.8"
 tempfile = "3.10"
 ulid = { version = "1.1", features = ["serde"] }
+owo-colors = { version = "4.4", features = ["supports-colors"] }
+crossterm = "0.29"

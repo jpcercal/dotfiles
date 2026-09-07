@@ -93,16 +93,96 @@ dotfiles schema --kind prefs --write
 ```
 crates/
   exec/       execution seam (real vs sandbox env, stubs, dry-run)
+              + report (Reporter/Event: the only user-feedback channel, sudo sniffing, streamed runs)
   manifest/   apps.yaml + commands.yaml types, validation, JSON Schema (+ units: unit-ID namespace)
   backends/   PackageBackend trait + brew/cask/mas/gem/npm/pip/cargo/go/composer + custom (hook carriers)
               + graph (manifest → DAG) + schedule (parallel ready-queue executor) + orchestrate (engine wiring)
   prefs/      declarative preferences engine (defaults/exec/builtins, apply/diff)
   core/       upgrade pipeline state machine (gates, probes, steps, reports)
   dotfiles/   the CLI binary (+ egui GUI behind the default `gui` feature)
+              + term_report (TermReporter: sections, per-unit blocks, elevation notices)
+              + tui (TuiReporter: model = pure event fold + review merge,
+                render = pure ANSI line renderer + diff painter, review =
+                failures-only post-run inspector, driver in mod.rs owns the
+                region lifecycle)
   testkit/    test fixtures (stub binaries with argv recording)
 schema/       generated JSON Schemas (committed, CI-enforced freshness)
 e2e/          reduced fixture manifests for the real-machine CI E2E job
 ```
+
+## User feedback (reporting seam + sudo consciousness)
+
+- **Library crates never print.** All user-visible output from `exec` /
+  `backends` / `prefs` flows as `report::Event`s through the `Reporter`
+  carried by `ExecEnv` (`Arc`, survives clones and scheduler threads;
+  default `NoopReporter`). The CLI installs `TermReporter` (plain) or
+  `TuiReporter` (interactive); tests use `RecordingReporter` or nothing.
+  `Reporter::finish()` settles the renderer once at process exit (no-op
+  except for the TUI); `main` holds a `ReportGuard` so unwinds restore the
+  terminal too.
+- **Two profiles, one event stream, docker-pull philosophy.** `UnitFinished`
+  carries a structural `UnitOutcome` (`NoOp`/`Changed`/`Failed`, derived in
+  `BackendOutcome::outcome_kind` — blocked units are `Failed`); renderers
+  hide `NoOp` and keep `Changed`/`Failed`:
+  - *Interactive* (`tui` feature, both stdio TTYs, not `--dry-run`,
+    no `--plain`): diffed ANSI region (`crates/dotfiles/src/tui/`:
+    `model` = pure event fold, `render` = pure styled-line renderer + diff
+    painter, driver thread in mod.rs owns the terminal). Settled rows —
+    no-ops ("already ok") included — stack above; in-flight rows sit below
+    with spinner + live `$ command`; click / arrows+Enter toggles a row's
+    collapsed stdout/stderr block inline; wheel scrolls; `q` never aborts
+    (no cancel semantics).
+  - *Plain* (pipes, CI, `--dry-run`, `--plain`): `TermReporter` prints
+    sections, unscoped `$` echoes, elevation notices, and one grouped block
+    per `Changed`/`Failed` unit only — no start lines, no no-op output.
+    Job recaps (`print_outcome`) keep the aggregate counts.
+- **TUI lifecycle (no CLI wiring beyond reporter choice):** the region
+  activates lazily on the first unit event and tears down on the next
+  `Section` (or at exit), printing settled rows + aggregates + sudo usage as
+  plain scrollback. Between jobs events pass through plain, so confirmations
+  and `sudo` password prompts always meet a normal terminal.
+- **The mid-run region is strictly output-only — and strictly stdin-free
+  (hard rule).** It must never touch terminal modes or stdin: no raw mode,
+  no mouse capture, no `crossterm::event` reads, and NO library that sends
+  cursor-position queries (`\x1b[6n` DSR — ratatui's crossterm backend does
+  this in `Terminal::with_options`/`clear()`/draw paths AND toggles raw
+  mode around the read, stealing bytes from `sudo` prompts and hanging on
+  ptys that never answer). This is why the renderer is a hand-rolled diffed
+  ANSI painter: `render::render_lines` produces styled strings per frame,
+  `render::diff_commands` emits `MoveTo`+text+erase-EOL only for changed
+  rows.
+- **Region geometry & prompt safety.** The region owns rows `0..h-1` (top
+  of screen); engagement scrolls a full screen so prior output survives in
+  scrollback and the region never floats detached. The LAST row stays free
+  and the cursor is parked there after every frame: interactive prompts
+  from children (`sudo` via mas/cask installers or hook snippets, announced
+  or not) land on that line, visible and typeable, never overwritten. A
+  1-second forced full repaint heals any scroll the password Entry causes.
+  `prompt_capable` on `UnitStarted` (mas/cask backends or sudo-carrying
+  hooks) powers the `⌨` footer heads-up. Degenerate terminals (`h < 10`)
+  fall back to TermReporter-style plain block printing.
+  `tests/pty.rs` reproduces a `sudo` stub prompting on `/dev/tty` mid-run
+  and must stay green.
+- **Failures-only post-run reviewer.** After the run completes, if any unit
+  failed in any job, an alternate-screen inspector opens over the merged
+  models (`Model::merged_for_review`, failed first): click/Space expands
+  collapsed stdout/stderr inline, `q`/Esc/Enter/Ctrl-C exits. Raw mode +
+  mouse capture are legal there — no children exist. Successful runs settle
+  instantly, docker-pull style. Shutdown is synchronous: `Reporter::finish()`
+  disconnects the channel and joins the driver; `TerminalGuard` restores
+  modes on unwind; `main`'s `ReportGuard` restores them once more from the
+  main thread (idempotent belt and braces).
+  `upgrade --headless`'s printer thread drains before its hooks phase, so the
+  tail renders cleanly; the egui GUI flow is untouched.
+- **Sudo is announced, every time, with reason.** `ExecEnv` sniffs `sudo`
+  spawns (past sudo's own flags to the inner command) and emits
+  `Event::Elevate { command, reason }`; callers that know *why* use
+  `env.elevate(program, args, reason)` (reasoned announcement replaces the
+  sniff — exactly once). Warmups are necessity-gated: `prefs apply` diffs
+  first and only pre-caches when an elevated entry is out of sync;
+  `install_all` skips the cask warmup when every cask is already installed.
+  `software-update` / `cache clean` show the exact `sudo …` command in the
+  confirmation prompt.
 
 ## Install engine (dependency graph + parallel scheduler)
 
@@ -134,7 +214,10 @@ availability (`command -v`) or swallow faults (`|| true`) — a failing hook
 fails its unit with the hook's stderr, which fails install/sync. Multi-line
 snippets start with `set -e` so the first fault aborts the snippet.
 `execution` tunes the engine (`max_jobs`, per lock-class `locks`; `brew`
-capped at 1). Execution: `graph::build` → `schedule::run`
+capped at 1). `max_jobs: 0` (auto) means `min(cpu cores, 4)`
+(`schedule::DEFAULT_MAX_JOBS`) — bounded fan-out, since units spawn
+app/OS-installer children; explicit `--jobs` / manifest values pin it
+exactly. Execution: `graph::build` → `schedule::run`
 (`std::thread::scope` ready-queue; failures block dependents as `skipped
 (blocked by …)`, never abort). CLI: `install`/`sync` accept `--jobs <N>` /
 `--sequential` (legacy path: `install_all_sequential`). `dotfiles install`

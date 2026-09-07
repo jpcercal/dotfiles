@@ -1,10 +1,12 @@
 //! Shared CLI context: how the binary locates its repo, manifest and execution
 //! environment. Tests drive everything through `DOTFILES_DIR` + `DOTFILES_SANDBOX`.
 
+use crate::term_report::TermReporter;
 use anyhow::{Context, Result};
-use dotfiles_exec::ExecEnv;
+use dotfiles_exec::{ExecEnv, Reporter};
 use dotfiles_manifest::Manifest;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct Ctx {
@@ -12,10 +14,45 @@ pub struct Ctx {
     pub dotfiles_dir: PathBuf,
 }
 
+/// Pick the user-feedback renderer: the interactive progress UI when (and
+/// only when) both stdio streams are TTYs, the `tui` feature is compiled in,
+/// and this is a real (non-dry-run) invocation. Everything else — dry runs,
+/// pipes, CI, tests, `--plain` (applied by `main` after construction) —
+/// renders through the plain reporter.
+pub fn default_reporter(dry_run: bool) -> Arc<dyn Reporter> {
+    #[cfg(feature = "tui")]
+    if !dry_run && tui_available() {
+        return Arc::new(crate::tui::TuiReporter::new());
+    }
+    let _ = dry_run;
+    Arc::new(TermReporter::new())
+}
+
+#[cfg(feature = "tui")]
+fn tui_available() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdout().is_terminal() && std::io::stderr().is_terminal()
+}
+
+/// Process-exit guard: settles the reporter (TUI region → scrollback
+/// summary, terminal restored). Hold one in `main` for the whole run so
+/// normal returns *and* unwinds land the terminal cleanly.
+pub struct ReportGuard {
+    reporter: Arc<dyn Reporter>,
+}
+
+impl Drop for ReportGuard {
+    fn drop(&mut self) {
+        self.reporter.finish();
+    }
+}
+
 impl Ctx {
     /// Real-machine context. `dry_run` forwards `--dry-run` to every spawned command.
     pub fn real(dry_run: bool) -> Self {
-        let env = ExecEnv::real().with_dry_run(dry_run);
+        let env = ExecEnv::real()
+            .with_dry_run(dry_run)
+            .with_reporter(default_reporter(dry_run));
         let dotfiles_dir = std::env::var_os("DOTFILES_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| env.home.join("dotfiles"));
@@ -25,11 +62,19 @@ impl Ctx {
     /// Sandboxed context used by `sync --sandbox` and integration tests: HOME
     /// and PATH live under `root`, dotfiles repo is `root/dotfiles`.
     pub fn sandbox(root: &std::path::Path, dry_run: bool) -> Result<Self> {
-        let env = ExecEnv::sandbox(root)?.with_dry_run(dry_run);
+        let env = ExecEnv::sandbox(root)?
+            .with_dry_run(dry_run)
+            .with_reporter(default_reporter(dry_run));
         Ok(Self {
             env,
             dotfiles_dir: root.join("dotfiles"),
         })
+    }
+
+    pub fn report_guard(&self) -> ReportGuard {
+        ReportGuard {
+            reporter: self.env.reporter.clone(),
+        }
     }
 
     pub fn manifest_path(&self) -> PathBuf {
