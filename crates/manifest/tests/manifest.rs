@@ -129,10 +129,11 @@ fn rejects_duplicate_mas_id_and_empty_name() {
 }
 
 #[test]
-fn rejects_unknown_bootstrap_step_and_bad_toolchains() {
+fn rejects_hookless_bootstrap_step_and_bad_toolchains() {
+    // Bootstrap steps carry no built-in logic — bare entries are dead.
     let err = parse_manifest("install:\n  bootstrap: [nope]\n").unwrap_err();
-    assert!(err.to_string().contains("unknown step"), "{}", err);
-    // moved to post-install hooks — no longer valid bootstrap steps
+    assert!(err.to_string().contains("carries no hooks"), "{}", err);
+    // Removed typed steps are only valid with hooks attached.
     for step in [
         "fzf-keybindings",
         "git-lfs",
@@ -140,10 +141,20 @@ fn rejects_unknown_bootstrap_step_and_bad_toolchains() {
         "nvim-plug",
         "rtk-patch",
         "claude-mem",
+        "opencode",
     ] {
         let err = parse_manifest(&format!("install:\n  bootstrap: [{step}]\n")).unwrap_err();
-        assert!(err.to_string().contains("unknown step"), "{step}: {err}");
+        assert!(
+            err.to_string().contains("carries no hooks"),
+            "{step}: {err}"
+        );
     }
+    // Any step id with hooks is accepted (pure hook carrier).
+    let m = parse_manifest(
+        "install:\n  bootstrap:\n    - id: \"custom-step\"\n      hooks:\n        post-install: \"echo hi\"\n",
+    )
+    .unwrap();
+    assert_eq!(m.install.bootstrap[0].id(), "custom-step");
     let err =
         parse_manifest("install:\n  toolchains:\n    node: { ensure: \"20\" }\n").unwrap_err();
     assert!(
@@ -320,7 +331,7 @@ fn unit_namespace_helpers() {
 #[test]
 fn implicit_edges_follow_declared_tools() {
     let m = parse_manifest(
-        "install:\n  require:\n    - \"brew-formula:fnm\"\n    - \"brew-formula:uv\"\n    - \"brew-formula:git\"\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap: [opencode]\n",
+        "install:\n  require:\n    - \"brew-formula:fnm\"\n    - \"brew-formula:uv\"\n    - \"brew-formula:git\"\n  toolchains:\n    node: {}\n    python: {}\n  bootstrap:\n    - id: \"opencode\"\n      hooks:\n        post-install: \"echo hi\"\n",
     )
     .unwrap();
     let ids = unit_ids(&m);

@@ -135,6 +135,7 @@
       "additionalProperties": false
     },
     "Install": {
+      "description": "Typed bootstrap steps are pure hook carriers (implementations live in `dotfiles-backends::bootstrap`, which runs no logic per step). Any step id is accepted; validation requires each entry to carry hooks.",
       "type": "object",
       "properties": {
         "bootstrap": {

@@ -134,12 +134,12 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
     }
 
     for entry in &m.install.bootstrap {
-        let step = entry.id();
-        if !crate::apps::KNOWN_BOOTSTRAP_STEPS.contains(&step) {
+        // Bootstrap steps carry no built-in logic — a hookless entry would
+        // silently do nothing, so hooks are required.
+        if !entry.has_hooks() {
             errors.push(format!(
-                "install.bootstrap: unknown step '{}' (known: {})",
-                step,
-                crate::apps::KNOWN_BOOTSTRAP_STEPS.join(", ")
+                "install.bootstrap: step '{}' carries no hooks (bootstrap steps have no built-in install logic; attach hooks or remove the entry)",
+                entry.id()
             ));
         }
     }

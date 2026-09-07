@@ -16,11 +16,9 @@ fn default_schema_version() -> u32 {
     2
 }
 
-/// Canonical names of typed bootstrap steps (implementations live in
-/// `dotfiles-backends::bootstrap`; kept here so manifest validation can reject
-/// unknown names at edit time). Only steps without an owning package live
-/// here; everything else moved to post-install hooks on its package.
-pub const KNOWN_BOOTSTRAP_STEPS: &[&str] = &["opencode"];
+/// Typed bootstrap steps are pure hook carriers (implementations live in
+/// `dotfiles-backends::bootstrap`, which runs no logic per step). Any step id
+/// is accepted; validation requires each entry to carry hooks.
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]

@@ -20,6 +20,12 @@ install:
     hooks:
       post-install: |
         set -e
+        if [ ! -x "$HOME/.opencode/bin/opencode" ]; then
+          tmp="$(mktemp)"
+          curl -fsSL -o "$tmp" https://opencode.ai/install >/dev/null
+          sh "$tmp" >/dev/null
+          rm -f "$tmp"
+        fi
         mkdir -p "$HOME/.config/opencode/skills"
         ln -sfn "$DOTFILES_DIR/opencode/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
         ln -sfn "$DOTFILES_DIR/opencode/opencode.json" "$HOME/.config/opencode/opencode.json"
