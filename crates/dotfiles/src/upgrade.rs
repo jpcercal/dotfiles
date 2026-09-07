@@ -90,15 +90,42 @@ pub fn run(args: UpgradeArgs) -> anyhow::Result<()> {
 
     if args.headless {
         let trigger = if args.gate { "gate" } else { "headless" };
-        return headless_run(&paths, trigger);
+        headless_run(&paths, trigger)?;
+        run_update_hooks();
+        return Ok(());
     }
 
     if args.gate {
-        return gate_run(&paths);
+        gate_run(&paths)?;
+        run_update_hooks();
+        return Ok(());
     }
 
     // default: foreground GUI
-    foreground_run(&paths)
+    foreground_run(&paths)?;
+    run_update_hooks();
+    Ok(())
+}
+
+/// After the core pipeline completes, run manifest-declared update hooks
+/// (pre-update → backend.upgrade → post-update) across the install graph.
+/// This fires hooks like `custom:rustup`'s `rustup update` in the agent-tick
+/// flow without any core↔manifest coupling.
+fn run_update_hooks() {
+    let ctx = crate::ctx::Ctx::real(false);
+    let m = match ctx.manifest() {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+    let env = ctx
+        .env
+        .clone()
+        .with_env("DOTFILES_DIR", &ctx.dotfiles_dir.to_string_lossy());
+    let opts = dotfiles_backends::orchestrate::sched_opts_from_manifest(&m);
+    match dotfiles_backends::orchestrate::update_all_with_opts(&env, &m, &opts) {
+        Ok(results) => crate::pkg::print_outcomes(&results),
+        Err(e) => eprintln!("update hooks error: {e:#}"),
+    }
 }
 
 fn dry_run(paths: &Paths) -> anyhow::Result<()> {

@@ -23,7 +23,6 @@ pub fn run(ctx: &Ctx, args: BootstrapArgs) -> Result<()> {
     }
     let m = ctx.manifest()?;
     let taps: Vec<String> = m
-        .install
         .require
         .iter()
         .filter_map(|e| {

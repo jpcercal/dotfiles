@@ -104,7 +104,7 @@ pub fn print_report(checks: &[Check]) -> Result<()> {
 /// thread pool (16 shards). Each probe is read-only.
 fn probe_checks(env: &ExecEnv, m: &dotfiles_manifest::Manifest) -> Vec<Check> {
     let mut tasks: Vec<(String, ProbeKind)> = vec![];
-    for e in &m.install.require {
+    for e in &m.require {
         let (prefix, bare) = match dotfiles_manifest::units::split_unit_id(e.id()) {
             Some((p, n)) => (p, n),
             None => continue,
@@ -324,7 +324,7 @@ mod tests {
         // No tools stubbed: everything skips, nothing is missing.
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"brew-tap:a/b\"\n    - id: \"mas:1\"\n      label: \"A\"\n",
+            "require:\n    - \"brew-formula:git\"\n    - \"brew-tap:a/b\"\n    - id: \"mas:1\"\n      label: \"A\"\n",
         );
         let checks = collect(&ctx).unwrap();
         assert!(!checks.is_empty());
@@ -347,7 +347,7 @@ mod tests {
         );
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"brew-formula:ghost-pkg\"\n    - id: \"mas:1\"\n      label: \"A\"\n    - id: \"mas:2\"\n      label: \"B\"\n",
+            "require:\n    - \"brew-formula:git\"\n    - \"brew-formula:ghost-pkg\"\n    - id: \"mas:1\"\n      label: \"A\"\n    - id: \"mas:2\"\n      label: \"B\"\n",
         );
         let checks = collect(&ctx).unwrap();
         let status = |id: &str| {
@@ -373,7 +373,7 @@ mod tests {
         t.stub("brew", "echo 'aws/tap'; exit 0");
         // No curl stub (and the isolated PATH hides the real one): reaching
         // the upstream check would SKIP, so OK proves the local fast path.
-        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"brew-tap:aws/tap\"\n");
+        let ctx = ctx_with_manifest(&t, "require:\n    - \"brew-tap:aws/tap\"\n");
         let checks = collect(&ctx).unwrap();
         assert_eq!(
             checks
@@ -396,7 +396,7 @@ mod tests {
         );
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  require:\n    - \"brew-tap:aws/tap\"\n    - \"brew-tap:nope/nothing\"\n",
+            "require:\n    - \"brew-tap:aws/tap\"\n    - \"brew-tap:nope/nothing\"\n",
         );
         let checks = collect(&ctx).unwrap();
         let status = |id: &str| {
@@ -423,7 +423,7 @@ mod tests {
         );
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  require:\n    - \"go:github.com/oklog/ulid/v2/cmd/ulid@latest\"\n    - \"go:example.com/nope/tool@latest\"\n",
+            "require:\n    - \"go:github.com/oklog/ulid/v2/cmd/ulid@latest\"\n    - \"go:example.com/nope/tool@latest\"\n",
         );
         let checks = collect(&ctx).unwrap();
         let status = |id: &str| {
@@ -473,7 +473,7 @@ mod tests {
     #[test]
     fn invalid_manifest_is_fatal_not_missing() {
         let t = TestEnv::new();
-        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"\"\n");
+        let ctx = ctx_with_manifest(&t, "require:\n    - \"\"\n");
         assert!(collect(&ctx).is_err());
     }
 

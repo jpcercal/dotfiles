@@ -66,11 +66,15 @@ fn run_diagnosis(ctx: &Ctx) -> Result<()> {
         status: if manifest.is_ok() { "ok" } else { "fail" },
         detail: match &manifest {
             Ok(m) => {
-                let total = m.install.require.len();
+                let total = m.require.len();
+                let custom_count = m.require.iter().filter(|e| {
+                    dotfiles_manifest::units::split_unit_id(e.id())
+                        .is_some_and(|(p, _)| p == "custom")
+                }).count();
                 format!(
-                    "{} packages, {} bootstrap steps",
+                    "{} packages, {} custom steps",
                     total,
-                    m.install.bootstrap.len()
+                    custom_count
                 )
             }
             Err(e) => e.to_string(),

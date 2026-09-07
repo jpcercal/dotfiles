@@ -1,28 +1,28 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Manifest",
-  "description": "Root of `apps.yaml` — the declarative installation + configuration manifest.",
+  "description": "Root of `apps.yaml` — the declarative installation + configuration manifest.\n\n`require` and `execution` live at the root level (no `install:` wrapper). Language toolchains (rustup/node/python) converge via `post-install` hooks on their carrier formulae (`fnm`, `uv`) or `custom:` entries (`rustup`).",
   "type": "object",
   "properties": {
-    "install": {
+    "execution": {
+      "description": "Parallel execution tuning for the install phase (the DAG engine).",
       "default": {
-        "bootstrap": [],
-        "execution": {
-          "locks": {},
-          "max_jobs": 0
-        },
-        "require": [],
-        "toolchains": {
-          "node": null,
-          "python": null,
-          "rustup": null
-        }
+        "locks": {},
+        "max_jobs": 0
       },
       "allOf": [
         {
-          "$ref": "#/definitions/Install"
+          "$ref": "#/definitions/Execution"
         }
       ]
+    },
+    "require": {
+      "description": "Unified package list: every installable item as `driver:name` with optional version, label, requires, lock, and lifecycle hooks.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/RequireEntry"
+      }
     },
     "schema_version": {
       "description": "Manifest format version; bump + migrate on breaking changes.",
@@ -34,45 +34,12 @@
   },
   "additionalProperties": false,
   "definitions": {
-    "BootstrapDetail": {
-      "type": "object",
-      "required": [
-        "id"
-      ],
-      "properties": {
-        "hooks": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Hooks"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "id": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "BootstrapEntry": {
-      "description": "A bootstrap entry: either a bare step name (`\"opencode\"`) or a detailed form with hooks (`{ id: \"opencode\", hooks: { post-install: \"...\" } }`).",
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "$ref": "#/definitions/BootstrapDetail"
-        }
-      ]
-    },
     "Execution": {
       "description": "Parallel execution tuning for the install phase. `apps.yaml` is the source of truth for the dependency graph; this section tunes the engine that executes it (worker count + per lock-class concurrency).",
       "type": "object",
       "properties": {
         "locks": {
-          "description": "Per lock-class concurrency overrides, e.g. `{ mas: 4, go: 4 }`. Keys are lock classes (`brew`, `mas`, `gem`, `npm`, `pip`, `cargo`, `go`, `composer`, `toolchain`, `bootstrap`); `brew` is capped at 1 (concurrent `brew` invocations are unsupported by Homebrew).",
+          "description": "Per lock-class concurrency overrides, e.g. `{ mas: 4, go: 4 }`. Keys are lock classes (`brew`, `mas`, `gem`, `npm`, `pip`, `cargo`, `go`, `composer`, `custom`); `brew` is capped at 1 (concurrent `brew` invocations are unsupported by Homebrew).",
           "default": {},
           "type": "object",
           "additionalProperties": {
@@ -92,7 +59,7 @@
       "additionalProperties": false
     },
     "Hooks": {
-      "description": "Lifecycle hook snippets run via `sh -c` through the exec seam. Each field is a shell snippet (may be multi-line). `post-install` fires whenever the unit ends up present (newly installed or already installed, no failures) so config converges; pre hooks fire ahead of their action. Snippets must be idempotency-preserving.",
+      "description": "Lifecycle hook snippets run via `sh -c` through the exec seam. Each field is a shell snippet (may be multi-line). `post-install` fires whenever the unit ends up present (newly installed or already installed, no failures) so config converges; pre hooks fire ahead of their action. `pre-update`/`post-update` fire during `dotfiles update`/`upgrade`; `pre-uninstall`/`post-uninstall` fire during `dotfiles uninstall`. Snippets must be idempotency-preserving.",
       "type": "object",
       "properties": {
         "post-install": {
@@ -134,76 +101,6 @@
       },
       "additionalProperties": false
     },
-    "Install": {
-      "description": "Typed bootstrap steps are pure hook carriers (implementations live in `dotfiles-backends::bootstrap`, which runs no logic per step). Any step id is accepted; validation requires each entry to carry hooks.",
-      "type": "object",
-      "properties": {
-        "bootstrap": {
-          "description": "Typed, idempotent setup steps (may carry post-install hooks).",
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/BootstrapEntry"
-          }
-        },
-        "execution": {
-          "description": "Parallel execution tuning for the install phase (the DAG engine).",
-          "default": {
-            "locks": {},
-            "max_jobs": 0
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Execution"
-            }
-          ]
-        },
-        "require": {
-          "description": "Unified package list: every installable item as `driver:name` with optional version, label, requires, lock, and lifecycle hooks.",
-          "default": [],
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/RequireEntry"
-          }
-        },
-        "toolchains": {
-          "description": "Language toolchains to ensure (rustup/node/python).",
-          "default": {
-            "node": null,
-            "python": null,
-            "rustup": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Toolchains"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "NodeToolchain": {
-      "type": "object",
-      "properties": {
-        "ensure": {
-          "description": "Currently only `lts` (via fnm).",
-          "default": "lts",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "PythonToolchain": {
-      "type": "object",
-      "properties": {
-        "provider": {
-          "description": "Currently only `uv`.",
-          "default": "uv",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
     "RequireDetail": {
       "type": "object",
       "required": [
@@ -222,7 +119,7 @@
           ]
         },
         "id": {
-          "description": "Canonical unit ID, e.g. `brew-formula:git`, `mas:1352778147`, `npm:prettier@3` (version suffix is sugar for the `version` field).",
+          "description": "Canonical unit ID, e.g. `brew-formula:git`, `mas:1352778147`, `npm:prettier@3` (version suffix is sugar for the `version` field), `custom:rustup` (custom install hook carrier).",
           "type": "string"
         },
         "label": {
@@ -259,7 +156,7 @@
       "additionalProperties": false
     },
     "RequireEntry": {
-      "description": "A single entry in `install.require`: either a bare unit ID string (`\"brew-formula:git\"`) or a detailed map with version / hooks / edges.",
+      "description": "A single entry in `require`: either a bare unit ID string (`\"brew-formula:git\"`) or a detailed map with version / hooks / edges.",
       "anyOf": [
         {
           "type": "string"
@@ -268,55 +165,6 @@
           "$ref": "#/definitions/RequireDetail"
         }
       ]
-    },
-    "RustupToolchain": {
-      "type": "object",
-      "properties": {
-        "channel": {
-          "default": "stable",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "Toolchains": {
-      "type": "object",
-      "properties": {
-        "node": {
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/NodeToolchain"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "python": {
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/PythonToolchain"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "rustup": {
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/RustupToolchain"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
     }
   }
 }

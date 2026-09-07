@@ -10,7 +10,7 @@ pub struct InstallArgs {
     /// Packages as `backend:name` (bare name = brew formula). No args = install
     /// everything declared in the manifest.
     pub specs: Vec<String>,
-    /// Max parallel install units (default: manifest `install.execution.max_jobs`,
+    /// Max parallel install units (default: manifest `execution.max_jobs`,
     /// 0 = number of CPUs).
     #[arg(long)]
     pub jobs: Option<usize>,
@@ -64,10 +64,14 @@ pub struct UpdateArgs {
 pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     let results = if args.specs.is_empty() {
         let m = ctx.manifest()?;
+        let custom_count = m.require.iter().filter(|e| {
+            dotfiles_manifest::units::split_unit_id(e.id())
+                .is_some_and(|(p, _)| p == "custom")
+        }).count();
         println!(
-            "installing manifest ({} packages, {} bootstrap steps)",
-            m.install.require.len(),
-            m.install.bootstrap.len()
+            "installing manifest ({} packages, {} custom steps)",
+            m.require.len(),
+            custom_count
         );
         // Hooks use $DOTFILES_DIR to resolve repo-relative symlink sources.
         let env = ctx
@@ -108,19 +112,58 @@ pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
 
 pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
     let mut grouped: Vec<(String, Vec<String>)> = vec![];
+    let mut custom_specs: Vec<String> = vec![];
     for s in &args.specs {
         let spec = Spec::parse(s)?;
-        match grouped.iter_mut().find(|(b, _)| b == &spec.backend) {
-            Some((_, v)) => v.push(spec.name),
-            None => grouped.push((spec.backend, vec![spec.name])),
+        if spec.backend == "custom" {
+            custom_specs.push(spec.name);
+        } else {
+            match grouped.iter_mut().find(|(b, _)| b == &spec.backend) {
+                Some((_, v)) => v.push(spec.name),
+                None => grouped.push((spec.backend, vec![spec.name])),
+            }
         }
     }
+    // Regular backends
     for (backend, pkgs) in grouped {
         let b = dotfiles_backends::by_name(&backend).expect("Spec::parse validates backend");
         let out = b.uninstall(&ctx.env, &pkgs)?;
         print_outcome(&out);
         if !out.ok() {
             anyhow::bail!("uninstall failed");
+        }
+    }
+    // Custom steps: look up manifest entries and run their uninstall hooks
+    // (the hooks ARE the uninstall action — e.g. `rustup self uninstall -y`).
+    if !custom_specs.is_empty() {
+        let m = ctx.manifest()?;
+        let env = ctx
+            .env
+            .clone()
+            .with_env("DOTFILES_DIR", &ctx.dotfiles_dir.to_string_lossy());
+        for name in &custom_specs {
+            let id = format!("custom:{name}");
+            let entry = m.require.iter().find(|e| e.id() == id);
+            let hooks = entry.and_then(|e| e.hooks());
+            if let Some(hooks) = hooks {
+                if let Some(snippet) = &hooks.pre_uninstall {
+                    let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &id);
+                    let res = hook_env.output("sh", &["-c", snippet])?;
+                    if !res.ok() {
+                        anyhow::bail!("pre-uninstall hook failed for {}: {}", id, res.stderr.trim());
+                    }
+                }
+                if let Some(snippet) = &hooks.post_uninstall {
+                    let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &id);
+                    let res = hook_env.output("sh", &["-c", snippet])?;
+                    if !res.ok() {
+                        anyhow::bail!("post-uninstall hook failed for {}: {}", id, res.stderr.trim());
+                    }
+                }
+                println!("uninstalled custom:{name}");
+            } else {
+                eprintln!("warning: no manifest entry for {id} — skipping");
+            }
         }
     }
     Ok(())
@@ -174,6 +217,18 @@ pub fn update(ctx: &Ctx, args: UpdateArgs) -> Result<()> {
         }
         let out = b.update_index(&ctx.env)?;
         print_outcome(&out);
+    }
+    // After index refresh, run update hooks (pre-update → upgrade → post-update)
+    // across the manifest graph. This fires manifest-declared update hooks like
+    // `custom:rustup`'s `rustup update` and runs `backend.upgrade()` per unit.
+    if let Ok(m) = ctx.manifest() {
+        let env = ctx
+            .env
+            .clone()
+            .with_env("DOTFILES_DIR", &ctx.dotfiles_dir.to_string_lossy());
+        let opts = orchestrate::sched_opts_from_manifest(&m);
+        let results = orchestrate::update_all_with_opts(&env, &m, &opts)?;
+        print_outcomes(&results);
     }
     Ok(())
 }
@@ -263,7 +318,7 @@ mod tests {
             "brew",
             "case \"$1\" in list) echo '' ;; install) echo boom 1>&2; exit 1 ;; esac; exit 0",
         );
-        let ctx = ctx_with_manifest(&t, "install:\n  require:\n    - \"brew-formula:git\"\n");
+        let ctx = ctx_with_manifest(&t, "require:\n  - \"brew-formula:git\"\n");
         let err = install_all(&ctx).unwrap_err();
         assert!(err.to_string().contains("install failed"), "{err}");
         assert!(err.to_string().contains("git"), "{err}");
@@ -277,7 +332,7 @@ mod tests {
         // (mid-bootstrap machines), only real failures fail the command.
         let ctx = ctx_with_manifest(
             &t,
-            "install:\n  require:\n    - \"brew-formula:git\"\n    - \"gem:neovim\"\n",
+            "require:\n  - \"brew-formula:git\"\n  - \"gem:neovim\"\n",
         );
         install_all(&ctx).unwrap();
     }
