@@ -1,7 +1,7 @@
-pub mod custom;
 mod brew;
 mod cargo;
 mod composer;
+pub mod custom;
 mod gem;
 mod go;
 pub mod graph;

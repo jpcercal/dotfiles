@@ -50,15 +50,7 @@ pub const UNIT_PREFIXES: &[&str] = &[
 
 /// Lock (resource) classes addressable from `execution.locks`.
 pub const LOCK_CLASSES: &[&str] = &[
-    "brew",
-    "mas",
-    "gem",
-    "npm",
-    "pip",
-    "cargo",
-    "go",
-    "composer",
-    "custom",
+    "brew", "mas", "gem", "npm", "pip", "cargo", "go", "composer", "custom",
 ];
 
 /// Whether this prefix supports `@version` pinning in the id sugar.

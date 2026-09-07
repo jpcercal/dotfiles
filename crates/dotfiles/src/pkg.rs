@@ -64,10 +64,13 @@ pub struct UpdateArgs {
 pub fn install(ctx: &Ctx, args: InstallArgs) -> Result<()> {
     let results = if args.specs.is_empty() {
         let m = ctx.manifest()?;
-        let custom_count = m.require.iter().filter(|e| {
-            dotfiles_manifest::units::split_unit_id(e.id())
-                .is_some_and(|(p, _)| p == "custom")
-        }).count();
+        let custom_count = m
+            .require
+            .iter()
+            .filter(|e| {
+                dotfiles_manifest::units::split_unit_id(e.id()).is_some_and(|(p, _)| p == "custom")
+            })
+            .count();
         println!(
             "installing manifest ({} packages, {} custom steps)",
             m.require.len(),
@@ -150,14 +153,22 @@ pub fn uninstall(ctx: &Ctx, args: UninstallArgs) -> Result<()> {
                     let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &id);
                     let res = hook_env.output("sh", &["-c", snippet])?;
                     if !res.ok() {
-                        anyhow::bail!("pre-uninstall hook failed for {}: {}", id, res.stderr.trim());
+                        anyhow::bail!(
+                            "pre-uninstall hook failed for {}: {}",
+                            id,
+                            res.stderr.trim()
+                        );
                     }
                 }
                 if let Some(snippet) = &hooks.post_uninstall {
                     let hook_env = env.clone().with_env("DOTFILES_PKG_ID", &id);
                     let res = hook_env.output("sh", &["-c", snippet])?;
                     if !res.ok() {
-                        anyhow::bail!("post-uninstall hook failed for {}: {}", id, res.stderr.trim());
+                        anyhow::bail!(
+                            "post-uninstall hook failed for {}: {}",
+                            id,
+                            res.stderr.trim()
+                        );
                     }
                 }
                 println!("uninstalled custom:{name}");

@@ -559,10 +559,7 @@ mod tests {
             "ruby",
             "case \"$*\" in *neovim*) exit 0 ;; *) echo 'first-line-error' 1>&2; echo 'traceback-tail' 1>&2; exit 1 ;; esac",
         );
-        let ctx = ctx_with_manifest(
-            &t,
-            "require:\n    - \"gem:neovim\"\n    - \"gem:ghost\"\n",
-        );
+        let ctx = ctx_with_manifest(&t, "require:\n    - \"gem:neovim\"\n    - \"gem:ghost\"\n");
         let checks = collect(&ctx);
         assert!(is_ok(&checks, "gem:neovim"));
         // Ruby backtraces: the failure detail is the first stderr line.

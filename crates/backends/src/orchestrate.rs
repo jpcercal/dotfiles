@@ -402,8 +402,7 @@ fn run_unit_update(env: &ExecEnv, unit: &graph::Unit) -> BackendOutcome {
                         );
                     }
                     Err(e) => {
-                        outcome
-                            .fail_one(unit.id.clone(), format!("post-update hook error: {}", e));
+                        outcome.fail_one(unit.id.clone(), format!("post-update hook error: {}", e));
                     }
                 }
             }
@@ -716,10 +715,9 @@ require:
     fn sequential_path_preserves_legacy_order() {
         let t = TestEnv::new();
         t.stub("brew", BREW_STUB);
-        let manifest = parse_manifest(
-            "require:\n  - \"brew-formula:git\"\n  - \"brew-cask:iterm2\"\n",
-        )
-        .unwrap();
+        let manifest =
+            parse_manifest("require:\n  - \"brew-formula:git\"\n  - \"brew-cask:iterm2\"\n")
+                .unwrap();
         let results = install_all_sequential(t.exec(), &manifest).unwrap();
         assert!(results.iter().all(|r| r.ok()));
         let brew_calls = t.calls_of("brew");
@@ -771,10 +769,10 @@ require:
 
     #[test]
     fn every_install_hook_executes_when_changed_and_when_present() {
-    // Every install-phase hook declared in the real manifests must actually
-    // execute: on a fresh install (package changed) AND on a re-run where the
-    // package is already installed (outcome.unchanged — the convergence
-    // case that broke the e2e-machine CI job).
+        // Every install-phase hook declared in the real manifests must actually
+        // execute: on a fresh install (package changed) AND on a re-run where the
+        // package is already installed (outcome.unchanged — the convergence
+        // case that broke the e2e-machine CI job).
         use dotfiles_manifest::{Manifest, RequireEntry};
 
         /// One hook snippet declared in a real manifest, with its entry for
@@ -921,7 +919,9 @@ require:
 "#,
         )
         .unwrap();
-        let results = update_all_with_opts(t.exec(), &manifest, &sched_opts_from_manifest(&manifest)).unwrap();
+        let results =
+            update_all_with_opts(t.exec(), &manifest, &sched_opts_from_manifest(&manifest))
+                .unwrap();
         assert!(
             results.iter().all(|r| r.ok()),
             "failures: {:?}",
@@ -957,7 +957,9 @@ require:
 "#,
         )
         .unwrap();
-        let results = update_all_with_opts(t.exec(), &manifest, &sched_opts_from_manifest(&manifest)).unwrap();
+        let results =
+            update_all_with_opts(t.exec(), &manifest, &sched_opts_from_manifest(&manifest))
+                .unwrap();
         assert!(results.iter().all(|r| r.ok()));
         let log = std::fs::read_to_string(t.root().join("calls.log")).unwrap();
         assert!(

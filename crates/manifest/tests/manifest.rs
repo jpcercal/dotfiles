@@ -190,10 +190,7 @@ require:
     assert_eq!(m.require[0].id(), "brew-formula:git");
     assert!(m.require[0].requires().is_empty());
     assert!(m.require[1].is_detailed());
-    assert_eq!(
-        m.require[1].requires(),
-        &["brew-formula:php".to_string()]
-    );
+    assert_eq!(m.require[1].requires(), &["brew-formula:php".to_string()]);
     assert_eq!(m.require[3].label(), Some("A"));
 }
 
@@ -240,10 +237,11 @@ fn rejects_bad_lock_config() {
         "{}",
         err
     );
-    let err = parse_manifest("require:\n  - id: \"brew-formula:a\"\n    lock: \"BAD\"\n").unwrap_err();
+    let err =
+        parse_manifest("require:\n  - id: \"brew-formula:a\"\n    lock: \"BAD\"\n").unwrap_err();
     assert!(err.to_string().contains("invalid lock name"), "{}", err);
-    let err = parse_manifest("require:\n  - id: \"brew-formula:a\"\n    requires: [\"\"]\n")
-        .unwrap_err();
+    let err =
+        parse_manifest("require:\n  - id: \"brew-formula:a\"\n    requires: [\"\"]\n").unwrap_err();
     assert!(err.to_string().contains("empty requires entry"), "{}", err);
 }
 
@@ -256,10 +254,9 @@ fn rejects_version_on_unsupported_drivers() {
         "{}",
         err
     );
-    let err = parse_manifest(
-        "require:\n  - id: \"mas:123\"\n    label: \"Foo\"\n    version: \"1.0\"\n",
-    )
-    .unwrap_err();
+    let err =
+        parse_manifest("require:\n  - id: \"mas:123\"\n    label: \"Foo\"\n    version: \"1.0\"\n")
+            .unwrap_err();
     assert!(
         err.to_string().contains("does not support version"),
         "{}",
@@ -306,10 +303,7 @@ fn implicit_edges_follow_declared_tools() {
         vec!["brew-formula:fnm"]
     );
     // pip needs python; python converges via the uv post-install hook.
-    assert_eq!(
-        implicit_requires("pip:pynvim", &m),
-        vec!["brew-formula:uv"]
-    );
+    assert_eq!(implicit_requires("pip:pynvim", &m), vec!["brew-formula:uv"]);
     // Custom units are pure hook carriers; they take no implicit edges.
     assert!(implicit_requires("custom:rustup", &m).is_empty());
 }
@@ -339,13 +333,7 @@ require:
 "#,
     )
     .unwrap();
-    assert_eq!(
-        m.require[0].effective_version(),
-        Some("3".to_string())
-    );
+    assert_eq!(m.require[0].effective_version(), Some("3".to_string()));
     assert!(m.require[0].has_hooks());
-    assert_eq!(
-        m.require[1].effective_version(),
-        Some("0.9.0".to_string())
-    );
+    assert_eq!(m.require[1].effective_version(), Some("0.9.0".to_string()));
 }

@@ -67,15 +67,15 @@ fn run_diagnosis(ctx: &Ctx) -> Result<()> {
         detail: match &manifest {
             Ok(m) => {
                 let total = m.require.len();
-                let custom_count = m.require.iter().filter(|e| {
-                    dotfiles_manifest::units::split_unit_id(e.id())
-                        .is_some_and(|(p, _)| p == "custom")
-                }).count();
-                format!(
-                    "{} packages, {} custom steps",
-                    total,
-                    custom_count
-                )
+                let custom_count = m
+                    .require
+                    .iter()
+                    .filter(|e| {
+                        dotfiles_manifest::units::split_unit_id(e.id())
+                            .is_some_and(|(p, _)| p == "custom")
+                    })
+                    .count();
+                format!("{} packages, {} custom steps", total, custom_count)
             }
             Err(e) => e.to_string(),
         },

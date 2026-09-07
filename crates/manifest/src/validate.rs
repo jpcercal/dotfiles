@@ -36,10 +36,7 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
                         units::UNIT_PREFIXES.join(", ")
                     ));
                 } else {
-                    errors.push(format!(
-                        "require: '{}' is not a valid unit ID",
-                        raw_id
-                    ));
+                    errors.push(format!("require: '{}' is not a valid unit ID", raw_id));
                 }
             }
             continue;
