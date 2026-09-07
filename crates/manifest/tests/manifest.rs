@@ -113,14 +113,12 @@ fn rejects_empty_require_id() {
 }
 
 #[test]
-fn rejects_duplicate_mas_id_and_empty_name() {
+fn rejects_duplicate_mas_id() {
     let err = parse_manifest(
         "require:\n  - id: \"mas:1\"\n    label: \"A\"\n  - id: \"mas:1\"\n    label: \"B\"\n",
     )
     .unwrap_err();
     assert!(err.to_string().contains("duplicate"), "{}", err);
-    let err = parse_manifest("require:\n  - id: \"mas:2\"\n    label: \"\"\n").unwrap_err();
-    assert!(err.to_string().contains("label"), "{}", err);
 }
 
 #[test]

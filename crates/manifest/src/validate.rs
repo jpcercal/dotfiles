@@ -60,19 +60,6 @@ pub fn validate(m: &Manifest) -> Result<(), ManifestError> {
                     bare_name
                 ));
             }
-            match entry.label() {
-                Some(l) if !l.trim().is_empty() => {}
-                _ => errors.push(format!(
-                    "require: mas:{} missing non-empty 'label'",
-                    bare_name
-                )),
-            }
-        }
-        // Label if present must be non-empty (allowed on any entry)
-        if let Some(l) = entry.label() {
-            if l.trim().is_empty() {
-                errors.push(format!("require: '{}' has empty label", raw_id));
-            }
         }
 
         // brew-tap shape
