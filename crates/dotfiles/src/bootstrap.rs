@@ -5,6 +5,7 @@ use crate::ctx::Ctx;
 use anyhow::Result;
 use clap::Parser;
 use dotfiles_backends::orchestrate::ensure_taps;
+use dotfiles_exec::Event;
 
 const BREW_INSTALL_URL: &str = "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh";
 const BREW_UPDATE_RETRIES: usize = 6;
@@ -17,6 +18,9 @@ pub struct BootstrapArgs {
 }
 
 pub fn run(ctx: &Ctx, args: BootstrapArgs) -> Result<()> {
+    ctx.env.report(Event::Section {
+        title: "bootstrap".to_string(),
+    });
     ensure_homebrew(ctx)?;
     if !args.no_update {
         brew_update_with_retries(ctx)?;
@@ -35,7 +39,7 @@ pub fn run(ctx: &Ctx, args: BootstrapArgs) -> Result<()> {
         })
         .collect();
     let outcome = ensure_taps(&ctx.env, &taps)?;
-    crate::pkg::print_outcome(&outcome);
+    crate::pkg::print_outcome(&ctx.env, &outcome);
     if !outcome.ok() {
         anyhow::bail!("tap setup failed");
     }
@@ -44,10 +48,14 @@ pub fn run(ctx: &Ctx, args: BootstrapArgs) -> Result<()> {
 
 fn ensure_homebrew(ctx: &Ctx) -> Result<()> {
     if ctx.env.has_command("brew") {
-        println!("homebrew: already installed ({})", brew_prefix(ctx)?);
+        ctx.env.report(Event::Note {
+            msg: format!("homebrew: already installed ({})", brew_prefix(ctx)?),
+        });
         return Ok(());
     }
-    println!("homebrew: installing (NONINTERACTIVE)…");
+    ctx.env.report(Event::Note {
+        msg: "homebrew: installing (NONINTERACTIVE)…".to_string(),
+    });
     let tmp = std::env::temp_dir().join("dotfiles-brew-install.sh");
     let dl = ctx.env.output(
         "curl",
@@ -90,12 +98,14 @@ fn brew_update_with_retries(ctx: &Ctx) -> Result<()> {
         if out.ok() {
             return Ok(());
         }
-        eprintln!(
-            "brew update attempt {}/{} failed: {}",
-            attempt,
-            BREW_UPDATE_RETRIES,
-            out.stderr.trim()
-        );
+        ctx.env.report(Event::Warn {
+            msg: format!(
+                "brew update attempt {}/{} failed: {}",
+                attempt,
+                BREW_UPDATE_RETRIES,
+                out.stderr.trim()
+            ),
+        });
         if attempt < BREW_UPDATE_RETRIES {
             std::thread::sleep(std::time::Duration::from_secs(2));
         }

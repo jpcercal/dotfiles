@@ -48,12 +48,17 @@ fn insert_statement(
 }
 
 fn seed(ctx: &Ctx) -> Result<()> {
+    ctx.env.report(dotfiles_exec::Event::Section {
+        title: "history".to_string(),
+    });
     let db = ctx.env.home.join(".local/share/atuin/history.db");
     if !db.is_file() {
-        println!(
-            "atuin history db {} does not exist yet — start atuin once first. Skipping.",
-            db.display()
-        );
+        ctx.env.report(dotfiles_exec::Event::Note {
+            msg: format!(
+                "atuin history db {} does not exist yet — start atuin once first. Skipping.",
+                db.display()
+            ),
+        });
         return Ok(());
     }
     let commands = ctx.commands()?;
@@ -96,7 +101,9 @@ fn seed(ctx: &Ctx) -> Result<()> {
     if !out.ok() {
         anyhow::bail!("sqlite3 failed: {}", out.stderr.trim());
     }
-    println!("seeded {} commands into {}", total, db.display());
+    ctx.env.report(dotfiles_exec::Event::Note {
+        msg: format!("seeded {} commands into {}", total, db.display()),
+    });
     Ok(())
 }
 

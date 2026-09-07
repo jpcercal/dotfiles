@@ -1,10 +1,12 @@
 //! Shared CLI context: how the binary locates its repo, manifest and execution
 //! environment. Tests drive everything through `DOTFILES_DIR` + `DOTFILES_SANDBOX`.
 
+use crate::term_report::TermReporter;
 use anyhow::{Context, Result};
 use dotfiles_exec::ExecEnv;
 use dotfiles_manifest::Manifest;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct Ctx {
@@ -15,7 +17,9 @@ pub struct Ctx {
 impl Ctx {
     /// Real-machine context. `dry_run` forwards `--dry-run` to every spawned command.
     pub fn real(dry_run: bool) -> Self {
-        let env = ExecEnv::real().with_dry_run(dry_run);
+        let env = ExecEnv::real()
+            .with_dry_run(dry_run)
+            .with_reporter(Arc::new(TermReporter::new()));
         let dotfiles_dir = std::env::var_os("DOTFILES_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| env.home.join("dotfiles"));
@@ -25,7 +29,9 @@ impl Ctx {
     /// Sandboxed context used by `sync --sandbox` and integration tests: HOME
     /// and PATH live under `root`, dotfiles repo is `root/dotfiles`.
     pub fn sandbox(root: &std::path::Path, dry_run: bool) -> Result<Self> {
-        let env = ExecEnv::sandbox(root)?.with_dry_run(dry_run);
+        let env = ExecEnv::sandbox(root)?
+            .with_dry_run(dry_run)
+            .with_reporter(Arc::new(TermReporter::new()));
         Ok(Self {
             env,
             dotfiles_dir: root.join("dotfiles"),

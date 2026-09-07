@@ -9,7 +9,7 @@
 
 use crate::graph::{Graph, Unit};
 use crate::outcome::BackendOutcome;
-use dotfiles_exec::ExecEnv;
+use dotfiles_exec::{Event, ExecEnv};
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Condvar, Mutex};
 
@@ -136,7 +136,20 @@ pub fn run(
                     }
                 };
                 let Some(i) = task else { return };
-                let outcome = runner(&graph.units[i], env);
+                // Scope every spawn of this unit to its id (output lines are
+                // attributed via `UnitLog`) and announce it live. Blocked
+                // units below never reach the runner: they emit `UnitFinished`
+                // without `UnitStarted`, since they were never attempted.
+                let id = graph.units[i].id.clone();
+                env.report(Event::UnitStarted { id: id.clone() });
+                let unit_env = env.clone().for_unit(&id);
+                let outcome = runner(&graph.units[i], &unit_env);
+                let finished = Event::UnitFinished {
+                    id,
+                    ok: outcome.ok(),
+                    detail: outcome.detail(),
+                };
+                env.report(finished);
                 {
                     let mut st = state.lock().unwrap();
                     let class = graph.units[i].lock.clone();
@@ -160,6 +173,11 @@ pub fn run(
                                 format!("blocked by '{}' (not attempted)", graph.units[i].id),
                             );
                             skip.note = format!("skipped: blocked by '{}'", graph.units[i].id);
+                            env.report(Event::UnitFinished {
+                                id: unit.id.clone(),
+                                ok: false,
+                                detail: skip.detail(),
+                            });
                             st.outcomes[d] = Some(skip);
                             st.done += 1;
                             // Remove from ready if already queued.
@@ -196,6 +214,7 @@ pub fn run(
 mod tests {
     use super::*;
     use crate::graph::UnitKind;
+    use dotfiles_exec::RecordingReporter;
     use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Condvar as StdCondvar, Mutex as StdMutex};
@@ -399,5 +418,85 @@ mod tests {
     fn effective_jobs_defaults_to_cpus() {
         assert_eq!(effective_jobs(&opts(3)), 3);
         assert!(effective_jobs(&opts(0)) >= 1);
+    }
+
+    #[test]
+    fn units_emit_started_and_finished_events() {
+        use dotfiles_exec::Event;
+        let t = dotfiles_testkit::TestEnv::new();
+        let reporter = Arc::new(RecordingReporter::new());
+        let env = t.exec().clone().with_reporter(reporter.clone());
+        let g = graph(vec![
+            unit("fail", &[], "l1"),
+            unit("child", &["fail"], "l2"),
+            unit("sibling", &[], "l3"),
+        ]);
+        run(&g, &opts(4), &env, &|u: &Unit, _: &ExecEnv| {
+            let mut out = BackendOutcome::empty("test");
+            if u.id == "fail" {
+                out.fail_one("fail", "boom");
+            } else {
+                out.changed.push(u.id.clone());
+            }
+            out
+        });
+        let events = reporter.events();
+        let started: Vec<&str> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::UnitStarted { id } => Some(id.as_str()),
+                _ => None,
+            })
+            .collect();
+        let finished: Vec<(&str, bool, &str)> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::UnitFinished { id, ok, detail } => Some((id.as_str(), *ok, detail.as_str())),
+                _ => None,
+            })
+            .collect();
+        // Attempted units announce start then finish …
+        assert!(started.contains(&"fail"));
+        assert!(started.contains(&"sibling"));
+        // … blocked units are never started, only finished as failed …
+        assert!(!started.contains(&"child"), "{started:?}");
+        let by_id: BTreeMap<&str, (bool, &str)> = finished
+            .into_iter()
+            .map(|(id, ok, d)| (id, (ok, d)))
+            .collect();
+        assert_eq!(by_id.len(), 3);
+        assert!(!by_id["fail"].0);
+        assert!(by_id["fail"].1.contains("boom"), "{:?}", by_id["fail"]);
+        assert!(by_id["sibling"].0);
+        assert!(!by_id["child"].0);
+        assert!(
+            by_id["child"].1.contains("blocked by 'fail'"),
+            "{:?}",
+            by_id["child"]
+        );
+        // Every start precedes its finish in the recorded order.
+        for id in ["fail", "sibling"] {
+            let s = events
+                .iter()
+                .position(|e| matches!(e, Event::UnitStarted { id: i } if i == id))
+                .unwrap();
+            let f = events
+                .iter()
+                .position(|e| matches!(e, Event::UnitFinished { id: i, .. } if i == id))
+                .unwrap();
+            assert!(s < f, "{id}");
+        }
+    }
+
+    #[test]
+    fn runner_sees_unit_scoped_env() {
+        let t = dotfiles_testkit::TestEnv::new();
+        let seen = Arc::new(StdMutex::new(vec![]));
+        let g = graph(vec![unit("a", &[], "l1")]);
+        run(&g, &opts(1), t.exec(), &|_: &Unit, env: &ExecEnv| {
+            seen.lock().unwrap().push(env.unit.clone());
+            BackendOutcome::empty("test")
+        });
+        assert_eq!(seen.lock().unwrap().as_slice(), &[Some("a".to_string())]);
     }
 }

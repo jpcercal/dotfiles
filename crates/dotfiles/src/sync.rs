@@ -4,6 +4,7 @@
 use crate::ctx::Ctx;
 use anyhow::Result;
 use clap::Parser;
+use dotfiles_exec::Event;
 
 pub const JOBS: &[&str] = &["bootstrap", "install", "prefs", "history"];
 pub const OPT_IN_JOBS: &[&str] = &["software-update"];
@@ -104,10 +105,13 @@ pub fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
         ctx
     };
 
-    println!("sync: jobs = {}", jobs.join(", "));
+    // Each job opens its own `Section` (bootstrap → install → prefs →
+    // history), so `sync` only announces the plan and the final result.
+    ctx.env.report(Event::Note {
+        msg: format!("sync: jobs = {}", jobs.join(", ")),
+    });
     let mut failed: Vec<&str> = vec![];
     for job in jobs {
-        println!("▶ {}", job);
         let result: Result<()> = match job {
             "bootstrap" => {
                 crate::bootstrap::run(ctx, crate::bootstrap::BootstrapArgs { no_update: true })
@@ -142,14 +146,18 @@ pub fn run(ctx: &Ctx, args: SyncArgs) -> Result<()> {
             other => anyhow::bail!("unknown job {}", other),
         };
         if let Err(e) = result {
-            eprintln!("✗ {} failed: {}", job, e);
+            ctx.env.report(Event::Warn {
+                msg: format!("✗ {} failed: {}", job, e),
+            });
             failed.push(job);
         }
     }
     if !failed.is_empty() {
         anyhow::bail!("sync: job(s) failed: {}", failed.join(", "));
     }
-    println!("sync: done");
+    ctx.env.report(Event::Note {
+        msg: "sync: done".to_string(),
+    });
     Ok(())
 }
 

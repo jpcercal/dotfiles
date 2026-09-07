@@ -4,8 +4,9 @@
 use crate::outcome::BackendOutcome;
 use crate::{brew, custom, graph, schedule, Spec};
 use anyhow::Result;
-use dotfiles_exec::ExecEnv;
+use dotfiles_exec::{Event, ExecEnv};
 use dotfiles_manifest::Manifest;
+use std::collections::BTreeSet;
 
 /// `brew tap` + `brew trust` (skips taps already tapped; `homebrew/*` needs no trust).
 pub fn ensure_taps(env: &ExecEnv, taps: &[String]) -> Result<BackendOutcome> {
@@ -125,64 +126,89 @@ pub fn sched_opts_from_manifest(m: &Manifest) -> schedule::SchedOpts {
 }
 
 /// Legacy sequential install, kept for `--sequential`. New code should use the graph engine.
+/// Each backend chunk is scoped to a unit id (`brew`, `cask`, …) so the
+/// sequential run renders through the same per-unit blocks as the graph path.
 pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<BackendOutcome>> {
     let mut results: Vec<BackendOutcome> = vec![];
 
-    results.push(ensure_taps(env, &taps_from_manifest(m))?);
+    // Taps keep their original fallibility (`?` aborts the run on spawn
+    // failure); only the announcements are new.
+    env.report(Event::UnitStarted {
+        id: "brew-taps".into(),
+    });
+    let taps = ensure_taps(&env.clone().for_unit("brew-taps"), &taps_from_manifest(m));
+    match &taps {
+        Ok(out) => env.report(Event::UnitFinished {
+            id: "brew-taps".into(),
+            ok: out.ok(),
+            detail: out.detail(),
+        }),
+        Err(e) => env.report(Event::UnitFinished {
+            id: "brew-taps".into(),
+            ok: false,
+            detail: e.to_string(),
+        }),
+    }
+    results.push(taps?);
 
     let brew = brew::Brew;
     let cask = brew::BrewCask;
-    results.push(run_if_available(
-        env,
-        &brew,
-        &packages_for_backend(m, "brew-formula"),
-    ));
-    results.push(run_if_available(
-        env,
-        &cask,
-        &packages_for_backend(m, "brew-cask"),
-    ));
-    results.push(run_if_available(
-        env,
-        &crate::gem::Gem,
-        &packages_for_backend(m, "gem"),
-    ));
-    results.push(run_if_available(
-        env,
-        &crate::npm::Npm,
-        &packages_for_backend(m, "npm"),
-    ));
-    results.push(run_if_available(
-        env,
-        &crate::pip::UvPip,
-        &packages_for_backend(m, "pip"),
-    ));
-    results.push(run_if_available(
-        env,
-        &crate::go::Go,
-        &packages_for_backend(m, "go"),
-    ));
+    results.push(run_sequential(env, "brew", |env| {
+        run_if_available(env, &brew, &packages_for_backend(m, "brew-formula"))
+    }));
+    results.push(run_sequential(env, "cask", |env| {
+        run_if_available(env, &cask, &packages_for_backend(m, "brew-cask"))
+    }));
+    results.push(run_sequential(env, "gem", |env| {
+        run_if_available(env, &crate::gem::Gem, &packages_for_backend(m, "gem"))
+    }));
+    results.push(run_sequential(env, "npm", |env| {
+        run_if_available(env, &crate::npm::Npm, &packages_for_backend(m, "npm"))
+    }));
+    results.push(run_sequential(env, "pip", |env| {
+        run_if_available(env, &crate::pip::UvPip, &packages_for_backend(m, "pip"))
+    }));
+    results.push(run_sequential(env, "go", |env| {
+        run_if_available(env, &crate::go::Go, &packages_for_backend(m, "go"))
+    }));
 
-    results.push(run_if_available(
-        env,
-        &crate::cargo::Cargo,
-        &packages_for_backend(m, "cargo"),
-    ));
-    results.push(run_if_available(
-        env,
-        &crate::composer::Composer,
-        &packages_for_backend(m, "composer"),
-    ));
+    results.push(run_sequential(env, "cargo", |env| {
+        run_if_available(env, &crate::cargo::Cargo, &packages_for_backend(m, "cargo"))
+    }));
+    results.push(run_sequential(env, "composer", |env| {
+        run_if_available(
+            env,
+            &crate::composer::Composer,
+            &packages_for_backend(m, "composer"),
+        )
+    }));
 
     let mas_ids: Vec<String> = packages_for_backend(m, "mas");
-    results.push(run_if_available(env, &crate::mas::Mas, &mas_ids));
+    results.push(run_sequential(env, "mas", |env| {
+        run_if_available(env, &crate::mas::Mas, &mas_ids)
+    }));
 
     // Custom steps (manifest order) — pure hook carriers (hooks fire in the
     // graph engine path; sequential path is legacy and does not run hooks).
     for e in &m.require {
         if let Some((p, n)) = dotfiles_manifest::units::split_unit_id(e.id()) {
             if p == "custom" {
-                results.push(custom::run(&n, env)?);
+                let id = format!("custom:{n}");
+                env.report(Event::UnitStarted { id: id.clone() });
+                let res = custom::run(&n, &env.clone().for_unit(&id));
+                match &res {
+                    Ok(out) => env.report(Event::UnitFinished {
+                        id,
+                        ok: out.ok(),
+                        detail: out.detail(),
+                    }),
+                    Err(e) => env.report(Event::UnitFinished {
+                        id,
+                        ok: false,
+                        detail: e.to_string(),
+                    }),
+                }
+                results.push(res?);
             }
         }
     }
@@ -190,18 +216,63 @@ pub fn install_all_sequential(env: &ExecEnv, m: &Manifest) -> Result<Vec<Backend
     Ok(results)
 }
 
+/// Run one sequential chunk with the same start/finish announcements the
+/// parallel scheduler emits, scoping every spawn to `id`.
+fn run_sequential(
+    env: &ExecEnv,
+    id: &str,
+    f: impl FnOnce(&ExecEnv) -> BackendOutcome,
+) -> BackendOutcome {
+    env.report(Event::UnitStarted { id: id.to_string() });
+    let out = f(&env.clone().for_unit(id));
+    env.report(Event::UnitFinished {
+        id: id.to_string(),
+        ok: out.ok(),
+        detail: out.detail(),
+    });
+    out
+}
+
 /// Cache `sudo` credentials once before the parallel run so concurrent cask
 /// installs never race on an interactive password prompt (mirrors the prefs
 /// `sudo -v` pre-flight). Best-effort: failures are ignored here and surface
-/// per-unit like any other error.
+/// per-unit like any other error. The warmup always states its reason, and
+/// is skipped entirely when every declared cask is already installed —
+/// sudo is only requested when it may actually be necessary. Individual
+/// elevations during the run announce themselves through the exec seam.
 fn preflight_sudo(env: &ExecEnv, m: &Manifest) -> Result<()> {
-    let has_cask = m.require.iter().any(|e| {
-        dotfiles_manifest::units::split_unit_id(e.id()).is_some_and(|(p, _)| p == "brew-cask")
-    });
-    if !has_cask || !env.has_command("sudo") {
+    let casks: Vec<String> = m
+        .require
+        .iter()
+        .filter_map(|e| {
+            let (p, n) = dotfiles_manifest::units::split_unit_id(e.id())?;
+            (p == "brew-cask").then_some(n)
+        })
+        .collect();
+    if casks.is_empty() || !env.has_command("sudo") {
         return Ok(());
     }
-    let _ = env.output("sudo", &["-v"])?;
+    if env.has_command("brew") {
+        if let Ok(listed) = env.output("brew", &["list", "-1", "--cask"]) {
+            if listed.ok() {
+                let installed: BTreeSet<&str> = listed.stdout.lines().map(str::trim).collect();
+                if casks.iter().all(|c| installed.contains(c.as_str())) {
+                    env.report(Event::Note {
+                        msg: format!(
+                            "sudo: all {} cask(s) already installed — skipping credential warmup",
+                            casks.len()
+                        ),
+                    });
+                    return Ok(());
+                }
+            }
+        }
+    }
+    let reason = format!(
+        "{} brew cask(s) may launch installers that require administrator privileges — caching credentials once up front",
+        casks.len()
+    );
+    let _ = env.elevate("sudo", &["-v"], &reason)?;
     Ok(())
 }
 
@@ -574,8 +645,10 @@ pub fn install_specs(env: &ExecEnv, specs: &[Spec]) -> Result<Vec<BackendOutcome
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dotfiles_exec::RecordingReporter;
     use dotfiles_manifest::parse_manifest;
     use dotfiles_testkit::TestEnv;
+    use std::sync::Arc;
 
     const BREW_STUB: &str = "case \"$1\" in \
       tap) if [ -z \"$2\" ]; then echo 'hashicorp/tap'; else exit 0; fi ;; \
@@ -609,6 +682,7 @@ mod tests {
     fn install_all_runs_backends_in_order() {
         let t = TestEnv::new();
         t.stub("brew", BREW_STUB);
+        t.stub_ok("sudo", "");
         t.stub("gem", "case \"$1\" in list) echo '' ;; esac; exit 0");
         t.stub("npm", "case \"$2\" in ls) echo '{}' ;; esac; exit 0");
         t.stub("uv", "case \"$1 $2\" in \"python find\") echo '/usr/bin/python3' ;; \"pip list\") echo '[]' ;; esac; exit 0");
@@ -984,5 +1058,74 @@ require:
         let results = install_all(t.exec(), &manifest).unwrap();
         assert!(results.iter().any(|r| !r.ok()));
         assert!(t.calls_of("brew").iter().all(|c| !c.starts_with("install")));
+    }
+
+    fn cask_manifest() -> dotfiles_manifest::Manifest {
+        parse_manifest("require:\n  - \"brew-cask:iterm2\"\n").unwrap()
+    }
+
+    #[test]
+    fn preflight_warmup_skipped_when_all_casks_installed() {
+        let t = TestEnv::new();
+        t.stub(
+            "brew",
+            "case \"$*\" in \"list -1 --cask\") echo 'iterm2' ;; esac\nexit 0",
+        );
+        t.stub_ok("sudo", "");
+        let reporter = Arc::new(RecordingReporter::new());
+        let env = t.exec().clone().with_reporter(reporter.clone());
+        install_all(&env, &cask_manifest()).unwrap();
+        // No elevation at all: the warmup was unnecessary.
+        assert!(t.calls_of("sudo").is_empty());
+        assert!(
+            reporter.events().iter().any(
+                |e| matches!(e, Event::Note { msg } if msg.contains("skipping credential warmup"))
+            ),
+            "{:?}",
+            reporter.events()
+        );
+        assert!(
+            !reporter
+                .events()
+                .iter()
+                .any(|e| matches!(e, Event::Elevate { .. })),
+            "{:?}",
+            reporter.events()
+        );
+    }
+
+    #[test]
+    fn preflight_warmup_announces_reason_when_cask_missing() {
+        let t = TestEnv::new();
+        t.stub(
+            "brew",
+            "case \"$*\" in \"list -1 --cask\") printf '' ;; esac\nexit 0",
+        );
+        t.stub_ok("sudo", "");
+        let reporter = Arc::new(RecordingReporter::new());
+        let env = t.exec().clone().with_reporter(reporter.clone());
+        install_all(&env, &cask_manifest()).unwrap();
+        assert_eq!(t.calls_of("sudo"), vec!["-v"]);
+        let elevate = reporter
+            .events()
+            .iter()
+            .find_map(|e| match e {
+                Event::Elevate { command, reason } => Some((command.clone(), reason.clone())),
+                _ => None,
+            })
+            .expect("warmup must announce elevation");
+        assert_eq!(elevate.0, "sudo -v");
+        assert!(elevate.1.contains("cask"), "{}", elevate.1);
+    }
+
+    #[test]
+    fn preflight_skipped_without_casks_or_sudo() {
+        // No cask in manifest → no sudo touched even when a stub exists.
+        let t = TestEnv::new();
+        t.stub("brew", BREW_STUB);
+        t.stub_ok("sudo", "");
+        let manifest = parse_manifest("require:\n  - \"brew-formula:git\"\n").unwrap();
+        install_all(t.exec(), &manifest).unwrap();
+        assert!(t.calls_of("sudo").is_empty());
     }
 }

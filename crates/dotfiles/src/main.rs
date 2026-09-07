@@ -16,6 +16,7 @@ mod schema;
 mod smoke;
 mod software_update;
 mod sync;
+mod term_report;
 #[cfg(feature = "gui")]
 mod ui_egui;
 #[cfg(feature = "gui")]

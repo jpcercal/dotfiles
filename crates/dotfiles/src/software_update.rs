@@ -23,9 +23,20 @@ pub fn run(ctx: &Ctx, args: SoftwareUpdateArgs) -> Result<()> {
     if args.list_only {
         return list(ctx);
     }
+    // The exact elevated command is shown before any prompt, so the user
+    // knows precisely what would run as root.
+    let argv = [
+        "softwareupdate",
+        "--install",
+        "--restart",
+        "--all",
+        "--agree-to-license",
+        "--verbose",
+    ];
     if !args.yes {
         eprint!(
-            "This installs ALL pending macOS updates and REBOOTS the machine. Continue? [y/N] "
+            "This installs ALL pending macOS updates and REBOOTS the machine.\n  $ sudo {}\nContinue? [y/N] ",
+            argv.join(" ")
         );
         std::io::stderr().flush()?;
         let mut line = String::new();
@@ -40,16 +51,10 @@ pub fn run(ctx: &Ctx, args: SoftwareUpdateArgs) -> Result<()> {
     if ctx.env.home.starts_with("/var/folders") || ctx.env.home.starts_with("/tmp") {
         anyhow::bail!("refusing `software-update` with a sandboxed HOME (safety guard)");
     }
-    let res = ctx.env.output(
+    let res = ctx.env.elevate(
         "sudo",
-        &[
-            "softwareupdate",
-            "--install",
-            "--restart",
-            "--all",
-            "--agree-to-license",
-            "--verbose",
-        ],
+        &argv,
+        "install every pending macOS update and reboot the machine",
     )?;
     if !res.ok() {
         anyhow::bail!("softwareupdate failed: {}", res.stderr.trim());

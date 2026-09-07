@@ -93,16 +93,41 @@ dotfiles schema --kind prefs --write
 ```
 crates/
   exec/       execution seam (real vs sandbox env, stubs, dry-run)
+              + report (Reporter/Event: the only user-feedback channel, sudo sniffing, streamed runs)
   manifest/   apps.yaml + commands.yaml types, validation, JSON Schema (+ units: unit-ID namespace)
   backends/   PackageBackend trait + brew/cask/mas/gem/npm/pip/cargo/go/composer + custom (hook carriers)
               + graph (manifest → DAG) + schedule (parallel ready-queue executor) + orchestrate (engine wiring)
   prefs/      declarative preferences engine (defaults/exec/builtins, apply/diff)
   core/       upgrade pipeline state machine (gates, probes, steps, reports)
   dotfiles/   the CLI binary (+ egui GUI behind the default `gui` feature)
+              + term_report (TermReporter: sections, per-unit blocks, elevation notices)
   testkit/    test fixtures (stub binaries with argv recording)
 schema/       generated JSON Schemas (committed, CI-enforced freshness)
 e2e/          reduced fixture manifests for the real-machine CI E2E job
 ```
+
+## User feedback (reporting seam + sudo consciousness)
+
+- **Library crates never print.** All user-visible output from `exec` /
+  `backends` / `prefs` flows as `report::Event`s through the `Reporter`
+  carried by `ExecEnv` (`Arc`, survives clones and scheduler threads;
+  default `NoopReporter`). The CLI installs `TermReporter`; tests use
+  `RecordingReporter` or nothing.
+- **Layout contract (buffered blocks, live status):** `Section` = job
+  (`▶ install`), `Subsection` = backend group; units announce `→ id` live
+  while commands/output accumulate per unit and flush as one grouped,
+  indented block on `UnitFinished` (`✓`/`✗`). Everything is shown —
+  successful blocks included, never gated behind verbosity flags. Colors via
+  `owo-colors` (`supports-colors`), plain when piped or `NO_COLOR`.
+- **Sudo is announced, every time, with reason.** `ExecEnv` sniffs `sudo`
+  spawns (past sudo's own flags to the inner command) and emits
+  `Event::Elevate { command, reason }`; callers that know *why* use
+  `env.elevate(program, args, reason)` (reasoned announcement replaces the
+  sniff — exactly once). Warmups are necessity-gated: `prefs apply` diffs
+  first and only pre-caches when an elevated entry is out of sync;
+  `install_all` skips the cask warmup when every cask is already installed.
+  `software-update` / `cache clean` show the exact `sudo …` command in the
+  confirmation prompt.
 
 ## Install engine (dependency graph + parallel scheduler)
 

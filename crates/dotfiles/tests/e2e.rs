@@ -27,6 +27,35 @@ fn sync_sandbox_completes_all_jobs() {
         stderr
     );
     assert!(stdout.contains("sync: done"), "{}", stdout);
+    // Structured live feedback: every job opens a section, units announce
+    // start/finish, and each finished unit flushes a grouped block with its
+    // exact commands (`    $ …`).
+    for section in ["▶ bootstrap", "▶ install", "▶ prefs", "▶ history"] {
+        assert!(stdout.contains(section), "missing {section}:\n{stdout}");
+    }
+    assert!(
+        stdout.contains("→ brew-formula:"),
+        "no unit start lines:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("✓ brew-formula:"),
+        "no unit finish lines:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("    $ brew "),
+        "no grouped command blocks:\n{stdout}"
+    );
+    // Sudo consciousness: every elevation is announced on stderr with the
+    // exact command and its reason (cask warmup + sudo prefs entries run
+    // against stubs in the sandbox).
+    assert!(
+        stderr.contains("⚠ sudo:"),
+        "no elevation notices:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("reason:"),
+        "elevation without reason:\n{stderr}"
+    );
     // All default jobs ran, in order
     let positions: Vec<Option<usize>> = ["bootstrap", "install", "prefs", "history"]
         .iter()

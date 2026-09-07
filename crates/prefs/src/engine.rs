@@ -121,7 +121,8 @@ fn apply_one(env: &ExecEnv, entry: &PrefEntry) -> Result<PrefStatus> {
         } => {
             let expanded: Vec<String> = args.iter().map(|a| expand_home(env, a)).collect();
             let argv: Vec<&str> = expanded.iter().map(String::as_str).collect();
-            let res = run_maybe_sudo_output(env, program, &argv, *sudo)?;
+            let reason = format!("exec entry declares `sudo: true` ({program})");
+            let res = run_maybe_sudo_output(env, program, &argv, *sudo, &reason)?;
             if !res.ok() && !*ignore_error {
                 return Ok(PrefStatus::Failed(res.stderr.trim().to_string()));
             }
@@ -135,7 +136,9 @@ fn apply_one(env: &ExecEnv, entry: &PrefEntry) -> Result<PrefStatus> {
                     for app_name in RESTART_APPS {
                         // sudo killall … &> /dev/null (script parity): exits 1 for
                         // apps that aren't running — expected, ignored.
-                        let _ = env.output("sudo", &["killall", app_name]);
+                        let reason =
+                            format!("restart {app_name} so preference changes take effect");
+                        let _ = run_maybe_sudo_output(env, "killall", &[app_name], true, &reason);
                     }
                     Ok(PrefStatus::Applied)
                 }
@@ -358,7 +361,9 @@ fn write_default(
         push_typed_value(&mut args, flag, env, value)?;
     }
     let argv: Vec<&str> = args.iter().map(String::as_str).collect();
-    run_maybe_sudo(env, "defaults", &argv, opts.sudo)
+    let reason =
+        format!("writes system-domain preference {domain} {key} (entry declares `sudo: true`)");
+    run_maybe_sudo(env, "defaults", &argv, opts.sudo, &reason)
 }
 
 fn read_default(
@@ -390,23 +395,32 @@ fn normalize_read(raw: &str) -> String {
     }
 }
 
+/// Run `program args`, elevated when `sudo` is set. Elevated runs announce
+/// the exact command plus `reason` through the exec seam — exactly once.
 fn run_maybe_sudo_output(
     env: &ExecEnv,
     program: &str,
     args: &[&str],
     sudo: bool,
+    reason: &str,
 ) -> Result<dotfiles_exec::ExecOutput> {
     if sudo {
         let mut full: Vec<&str> = vec![program];
         full.extend_from_slice(args);
-        Ok(env.output("sudo", &full)?)
+        Ok(env.elevate("sudo", &full, reason)?)
     } else {
         env.output(program, args)
     }
 }
 
-fn run_maybe_sudo(env: &ExecEnv, program: &str, args: &[&str], sudo: bool) -> Result<()> {
-    let out = run_maybe_sudo_output(env, program, args, sudo)?;
+fn run_maybe_sudo(
+    env: &ExecEnv,
+    program: &str,
+    args: &[&str],
+    sudo: bool,
+    reason: &str,
+) -> Result<()> {
+    let out = run_maybe_sudo_output(env, program, args, sudo, reason)?;
     if !out.ok() {
         anyhow::bail!("{} failed: {}", program, out.stderr.trim());
     }
@@ -499,6 +513,42 @@ prefs:
                 .any(|c| c.starts_with("defaults write /Library/Preferences")),
             "{:?}",
             t.calls_of("sudo")
+        );
+    }
+
+    #[test]
+    fn sudo_writes_announce_exact_command_and_reason() {
+        use dotfiles_exec::{Event, RecordingReporter};
+        use std::sync::Arc;
+        let t = TestEnv::new();
+        t.stub("defaults", "if [ \"$1\" = read ]; then exit 1; fi; exit 0");
+        t.stub_ok("sudo", "");
+        let reporter = Arc::new(RecordingReporter::new());
+        let env = t.exec().clone().with_reporter(reporter.clone());
+        let file = parse_prefs(
+            "prefs:\n  - { id: x, kind: defaults, domain: /Library/Preferences/com.apple.loginwindow, key: DSBindTimeout, type: int, value: 5, sudo: true }\n",
+        )
+        .unwrap();
+        apply(&env, &file).unwrap();
+        let elevate = reporter
+            .events()
+            .into_iter()
+            .find_map(|e| match e {
+                Event::Elevate { command, reason } => Some((command, reason)),
+                _ => None,
+            })
+            .expect("elevated write must announce");
+        assert!(
+            elevate
+                .0
+                .starts_with("sudo defaults write /Library/Preferences"),
+            "{}",
+            elevate.0
+        );
+        assert!(
+            elevate.1.contains("sudo: true"),
+            "reason must cite the manifest flag: {}",
+            elevate.1
         );
     }
 
